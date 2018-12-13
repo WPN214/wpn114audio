@@ -10,6 +10,6 @@ void qml_plugin::registerTypes(const char *uri)
 {
     Q_UNUSED    ( uri );
 
-    qmlRegisterUncreatableType<StreamNode, 1> ( "WPN114", 1, 0, "StreamNode","Uncreatable");
-    qmlRegisterType<WorldStream, 1> ( "WPN114", 1, 0, "AudioStream" );
+    qmlRegisterUncreatableType<StreamNode, 1> ( "WPN114.Audio", 1, 0, "StreamNode","Uncreatable");
+    qmlRegisterType<WorldStream, 1> ( "WPN114.Audio", 1, 0, "AudioStream" );
 }
