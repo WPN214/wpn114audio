@@ -8,6 +8,7 @@ QT += quick
 #message(WPN114-QML-MODULE will be installed at: $$[QT_INSTALL_QML]/WPN114/Audio)
 
 QMLDIR_FILES += $$PWD/qml/qmldir
+
 DESTDIR = $$[QT_INSTALL_QML]/WPN114/Audio
 
 for(FILE,QMLDIR_FILES) {

@@ -14,11 +14,11 @@ linux {
 }
 
 HEADERS += $$PWD/external/rtaudio/RtAudio.h
-HEADERS += $$PWD/source/audio/audio.hpp
-HEADERS += $$PWD/source/audio/soundfile.hpp
+HEADERS += $$PWD/source/audio.hpp
+HEADERS += $$PWD/source/soundfile.hpp
 SOURCES += $$PWD/external/rtaudio/RtAudio.cpp
-SOURCES += $$PWD/source/audio/audio.cpp
-SOURCES += $$PWD/source/audio/soundfile.cpp
+SOURCES += $$PWD/source/audio.cpp
+SOURCES += $$PWD/source/soundfile.cpp
 
 SOURCES += $$PWD/qml_plugin.cpp
 HEADERS += $$PWD/qml_plugin.hpp

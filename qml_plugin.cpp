@@ -1,7 +1,7 @@
 #include "qml_plugin.hpp"
 
-#include <source/audio/audio.hpp>
-#include <source/audio/soundfile.hpp>
+#include <source/audio.hpp>
+#include <source/soundfile.hpp>
 
 #include <QQmlEngine>
 #include <qqml.h>
