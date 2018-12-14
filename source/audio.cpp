@@ -350,13 +350,13 @@ WorldStream::~WorldStream()
     }
 }
 
-void WorldStream::setSampleRate(uint32_t sample_rate)
+void WorldStream::setSampleRate(quint32 sample_rate)
 {
     if ( sample_rate != m_sample_rate ) emit sampleRateChanged();
     m_sample_rate = sample_rate;
 }
 
-void WorldStream::setBlockSize(uint16_t block_size)
+void WorldStream::setBlockSize(quint16 block_size)
 {
     if ( block_size != m_block_size ) emit blockSizeChanged();
     m_block_size = block_size;
@@ -374,9 +374,30 @@ void WorldStream::setOutDevice(QString device)
     m_out_device = device;
 }
 
+void WorldStream::setApi(QString api)
+{
+    m_api = api;
+}
+
+void WorldStream::setOffset(quint32 offset)
+{
+    m_offset = offset;
+}
+
 void WorldStream::componentComplete()
 {
-    RtAudio audio;
+    RtAudio::Api api = RtAudio::UNSPECIFIED;
+
+    if ( m_api == "JACK" )
+        api = RtAudio::UNIX_JACK;
+    else if ( m_api == "CORE" )
+        api = RtAudio::MACOSX_CORE;
+    else if ( m_api == "ALSA" )
+        api = RtAudio::LINUX_ALSA;
+    else if ( m_api == "PULSE" )
+        api = RtAudio::LINUX_PULSE;
+
+    RtAudio audio(api);
     RtAudio::StreamParameters parameters;
     RtAudio::DeviceInfo info;
     RtAudio::StreamOptions options;
@@ -520,7 +541,7 @@ void AudioStream::configure()
     {
         m_stream->openStream( &m_parameters, nullptr, m_format,
             m_world.sampleRate(), &m_blocksize,
-            &readData, (void*) &m_world, &m_options, nullptr );
+            &readData, static_cast<void*>(&m_world), &m_options, nullptr );
     }
 
     catch(const RtAudioError& e)
@@ -581,7 +602,7 @@ int readData( void* out, void* in, unsigned int nframes,
     auto inserts    = world.m_inserts;
     quint16 nout    = world.m_num_outputs;
     quint16 bsize   = world.m_block_size;
-    float* data     = ( float* ) out;
+    float* data     = static_cast<float*>(out);
 
     auto buf = world.preprocess( nullptr, bsize );
 

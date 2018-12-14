@@ -34,8 +34,8 @@ class SoundfileStreamer : public QObject
     Q_OBJECT
 
     public:
-    SoundfileStreamer   ( Soundfile* sfile = 0 );
-    ~SoundfileStreamer  ( );
+    SoundfileStreamer       ( Soundfile* sfile = 0 );
+    ~SoundfileStreamer      ( );
 
     void setStartSample     ( quint64 index );
     void setEndSample       ( quint64 index );

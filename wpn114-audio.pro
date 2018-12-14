@@ -3,10 +3,6 @@ TEMPLATE = lib
 CONFIG += c++11 dll
 QT += quick
 
-#message(Qt version: $$[QT_VERSION])
-#message(Qt is installed in $$[QT_INSTALL_PREFIX])
-#message(WPN114-QML-MODULE will be installed at: $$[QT_INSTALL_QML]/WPN114/Audio)
-
 QMLDIR_FILES += $$PWD/qml/qmldir
 
 DESTDIR = $$[QT_INSTALL_QML]/WPN114/Audio

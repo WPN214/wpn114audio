@@ -1,7 +1,4 @@
-DEFINES += QT_DEPRECATED_WARNINGS
-
 macx {
-    QMAKE_MAC_SDK = macosx10.14
     LIBS +=  \
     -framework CoreFoundation \
     -framework CoreAudio

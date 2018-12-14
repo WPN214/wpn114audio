@@ -193,6 +193,8 @@ class WorldStream : public StreamNode
     Q_PROPERTY  ( QString inDevice READ inDevice WRITE setInDevice NOTIFY inDeviceChanged )
     Q_PROPERTY  ( QString outDevice READ outDevice WRITE setOutDevice NOTIFY outDeviceChanged )
     Q_PROPERTY  ( QQmlListProperty<StreamNode> inserts READ inserts )
+    Q_PROPERTY  ( QString api READ api WRITE setApi )
+    Q_PROPERTY  ( int offset READ offset WRITE setOffset )
 
     friend class AudioStream;
     friend int readData( void* out, void* in, unsigned int nframes,
@@ -213,11 +215,15 @@ class WorldStream : public StreamNode
     uint16_t blockSize      ( ) const { return m_block_size; }
     QString inDevice        ( ) const { return m_in_device; }
     QString outDevice       ( ) const { return m_out_device; }
+    QString api             ( ) const { return m_api; }
+    quint32 offset ( ) const { return m_offset; }
 
-    void setSampleRate   ( uint32_t sample_rate );
-    void setBlockSize    ( uint16_t block_size );
+    void setSampleRate   ( quint32 sample_rate );
+    void setBlockSize    ( quint16 block_size );
     void setInDevice     ( QString device );
     void setOutDevice    ( QString device );
+    void setOffset       ( quint32 offset );
+    void setApi          ( QString api );
 
     AudioStream* stream () { return m_stream; }
 
@@ -250,10 +256,12 @@ class WorldStream : public StreamNode
     static void clearInserts     ( QQmlListProperty<StreamNode>* );
 
     private:
-    uint32_t m_sample_rate;
-    uint16_t m_block_size;
+    quint32 m_offset = 0;
+    quint32 m_sample_rate;
+    quint16 m_block_size;
     QString m_in_device;
     QString m_out_device;
+    QString m_api;
     AudioStream* m_stream;
     QThread m_stream_thread;
     qint64 m_clock;
