@@ -386,6 +386,27 @@ void WorldStream::setOffset(quint32 offset)
     m_offset = offset;
 }
 
+QStringList WorldStream::inDevices() const
+{
+    return QStringList();
+}
+
+QStringList WorldStream::outDevices() const
+{
+    QStringList list;
+    RtAudio audio;
+    auto ndevices = audio.getDeviceCount();
+
+    for ( quint32 d = 0; d < ndevices; ++d )
+    {
+        auto info = audio.getDeviceInfo(d);
+        auto name = QString::fromStdString(info.name);
+        list << name;
+    }
+
+    return list;
+}
+
 void WorldStream::componentComplete()
 {
     RtAudio::Api api = RtAudio::UNSPECIFIED;
@@ -412,7 +433,6 @@ void WorldStream::componentComplete()
         {
             info = audio.getDeviceInfo(d);
             auto name = QString::fromStdString(info.name);
-            qDebug() << name;
 
             if ( name.contains(m_out_device) )
             {
@@ -423,6 +443,9 @@ void WorldStream::componentComplete()
     }
 
     else parameters.deviceId = audio.getDefaultOutputDevice();
+
+    auto selected_info = audio.getDeviceInfo(parameters.deviceId);
+    qDebug() << "[AUDIO] Selected Device:" << QString::fromStdString(selected_info.name);
 
     parameters.nChannels = m_num_outputs;
     options.streamName = "WPN114";

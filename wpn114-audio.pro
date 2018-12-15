@@ -4,17 +4,21 @@ CONFIG += c++11 dll
 QT += quick
 
 localmod: DESTDIR = $$QML_MODULE_DESTDIR/WPN114/Audio
-else: DESTDIR = $$[QT_INSTALL_QML]/WPN114/Audio
+else {
+    DESTDIR = $$[QT_INSTALL_QML]/WPN114/Audio
+    QML_MODULE_DESTDIR = $$[QT_INSTALL_QML]
+}
+
 QMLDIR_FILES += $$PWD/qml/qmldir
+QMAKE_LFLAGS_SONAME = -Wl,-install_name,@rpath/
 
 for(FILE,QMLDIR_FILES) {
     QMAKE_POST_LINK += $$quote(cp $${FILE} $${DESTDIR}$$escape_expand(\n\t))
 }
 
 macx {
-    LIBS +=  \
-    -framework CoreFoundation \
-    -framework CoreAudio
+    LIBS += -framework CoreFoundation
+    LIBS += -framework CoreAudio
     DEFINES += __MACOSX_CORE__
 }
 

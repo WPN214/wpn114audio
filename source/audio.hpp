@@ -209,7 +209,10 @@ class WorldStream : public StreamNode
     virtual void componentComplete() override;
 
     Q_INVOKABLE void start  ( );
-    Q_INVOKABLE void stop   ( );        
+    Q_INVOKABLE void stop   ( );
+
+    Q_INVOKABLE QStringList inDevices() const;
+    Q_INVOKABLE QStringList outDevices() const;
 
     uint32_t sampleRate     ( ) const { return m_sample_rate; }
     uint16_t blockSize      ( ) const { return m_block_size; }
