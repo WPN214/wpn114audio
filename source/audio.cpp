@@ -332,9 +332,11 @@ float** StreamNode::preprocess(float** buf, qint64 le)
 
 //-----------------------------------------------------------------------------------------------
 
-WorldStream::WorldStream() : m_sample_rate( 44100 ), m_block_size( 512 )
+WorldStream::WorldStream()
 {
-    SETTYPE( StreamType::Mixer );
+    SETN_IN     ( 0 );
+    SETN_OUT    ( 2 );
+    SETTYPE     ( StreamType::Mixer );
 }
 
 WorldStream::~WorldStream()

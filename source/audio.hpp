@@ -257,8 +257,8 @@ class WorldStream : public StreamNode
 
     private:
     quint32 m_offset = 0;
-    quint32 m_sample_rate;
-    quint16 m_block_size;
+    quint32 m_sample_rate = 44100;
+    quint16 m_block_size = 512;
     QString m_in_device;
     QString m_out_device;
     QString m_api;
