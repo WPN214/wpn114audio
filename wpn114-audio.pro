@@ -11,7 +11,7 @@ else {
 
 QMLDIR_FILES += $$PWD/qml/qmldir
 QMLDIR_FILES += $$PWD/qml/audio.qmltypes
-QMAKE_LFLAGS_SONAME = -Wl,-install_name,@rpath/
+macx: QMAKE_LFLAGS_SONAME = -Wl,-install_name,@rpath/
 
 for(FILE,QMLDIR_FILES) {
     QMAKE_POST_LINK += $$quote(cp $${FILE} $${DESTDIR}$$escape_expand(\n\t))
@@ -26,6 +26,7 @@ macx {
 linux {
     DEFINES += __LINUX_ALSA__
     DEFINES += __UNIX_JACK__
+    LIBS += -lpthread -ljack -lasound
 }
 
 HEADERS += $$PWD/external/rtaudio/RtAudio.h
