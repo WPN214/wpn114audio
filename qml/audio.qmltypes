@@ -1,0 +1,64 @@
+import QtQuick.tooling 1.2
+
+Module
+{
+    Component
+    {
+        name: "StreamNode"
+        prototype: "QObject"
+        isCreatable: false
+
+        exports: ["WPN114.Audio/StreamNode 1.0"]
+        exportsMetaObjectRevisions: [1]
+        defaultProperty: "subnodes"
+
+        Property { name: "mute"; type: "bool" }
+        Property { name: "active"; type: "bool" }
+        Property { name: "numInputs"; type: "int" }
+        Property { name: "numOutputs"; type: "int" }
+        Property { name: "parentChannels"; type: "QVariant" }
+        Property { name: "level"; type: "qreal" }
+        Property { name: "dBlevel"; type: "qreal" }
+        Property { name: "subnodes"; type: "StreamNode"; isList: true }
+        Property { name: "parentStream"; type: "StreamNode" }
+
+        Signal { name: "muteChanged" }
+        Signal { name: "activeChanged" }
+        Signal { name: "numInputsChanged" }
+        Signal { name: "numOutputsChanged" }
+        Signal { name: "levelChanged" }
+        Signal { name: "dBlevelChanged" }
+    }
+
+    Component
+    {
+        name: "WorldStream"
+        prototype: "StreamNode"
+        exports: ["WPN114.Audio/Audiostream 1.0"]
+        exportsMetaObjectRevisions: [1]
+
+        Property { name: "sampleRate"; type: "int" }
+        Property { name: "blockSize"; type: "int" }
+        Property { name: "offset"; type: "int" }
+        Property { name: "inDevice"; type: "string" }
+        Property { name: "outDevice"; type: "string" }
+        Property { name: "api"; type: "string" }
+        Property { name: "inserts"; type: "StreamNode"; isList: true }
+
+        Method { name: "start" }
+        Method { name: "stop" }
+        Method { name: "inDevices"; type: "QStringList" }
+        Method { name: "outDevices"; type: "QStringList" }
+
+        Signal
+        {
+            name: "tick"
+            Parameter { name: "tick"; type: "int" }
+        }
+
+        Signal { name: "sampleRateChanged" }
+        Signal { name: "blockSizeChanged" }
+        Signal { name: "inDeviceChanged" }
+        Signal { name: "outDeviceChanged" }
+    }
+}

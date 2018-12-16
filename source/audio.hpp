@@ -105,7 +105,6 @@ class StreamNode : public QObject, public QQmlParserStatus
     void numInputsChanged   ( );
     void numOutputsChanged  ( );
     void levelChanged       ( );
-    void exposePathChanged  ( );
     void dBlevelChanged     ( );
 
     protected:
