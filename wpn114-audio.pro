@@ -11,6 +11,8 @@ else {
 
 QMLDIR_FILES += $$PWD/qml/qmldir
 QMLDIR_FILES += $$PWD/qml/audio.qmltypes
+OTHER_FILES = $$QMLDIR_FILES
+
 macx: QMAKE_LFLAGS_SONAME = -Wl,-install_name,@rpath/
 
 for(FILE,QMLDIR_FILES) {
