@@ -20,7 +20,7 @@ Module
         Property { name: "level"; type: "qreal" }
         Property { name: "dBlevel"; type: "qreal" }
         Property { name: "subnodes"; type: "StreamNode"; isList: true }
-        Property { name: "parentStream"; type: "StreamNode" }
+        Property { name: "parentStream"; type: "StreamNode"; isPointer: true }
 
         Signal { name: "muteChanged" }
         Signal { name: "activeChanged" }
@@ -32,9 +32,9 @@ Module
 
     Component
     {
-        name: "WorldStream"
+        name: "AudioStream"
         prototype: "StreamNode"
-        exports: ["WPN114.Audio/Audiostream 1.0"]
+        exports: ["WPN114.Audio/AudioStream 1.0"]
         exportsMetaObjectRevisions: [1]
 
         Property { name: "sampleRate"; type: "int" }
