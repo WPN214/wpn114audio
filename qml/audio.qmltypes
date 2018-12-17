@@ -9,7 +9,7 @@ Module
         isCreatable: false
 
         exports: ["WPN114.Audio/StreamNode 1.0"]
-        exportsMetaObjectRevisions: [1]
+        exportMetaObjectRevisions: [1]
         defaultProperty: "subnodes"
 
         Property { name: "mute"; type: "bool" }
