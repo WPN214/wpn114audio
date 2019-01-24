@@ -31,10 +31,12 @@ linux {
     LIBS += -lpthread -ljack -lasound
 }
 
-HEADERS += $$PWD/external/rtaudio/RtAudio.h
+HEADERS += $$PWD/external/rtaudio/RtAudio.h \
+    source/qtwrapper.hpp
 HEADERS += $$PWD/source/audio.hpp
 HEADERS += $$PWD/source/soundfile.hpp
-SOURCES += $$PWD/external/rtaudio/RtAudio.cpp
+SOURCES += $$PWD/external/rtaudio/RtAudio.cpp \
+    source/qtwrapper.cpp
 SOURCES += $$PWD/source/audio.cpp
 SOURCES += $$PWD/source/soundfile.cpp
 
