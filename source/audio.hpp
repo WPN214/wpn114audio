@@ -12,8 +12,13 @@ namespace signal {
 // 0--
 //
 // ==========================================================================================
+// forwards:
 class connection;
+// ==========================================================================================
+enum polarity_t { output = 0, input = 1 };
+// ==========================================================================================
 struct graph_properties
+// ==========================================================================================
 {
     signal_t rate;
     size_t vsz;
@@ -36,7 +41,7 @@ class node
         friend class graph;
 
         public:
-        pin ( node& parent, std::string label, size_t nchannels, bool def );
+        pin (node& parent, polarity_t t, std::string_view label, size_t nchannels, bool def );
 
         bool connected();
         bool connected(node&);
@@ -44,9 +49,12 @@ class node
 
         protected:
         void allocate(size_t size);
+        void add_connection(connection& con);
+        void remove_connection(connection& con);
 
         private:
         node& _parent;
+        polarity_t _polarity;
         std::vector<connection*> _connections;
         std::string _label;
         stream _stream;
@@ -59,7 +67,7 @@ class node
     //---------------------------------------------------------------------------------------
     {
         stream::scoped_accessor _stream;
-        std::string label;
+        std::string const& label;
     };
 
     //---------------------------------------------------------------------------------------
@@ -67,40 +75,56 @@ class node
     // a stream vector, for each pin
     //---------------------------------------------------------------------------------------
     {
-        stream::scoped_accessor& operator[](std::string);
+        stream::scoped_accessor& operator[](std::string_view);
         std::vector<pinstream_ref> _streams;
     };
 
+    node();
+
+    size_t num_uppins() const;
+    size_t num_dnpins() const;
+
+    void num_uppins(size_t);
+    void num_dnpins(size_t);
+
     pin& inpin();
     pin& inpin(size_t index);
-    pin& inpin(std::string ref);
+    pin& inpin(std::string_view ref);
 
     pin& outpin();
     pin& outpin(size_t index);
-    pin& outpin(std::string ref);
+    pin& outpin(std::string_view ref);
 
     //---------------------------------------------------------------------------------------
     protected:
     graph_properties _properties;
 
-    void decl_input     ( std::string label, size_t nchannels, bool def );
-    void decl_output    ( std::string label, size_t nchannels, bool def );
+    // it should be string_views, not strings
+    void decl_input(std::string_view label, size_t nchannels, bool def = false);
+    void decl_output(std::string_view label, size_t nchannels, bool def = false);
 
     virtual void initialize  ( graph_properties properties ) noexcept = 0;
     virtual void rwrite      ( node::pool& in, node::pool& out, size_t sz ) noexcept = 0;
 
     private:
-    pool make_pools  ( std::vector<pin>& pinvector, size_t sz ) noexcept;
-    void configure   ( graph_properties properties ) noexcept;
-    void process     ( ) noexcept;
-
+    pool make_pools   ( std::vector<pin>& pinvector, size_t sz ) noexcept;
+    void configure    ( graph_properties properties ) noexcept;
     bool connected    ( node const& other ) const noexcept;
+
+    void process() noexcept;
 
     size_t _pos;
     bool _intertwined = false;
     std::vector<pin> _uppins;
     std::vector<pin> _dnpins;
 
+    WPN_UNIMPLEMENTED
+    // this will be for later use
+    // in the spatialization-rendering context
+    signal_t _x = 0;
+    signal_t _y = 0;
+    signal_t _w = 0;
+    signal_t _h = 0;
 
 };// node
 // ==========================================================================================
@@ -109,6 +133,14 @@ class connection
 {
     friend class node;
     friend class graph;
+
+    WPN_UNIMPLEMENTED
+    enum class pattern
+    {
+        merge   = 0,
+        append  = 1,
+        split   = 2
+    };
 
     public:
     using matrix = std::vector<std::pair<size_t,size_t>>;
@@ -128,7 +160,7 @@ class connection
     void close   ( );
 
     protected:
-    connection      ( node::pin& source, node::pin& dest, matrix mtx );
+    connection      ( node::pin& source, node::pin& dest, pattern ptn );
     void allocate   ( size_t size );
     void pull       ( size_t size );
 
@@ -143,6 +175,7 @@ class connection
     node::pin& _source;
     node::pin& _dest;
     matrix _matrix;
+    pattern _pattern;
 };
 
 // ==========================================================================================
@@ -152,25 +185,34 @@ class graph
     public:
     friend class node;
 
-    static void initialize();
+    static connection&
+    connect(node::pin& source, node::pin& dest,
+            connection::pattern = connection::pattern::merge);
 
     static connection&
-    connect(node::pin& source,
-            node::pin& dest,
-            connection::matrix mtx = {});
+    connect(node& source, node& dest,
+            connection::pattern = connection::pattern::merge);
 
     static connection&
-    connect(node& source,
-            node& dest,
-            connection::matrix mtx = {});
+    connect(node& source, node::pin& dest,
+            connection::pattern = connection::pattern::merge);
 
-    static void disconnect(node::pin& source,
-                           node::pin& dest);
+    static connection&
+    connect(node::pin& source, node& dest,
+            connection::pattern = connection::pattern::merge);
+
+    static void disconnect(node::pin& source, node::pin& dest);
+    static void disconnect(node& source, node& dest);
+
+    static void clear_connections(node& lhs, node& rhs);
+    static int clear();
+
+    static int run(node&, size_t = 1);
 
     static void
-    configure(signal_t rate,
-             size_t vector_size,
-             size_t vector_feedback_size);
+    configure(signal_t rate = 44100,
+             size_t vector_size = 512,
+             size_t vector_feedback_size = 64);
 
     private:
     static std::vector<connection*>
@@ -188,7 +230,7 @@ class sinetest : public node
 // ==========================================================================================
 {
     public:
-    sinetest();
+    sinetest(signal_t f);
 
     void initialize(graph_properties properties) noexcept override;
     void rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexcept override;
@@ -196,6 +238,7 @@ class sinetest : public node
     private:
     stream _wtable;
     size_t _phase;
+    signal_t _frequency;
 };
 // ==========================================================================================
 class vca : public node
@@ -208,7 +251,26 @@ class vca : public node
 
     private:
     signal_t _amplitude = 1;
+};
 
+// ==========================================================================================
+class rmodulator : public node
+// ==========================================================================================
+{
+    public:
+    void initialize(graph_properties properties) noexcept override;
+    void rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexcept override;
+
+    private:
+    signal_t _frequency;
+};
+// ==========================================================================================
+class dummy_output : public node
+// ==========================================================================================
+{
+    public:
+    void initialize(graph_properties properties) noexcept override;
+    void rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexcept override;
 };
 
 }

@@ -5,8 +5,9 @@
 using namespace wpn114::signal;
 // ------------------------------------------------------------------------------------------
 
-node::pin::pin(node &parent, std::string label, size_t nchannels, bool def) :
-    _parent(parent), _label(label), _default(def), _nchannels(nchannels)
+node::pin::pin(node &parent, polarity_t t, std::string_view label, size_t nchannels, bool def) :
+    _parent(parent), _label(label), _default(def), _nchannels(nchannels),
+    _polarity(t)
 {
     _connections.reserve(15);
 }
@@ -17,16 +18,71 @@ node::pin::allocate(size_t size)
     _stream.allocate(_nchannels, size);
 }
 
-stream::scoped_accessor& node::pool::operator[](std::string ref)
+void node::pin::add_connection(connection& con)
+{
+    _connections.push_back(&con);
+}
+
+void node::pin::remove_connection(connection& con)
+{
+    std::remove(_connections.begin(),
+                _connections.end(),
+                &con);
+}
+
+bool node::pin::connected()
+{
+    return _connections.size() > 0;
+}
+
+bool node::pin::connected(node& node)
+{
+    for ( const auto& con : _connections )
+    {
+        if  ( _polarity == input &&
+             &con->_source._parent == &node )
+             return true;
+
+        else if ( _polarity == output &&
+                  &con->_dest._parent == &node )
+            return true;
+    }
+
+    return false;
+}
+
+bool node::pin::connected(node::pin& pin)
+{
+    for ( const auto& con : _connections )
+    {
+        if ( _polarity == input &&
+            &con->_source == &pin )
+            return true;
+
+        else if ( _polarity == output &&
+                  &con->_dest == &pin )
+            return true;
+    }
+    return false;
+}
+
+stream::scoped_accessor& node::pool::operator[](std::string_view ref)
 {
     for ( auto& strm : _streams )
         if ( strm.label == ref )
              return strm._stream;
+
+    WPN_EXCEPT
 }
 
 // ------------------------------------------------------------------------------------------
 // NODE
 // ------------------------------------------------------------------------------------------
+
+node::node()
+{
+    graph::_nodes.push_back(this);
+}
 
 WPN_UNIMPLEMENTED
 bool node::connected(node const& other ) const noexcept
@@ -47,20 +103,23 @@ node::make_pools(std::vector<pin>& pinvec, size_t sz) noexcept
     return pool;
 }
 
-void node::decl_input(std::string label, size_t nchannels, bool def)
+void node::decl_input(std::string_view label, size_t nchannels, bool def)
 {
-    _uppins.emplace_back(*this, label, nchannels, def);
+    _uppins.emplace_back(*this, input, label, nchannels, def);
 }
 
-void node::decl_output(std::string label, size_t nchannels, bool def)
+void node::decl_output(std::string_view label, size_t nchannels, bool def)
 {
-    _dnpins.emplace_back(*this, label, nchannels, def);
+    _dnpins.emplace_back(*this, output, label, nchannels, def);
 }
 
-WPN_UNIMPLEMENTED
 node::pin& node::inpin()
 {
-    // return default input pin
+    for ( auto& pin : _uppins )
+          if ( pin._default )
+               return pin;
+
+    WPN_EXCEPT
 }
 
 node::pin& node::inpin(size_t index)
@@ -69,16 +128,22 @@ node::pin& node::inpin(size_t index)
     return _uppins[index];
 }
 
-WPN_UNIMPLEMENTED
-node::pin& node::inpin(std::string ref)
+node::pin& node::inpin(std::string_view ref)
 {
+    for ( auto& pin: _uppins )
+         if ( pin._label == ref )
+              return pin;
 
+    WPN_EXCEPT
 }
 
-WPN_UNIMPLEMENTED
 node::pin& node::outpin()
 {
+    for ( auto& pin : _dnpins )
+          if ( pin._default )
+               return pin;
 
+    WPN_EXCEPT
 }
 
 node::pin& node::outpin(size_t index)
@@ -87,11 +152,14 @@ node::pin& node::outpin(size_t index)
 }
 
 WPN_UNIMPLEMENTED
-node::pin& node::outpin(std::string ref)
+node::pin& node::outpin(std::string_view ref)
 {
+    for ( auto& pin: _dnpins )
+         if ( pin._label == ref )
+              return pin;
 
+    WPN_EXCEPT
 }
-
 
 void node::configure(graph_properties properties) noexcept
 {
@@ -138,25 +206,34 @@ void connection::pull(size_t sz)
          while ( _source._parent._pos < sz )
                  _source._parent.process();
 
-    // we draw from source's _stream
-    // (streams have been synced at construct-time)
-    WPN_OPTIMIZE // do not draw & pour if muted, just increment position
-    auto s = _stream.draw(sz);
-
     if ( _muted )
-         s.drain();
-    else s *= _level;
+    {
+        WPN_UNIMPLEMENTED
+        // do not draw & pour if muted, just increment position
+        _stream.draw_skip(sz);
+        _stream.pour_skip(sz);
+    }
 
-    // then, we pour its stream into dest's
-    // depending on matrix routing (todo)
-    _stream.pour(sz);
+    else
+    {
+        // we draw from source's _stream
+        // (streams have been synced at construct-time)
+        auto s = _stream.draw(sz);
+        s*= _level;
+
+        WPN_UNIMPLEMENTED
+        // then, we pour its stream into dest's
+        // depending on matrix routing (todo)
+        _stream.pour(sz);
+    }
 }
 
-connection::connection(node::pin& source, node::pin& dest, matrix mtx) :
-    _source(source), _dest(dest), _matrix(mtx)
+connection::connection(node::pin& source, node::pin& dest, pattern ptn) :
+    _source(source), _dest(dest), _pattern(ptn)
 {
-    _stream.add_upsync(_source._stream);
-    _stream.add_dnsync(_dest._stream);
+    WPN_EXAMINE
+    _stream.add_upsync( _source._stream);
+    _stream.add_dnsync( _dest._stream);
 }
 
 void connection::allocate(size_t size)
@@ -206,30 +283,38 @@ std::vector<connection*> graph::_connections;
 std::vector<node*> graph::_nodes;
 graph_properties graph::_properties;
 
-void graph::initialize()
-{
-    _connections.reserve(150);
-    _nodes.reserve(100);
-}
-
-connection& graph::connect(node::pin& source, node::pin& dest, connection::matrix mtx)
-{
-    connection* con = new connection(source, dest, mtx);
-
-    _connections.push_back          ( con );
-    source._connections.push_back   ( con );
-    dest._connections.push_back     ( con );
-
-    WPN_UNIMPLEMENTED
-    // parse matrix
-
-    if ( dest._parent.connected(source._parent))
+connection& graph::connect(node::pin& source, node::pin& dest,
+                           connection::pattern ptn)
+{    
+    // verify that source is output and dest is input
+    if ( source._polarity != output || dest._polarity != input )
     {
-        dest._parent._intertwined    = true;
+        // throw exception
+        WPN_EXCEPT;
+    }
+
+    // connection's constructor will examine (silently)
+    // if the connection pattern is correct or not
+    connection* con = new connection(source, dest, ptn);
+
+    _connections.push_back  ( con  );
+    source.add_connection   ( *con );
+    dest.add_connection     ( *con );
+
+    if ( dest.connected( source ))
+    {
         source._parent._intertwined  = true;
+        dest._parent._intertwined    = true;
         con->_feedback               = true;
     }
+
     return *con;
+}
+
+connection& graph::connect(node& source, node& dest,
+                           connection::pattern ptn)
+{
+    return graph::connect(source.outpin(), dest.inpin(), ptn);
 }
 
 void graph::disconnect(node::pin &source, node::pin &dest)
@@ -242,13 +327,18 @@ void graph::disconnect(node::pin &source, node::pin &dest)
                con = cn;
 
     if ( con )
-    {
-        std::remove(_connections.begin(), _connections.end(), con);
-        std::remove(source._connections.begin(), source._connections.end(), con);
-        std::remove(dest._connections.begin(), dest._connections.end(), con);
+    {                
+        source.remove_connection(*con);
+        dest.remove_connection(*con);
     }
 
     WPN_EXCEPT // throw exception if connection not found
+}
+
+// convenience method for disconnecting default inputs/outputs
+void graph::disconnect(node& source, node& dest)
+{
+    graph::disconnect(source.outpin(), dest.inpin());
 }
 
 void graph::configure(signal_t rate, size_t vector_size, size_t fb_size)
@@ -256,24 +346,45 @@ void graph::configure(signal_t rate, size_t vector_size, size_t fb_size)
     _properties.rate    = rate;
     _properties.vsz     = vector_size;
     _properties.fvsz    = fb_size;
+
+    _connections.reserve(150);
+    _nodes.reserve(100);
+}
+
+int graph::run(node& node, size_t times)
+{
+    while ( times )
+    {
+        node.process();
+        times--;
+    }
+
+    return 0;
+}
+
+WPN_UNIMPLEMENTED
+int graph::clear()
+{
+    return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 // SINETEST
-sinetest::sinetest() {}
+sinetest::sinetest(signal_t f) : _frequency(f) {}
+#define WPN_SINETEST_WT_SZ 16384
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 void sinetest::initialize(graph_properties properties) noexcept
 {
     // initialize stream
-    _wtable.allocate(1, 16384);
+    _wtable.allocate(1, WPN_SINETEST_WT_SZ);
     auto acc = _wtable.accessor();
 
     // declare an input pin
     decl_input("FREQUENCY", 1, true);
 
     // declare an output pin
-    decl_output("MAIN", 1, true); // ok
+    decl_output("MAIN", 1, true);
 }
 
 void sinetest::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexcept
@@ -285,6 +396,10 @@ void sinetest::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexce
     // we make a stack-copy of the freq stream
     // in order to make more efficient calculations
     stack_stream<> op(freq);
+
+    if ( inpin().connected())
+         op.accessor() *= _frequency;
+
     auto op_acc = op.accessor();
 
     // this will give us the incrementation positions
@@ -300,11 +415,18 @@ void sinetest::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexce
 
 void vca::initialize(graph_properties properties) noexcept
 {
-    decl_input("MAIN", 1, true);
-    decl_input("GAIN", 1, false);
+    WPN_UNIMPLEMENTED
+    // when nchannels is set to zero
+    // that it is input-agnostic
+    // this would be similar to multichannel expansion in sc
+    // we can set the number of inputs/outputs at runtime
+    decl_input( "MAIN", 0, true );
+    decl_input( "GAIN", 1 );
 
-    decl_output("MAIN", 1, true);
+    decl_output( "MAIN", 0, true );
 }
+
+vca::vca() {}
 
 void vca::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexcept
 {
@@ -319,4 +441,34 @@ void vca::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexcept
          out   = in;
     }
     else out = in* _amplitude;
+}
+
+void rmodulator::initialize(graph_properties properties) noexcept
+{
+    // input declaration ----------
+    decl_input( "MAIN", 0, true );
+    decl_input( "FREQUENCY", 1  );
+    decl_input( "WAVEFORM", 1   );
+
+    // output declaration ---------
+    decl_output( "MAIN", 0, true );
+}
+
+void rmodulator::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexcept
+{
+    auto in  = inputs  [ "MAIN" ];
+    auto out = outputs [ "MAIN" ];
+}
+
+void dummy_output::initialize(graph_properties properties) noexcept
+{
+    decl_input("MAIN", 1, true);
+}
+
+void dummy_output::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) noexcept
+{
+    auto in = inputs["MAIN"];
+
+    for ( size_t n = 0; n < sz; ++n )
+          std::cout << in[0][n] << std::endl;
 }

@@ -30,6 +30,12 @@ channel& channel::operator=(channel const& copy)
     return *this;
 }
 
+channel::~channel()
+{
+    WPN_UNSAFE // if data is allocated on the stack..
+    delete[] _data;
+}
+
 channel::operator scoped_accessor()
 {
     return scoped_accessor(*this, _data, _data+_size, _data);
@@ -49,6 +55,15 @@ channel::accessor(size_t begin, size_t size, size_t pos)
 
 channel::scoped_accessor::scoped_accessor(channel& parent, signal_t* b, signal_t* e, signal_t* pos) :
     _parent(parent), _begin(b), _end(e), _pos(pos) {}
+
+channel::scoped_accessor::scoped_accessor(channel::scoped_accessor const& copy) :
+    _parent(copy._parent),
+    _begin(copy._begin),
+    _end(copy._end),
+    _pos(copy._pos)
+{
+
+}
 
 channel::scoped_accessor::iterator
 channel::scoped_accessor::begin()
@@ -71,6 +86,17 @@ channel::scoped_accessor&
 channel::scoped_accessor::operator=(signal_t const s)
 {
     FOR_CHANNEL_SAMPLE(n) _begin[n] = s;
+    return *this;
+}
+
+
+// copy-assign operator
+// the _DATA_ is copied, not the whole structure
+channel::scoped_accessor&
+channel::scoped_accessor::operator=(channel::scoped_accessor const& assign)
+{
+    FOR_CHANNEL_SAMPLE(n)
+       _begin[n] = assign._begin[n];
     return *this;
 }
 
@@ -197,67 +223,71 @@ channel::scoped_accessor::operator/=(signal_t const s)
 
 // ------------------------------------------------------------------------------------------
 
-signal_t channel::scoped_accessor::min(level_t t)
+signal_t channel::scoped_accessor::min()
 {
     signal_t min = 0;
     FOR_CHANNEL_SAMPLE(n)
              min = std::min(min, _begin[n]);
-
-    WPN_EXAMINE
-    if ( t == level_t::linear )
-         return min;
-    else return ATODB(min);
+    return   min;
 }
 
-signal_t channel::scoped_accessor::max(level_t t)
+signal_t channel::scoped_accessor::max()
 {
     signal_t max = 0;
     FOR_CHANNEL_SAMPLE(n)
              max = std::max(max, _begin[n]);
-
-    WPN_EXAMINE
-    if ( t == level_t::linear)
-         return max;
-    else return ATODB(max);
+    return   max;
 }
 
-signal_t channel::scoped_accessor::rms(level_t t)
+signal_t channel::scoped_accessor::rms()
 {
-    signal_t mean = 0, rms = 0;
+    signal_t mean = 0;
     FOR_CHANNEL_SAMPLE(n)
              mean += _begin[n];
 
-    rms = sqrt(1.0/_size*mean);
-
-    WPN_EXAMINE
-    if ( t == level_t::linear )
-         return rms;
-    else return ATODB(rms);
+    return sqrt(1.0/_size*mean);
 }
 
-void channel::scoped_accessor::drain()
+void
+channel::scoped_accessor::drain()
 {
-    std::memset(_begin, 0, _size);
+    std::memset(_begin, 0, sizeof(signal_t)*_size);
 }
 
-void channel::scoped_accessor::normalize()
+void
+channel::scoped_accessor::normalize()
 {
     signal_t m = max();
     FOR_CHANNEL_SAMPLE(n)
         _begin[n] *= 1.0/m;
 }
 
-size_t channel::scoped_accessor::size() const
+size_t
+channel::scoped_accessor::size() const
 {
     return _size;
 }
 
+void // lookup,
+channel::scoped_accessor::lookup(scoped_accessor& source,
+                                 scoped_accessor const& head,
+                                 bool increment)
+{
+    if ( increment )
+    {
+
+    }
+
+    else
+    {
+
+    }
+}
+
 // ==========================================================================================
 // WPN114::SIGNAL::CHANNEL::SCOPED_ACCESSOR::ITERATOR
+channel::scoped_accessor::iterator::iterator(signal_t* data) : _data(data) {}
 // ==========================================================================================
-
-channel::scoped_accessor::iterator::iterator(signal_t* data) :
-    _data(data) {}
 
 channel::scoped_accessor::iterator&
 channel::scoped_accessor::iterator::operator++()
@@ -303,7 +333,7 @@ stream::stream(size_t nchannels, size_t channel_size, signal_t fill) :
     _size(channel_size), _nchannels(nchannels)
 {
     for ( size_t n = 0; n < nchannels; ++n)
-        _channels.push_back(new channel(channel_size, fill));
+         _channels.push_back(new channel(channel_size, fill));
 }
 
 WPN_UNIMPLEMENTED
@@ -316,6 +346,12 @@ WPN_UNIMPLEMENTED
 stream& stream::operator=(stream const& copy)
 {
 
+}
+
+stream::~stream()
+{
+    for ( auto& channel : _channels )
+          delete channel;
 }
 
 size_t stream::size() const
@@ -358,6 +394,7 @@ void stream::allocate(size_t nchannels, size_t size)
 }
 
 // in the case that we already know how many channels there will be
+WPN_UNSAFE
 void stream::allocate(size_t size)
 {
     for ( size_t n = 0; n < _nchannels; ++n )
@@ -380,6 +417,16 @@ void stream::add_upsync(stream& s)
 void stream::add_dnsync(stream& s)
 {
     add_sync(s, _dnsync);
+}
+
+void stream::draw_skip(size_t sz)
+{
+    _upsync.pos += sz;
+}
+
+void stream::pour_skip(size_t sz)
+{
+    _dnsync.pos += sz;
 }
 
 stream::scoped_accessor
@@ -409,6 +456,25 @@ stream::scoped_accessor::scoped_accessor(stream& parent,
 {
     for ( size_t n = 0; n < parent.nchannels(); ++n)
         _accessors.push_back(parent[n].accessor(begin, size));
+}
+
+stream::scoped_accessor::scoped_accessor(stream::scoped_accessor const& copy) :
+    _parent(copy._parent),
+    _begin(copy._begin),
+    _size(copy._size),
+    _pos(copy._pos),
+    _accessors(copy._accessors)
+{
+}
+
+stream::scoped_accessor&
+stream::scoped_accessor::operator=(stream::scoped_accessor const& assign)
+{
+    // copy-assign, we just copy contents into this
+    for ( size_t n = 0; n < assign.nchannels(); ++n )
+         _accessors[n] = assign._accessors[n];
+
+    return *this;
 }
 
 stream::scoped_accessor::iterator
@@ -494,7 +560,6 @@ stream::scoped_accessor::operator<<(scoped_accessor const& other)
     // merge streambuffers
     for ( size_t n = 0; n < other.nchannels(); ++n )
          _accessors[n] << other._accessors[n];
-
     return *this;
 }
 
@@ -508,10 +573,9 @@ stream::scoped_accessor::operator>>(scoped_accessor& other)
 
 WPN_UNIMPLEMENTED
 void stream::scoped_accessor::lookup( scoped_accessor& source,
-                                      const scoped_accessor & index)
+                                      scoped_accessor const& index,
+                                      bool increment)
 {
-
-
 
 }
 
@@ -542,8 +606,3 @@ bool stream::scoped_accessor::iterator::operator!=(iterator const& s)
 {
     return s._data != _data;
 }
-
-
-
-
-

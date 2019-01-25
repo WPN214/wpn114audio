@@ -29,9 +29,6 @@ namespace signal
 #define ATODB(_a) std::log10(_a)*20
 #define DBTOA(_d) std::pow(10, _d*.05)
 #define LININTERP(_x,_a,_b) _a+_x*(_b-_a)
-
-
-
 // ===========================================================================================
 // heap-allocated channel
 class channel
@@ -47,6 +44,8 @@ class channel
     channel(size_t size, signal_t fill = 0);
     channel(channel const&);
     channel(channel&&) = delete;
+
+    ~channel();
 
     // assignment operators
     channel& operator=(channel const&);
@@ -67,16 +66,19 @@ class channel
     // ======================================================================================
     {
         friend class channel;
-        public:
 
+        public:
         scoped_accessor();
+        scoped_accessor(scoped_accessor const&);
+
         class iterator;
         iterator begin();
         iterator end();
 
         signal_t& operator[](size_t);
-        size_t size() const;
+        size_t size() const;        
         scoped_accessor& operator=(signal_t const);
+        scoped_accessor& operator=(scoped_accessor const&);
         scoped_accessor& operator++();
 
         // stream operators --------------------------------
@@ -103,12 +105,16 @@ class channel
         scoped_accessor& operator/=(const signal_t);
 
         // signal-related -------------------
-        signal_t min(level_t = level_t::linear);
-        signal_t max(level_t = level_t::linear);
-        signal_t rms(level_t = level_t::linear);
+        signal_t min();
+        signal_t max();
+        signal_t rms();
 
         void drain();
         void normalize();
+
+        void lookup( scoped_accessor&,
+                     scoped_accessor const&,
+                     bool increment = false );
 
         private:
         scoped_accessor(channel&, signal_t* begin, signal_t* end, signal_t* pos );
@@ -157,6 +163,8 @@ class stream
     void allocate(size_t nchannels, size_t size);
     void allocate(size_t size);
 
+    ~stream();
+
     class scoped_accessor;
     operator scoped_accessor();
     scoped_accessor accessor(size_t begin = 0, size_t size = 0, size_t pos = 0);
@@ -177,6 +185,9 @@ class stream
     void add_sync(stream&, sync&);
     void add_upsync(stream&);
     void add_dnsync(stream&);
+
+    void draw_skip(size_t);
+    void pour_skip(size_t);
 
     scoped_accessor draw(size_t);
     void pour(size_t);
@@ -202,8 +213,6 @@ class stream
         public:        
         scoped_accessor();
         scoped_accessor(scoped_accessor const&);
-        scoped_accessor(scoped_accessor&&) = delete;
-
         scoped_accessor& operator=(scoped_accessor const&);
 
         class iterator;
@@ -222,7 +231,7 @@ class stream
         scoped_accessor& operator<<(scoped_accessor const&);
         scoped_accessor& operator>>(scoped_accessor&);
 
-        void lookup(scoped_accessor&, scoped_accessor const&);
+        void lookup(scoped_accessor&, scoped_accessor const&, bool increment = false);
 
         size_t size() const;
         size_t nchannels() const;
