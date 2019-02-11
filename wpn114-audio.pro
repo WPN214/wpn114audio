@@ -34,11 +34,12 @@ linux {
 HEADERS += $$PWD/external/rtaudio/RtAudio.h \
     source/qtwrapper.hpp
 HEADERS += $$PWD/source/audio.hpp
-HEADERS += $$PWD/source/soundfile.hpp
+HEADERS += $$PWD/source/stream.hpp
 SOURCES += $$PWD/external/rtaudio/RtAudio.cpp \
     source/qtwrapper.cpp
 SOURCES += $$PWD/source/audio.cpp
-SOURCES += $$PWD/source/soundfile.cpp
+SOURCES += $$PWD/source/stream.cpp
+
 
 SOURCES += $$PWD/qml_plugin.cpp
 HEADERS += $$PWD/qml_plugin.hpp
