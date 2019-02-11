@@ -4,7 +4,7 @@
 //-------------------------------------------------------------------------------------------------
 #define RTFM "READ_THE_FUCKING_MANUAL"
 //-------------------------------------------------------------------------------------------------
-#define WPN_STRUCT_INITIALIZE(_t, _v) _t _v =
+#define WPN_STRUCT_CREATE_INITIALIZE(_t, _v) _t _v =
 //-------------------------------------------------------------------------------------------------
 #define WPN_TODO
 #define WPN_REFACTOR
@@ -15,7 +15,7 @@
 #define WPN_REVISE
 #define WPN_OK
 //-------------------------------------------------------------------------------------------------
-#define FOREACH_CHANNEL_SAMPLE(_c, _n) for(usize _n = 0; _n < _c->size; ++_n)
+#define foreach_channel_sample(_c, _n) for(usize _n = 0; _n < _c->size; ++_n)
 typedef wpn_channel_accessor wpn_ch_acc;
 typedef wpn_stream_accessor wpn_st_acc;
 //-------------------------------------------------------------------------------------------------
@@ -60,8 +60,8 @@ wpn_channel_allocate(usize n, usize size, sgn_t rate)
 WPN_OK wpn_channel_accessor
 wpn_channel_access(wpn_channel* channel, usize begin, usize size, usize pos)
 {
-    WPN_STRUCT_INITIALIZE
-    ( wpn_ch_acc, acc )
+    WPN_STRUCT_CREATE_INITIALIZE
+        ( wpn_ch_acc, acc )
     {
         .parent  = channel,
         .begin   = channel->data+begin,
@@ -70,6 +70,12 @@ wpn_channel_access(wpn_channel* channel, usize begin, usize size, usize pos)
     };
 
     return acc;
+}
+
+WPN_TODO wpn_channel_accessor
+wpn_stack_channel_access(wpn_stack_channel* channel, usize begin, usize size, usize pos)
+{
+
 }
 
 // ----------------------------------------------------------------------
@@ -86,8 +92,8 @@ wpn_channel_drain(wpn_ch_acc* acc )
 WPN_OK void
 wpn_channel_vfill(wpn_ch_acc* acc, sgn_t v)
 {
-    FOREACH_CHANNEL_SAMPLE(acc, s)
-            acc->begin[s] = v;
+    foreach_channel_sample(acc, s)
+        acc->begin[s] = v;
 }
 // ----------------------------------------------------------------------
 // ** CHANNEL-COPY-MERGE
@@ -98,12 +104,10 @@ wpn_channel_vfill(wpn_ch_acc* acc, sgn_t v)
 WPN_EXAMINE void
 wpn_channel_cpmg(wpn_ch_acc* source, wpn_ch_acc* dest)
 {
-    usize index = source->size < dest->size ?
-                  source->size : dest->size;
-
+    usize index = wpnmin(source->size, dest->size);
     while ( index-- )
             dest->begin[index] +=
-            source->begin[index];
+                source->begin[index];
 }
 // ----------------------------------------------------------------------
 // ** CHANNEL-POUR
@@ -117,11 +121,44 @@ wpn_channel_pour(wpn_ch_acc* source, wpn_ch_acc* dest)
     wpn_channel_cpmg(source, dest);
     wpn_channel_drain(dest);
 }
+
+WPN_OK void
+wpn_channel_crem(wpn_ch_acc* target, wpn_ch_acc* operator)
+{
+    usize sz = wpnmin(target->size, operator->size);
+    for ( usize n = 0; n < sz; ++n )
+        target->begin[n] -= operator->begin[n];
+}
+
+WPN_OK void
+wpn_channel_cmul(wpn_ch_acc* target, wpn_ch_acc* operator)
+{
+    usize sz = wpnmin(target->size, operator->size);
+    for ( usize n = 0; n < sz; ++n )
+          target->begin[n] *= operator->begin[n];
+}
+
+WPN_OK void
+wpn_channel_cdiv(wpn_ch_acc* target, wpn_ch_acc* operator)
+{
+    usize sz = wpnmin(target->size, operator->size);
+    for ( usize n = 0; n < sz; ++n )
+          target->begin[n] /= operator->begin[n];
+}
+
+WPN_TODO void
+wpn_channel_lookup(wpn_ch_acc* source, wpn_ch_acc* dest, wpn_ch_acc* head, bool increment)
+{
+    assert(source->size == dest->size == head->size);
+
+}
+
+
 //-------------------------------------------------------------------------------------------------
 // CHANNEL OPERATIONS & ANALYSIS
 //-------------------------------------------------------------------------------------------------
 #define FOREACH_SAMPLE_OPERATOR(_c, _s, _v)                                                       \
-        FOREACH_CHANNEL_SAMPLE(_c, _n) _c->begin[_n] _s _v;
+        foreach_channel_sample(_c, _n) _c->begin[_n] _s _v;
 //-------------------------------------------------------------------------------------------------
 void // +=
 wpn_channel_dcadd(wpn_ch_acc* acc, sgn_t offset)
@@ -157,7 +194,7 @@ WPN_OK sgn_t
 wpn_channel_min(wpn_ch_acc* acc)
 {
     sgn_t  m = 0;
-    FOREACH_CHANNEL_SAMPLE(acc, n)
+    foreach_channel_sample(acc, n)
            m = wpnmin(m, acc->begin[n]);
     return m;
 }
@@ -166,7 +203,7 @@ WPN_OK sgn_t
 wpn_channel_max(wpn_ch_acc* acc)
 {
     sgn_t  m = 0;
-    FOREACH_CHANNEL_SAMPLE(acc, n)
+    foreach_channel_sample(acc, n)
            m = wpnmax(m, acc->begin[n]);
     return m;
 }
@@ -176,7 +213,7 @@ wpn_channel_rms(wpn_ch_acc* acc, enum level_t t)
 {
     if ( t == linear )
          return rms(acc->begin, acc->size);
-    else return ATODB(rms(acc->begin, acc->size));
+    else return atodb(rms(acc->begin, acc->size));
 }
 
 // ================================================================================================
@@ -204,8 +241,8 @@ wpn_stream_accessor
 wpn_stream_access(wpn_stream* stream, usize begin, usize size, usize pos)
 {
 
-    WPN_STRUCT_INITIALIZE
-    ( wpn_st_acc, acc ) {
+    WPN_STRUCT_CREATE_INITIALIZE
+      ( wpn_st_acc, acc ) {
         .parent   = stream,
         .begin    = begin,
         .end      = begin+size,
@@ -214,6 +251,12 @@ wpn_stream_access(wpn_stream* stream, usize begin, usize size, usize pos)
     };
 
     return acc;
+}
+
+WPN_TODO wpn_stream_accessor
+wpn_stack_stream_access(wpn_stack_stream* stream, usize begin, usize sz, usize pos)
+{
+
 }
 
 // ------------------------------------------------------------------------------------------
@@ -225,14 +268,14 @@ wpn_stream_at(wpn_stream_accessor* acc, usize index)
 }
 
 // ------------------------------------------------------------------------------------------
-#define FOREACH_STREAM_CHANNEL(_acc, _c)                                                    \
+#define foreach_stream_channel(_acc, _c)                                                    \
         for (usize _c = 0; _c < _acc->parent->nchannels; ++_c)
 // ------------------------------------------------------------------------------------------
 
 void
 wpn_stream_drain(wpn_st_acc* s_acc)
 {
-    FOREACH_STREAM_CHANNEL (s_acc, c) {
+    foreach_stream_channel(s_acc, c) {
         wpn_ch_acc c_acc = wpn_stream_at(s_acc, c);
         wpn_channel_drain(&c_acc);
     }
@@ -241,19 +284,29 @@ wpn_stream_drain(wpn_st_acc* s_acc)
 void
 wpn_stream_vfill(wpn_st_acc* s_acc, sgn_t v)
 {
-    FOREACH_STREAM_CHANNEL (s_acc, c) {
+    foreach_stream_channel(s_acc, c) {
         wpn_ch_acc c_acc = wpn_stream_at(s_acc, c);
         wpn_channel_vfill(&c_acc, v);
     }
 }
 
-WPN_UNSAFE void
+WPN_TODO void // COPY-REPLACE
+wpn_stream_cprp(wpn_st_acc* source, wpn_st_acc* dest)
+{
+
+}
+
+WPN_OK void
 wpn_stream_cpmg(wpn_st_acc* source, wpn_st_acc* dest)
 {
-    FOREACH_STREAM_CHANNEL (source, c) {
-        wpn_ch_acc s_acc = wpn_stream_at(source, c);
-        wpn_ch_acc d_acc = wpn_stream_at(dest, c);
-        wpn_channel_cpmg(&s_acc, &d_acc);
+    usize sz = wpnmin(source->parent->nchannels,
+                      dest->parent->nchannels);
+
+    for ( usize ch = 0; ch < sz; ++ch )
+    {
+        wpn_ch_acc s_acc = wpn_stream_at(source, ch);
+        wpn_ch_acc o_acc = wpn_stream_at(dest, ch);
+        wpn_channel_cpmg(&s_acc, &o_acc);
     }
 }
 
@@ -264,13 +317,61 @@ wpn_stream_pour(wpn_st_acc* source, wpn_st_acc* dest)
     wpn_stream_drain(dest);
 }
 
+WPN_REFACTOR void
+wpn_stream_srem(wpn_st_acc* source, wpn_st_acc* operator)
+{
+    usize sz = wpnmin(source->parent->nchannels,
+            operator->parent->nchannels);
+
+    for ( usize ch = 0; ch < sz; ++ch )
+    {
+        wpn_ch_acc s_acc = wpn_stream_at(source, ch);
+        wpn_ch_acc o_acc = wpn_stream_at(operator, ch);
+        wpn_channel_crem(&s_acc, &o_acc);
+    }
+}
+
+WPN_REFACTOR void
+wpn_stream_smul(wpn_st_acc* source, wpn_st_acc* operator)
+{
+    usize sz = wpnmin(source->parent->nchannels,
+                      operator->parent->nchannels);
+
+    for ( usize ch = 0; ch < sz; ++ch )
+    {
+        wpn_ch_acc s_acc = wpn_stream_at(source, ch);
+        wpn_ch_acc o_acc = wpn_stream_at(operator, ch);
+        wpn_channel_cmul(&s_acc, &o_acc);
+    }
+}
+
+WPN_REFACTOR void
+wpn_stream_sdiv(wpn_st_acc* source, wpn_st_acc* operator)
+{
+    usize sz = wpnmin(source->parent->nchannels,
+                      operator->parent->nchannels);
+
+    for ( usize ch = 0; ch < sz; ++ch )
+    {
+        wpn_ch_acc s_acc = wpn_stream_at(source, ch);
+        wpn_ch_acc o_acc = wpn_stream_at(operator, ch);
+        wpn_channel_cdiv(&s_acc, &o_acc);
+    }
+}
+
+WPN_TODO void
+wpn_stream_lookup(wpn_st_acc* source, wpn_st_acc* dest, wpn_st_acc* head, bool increment)
+{
+
+}
+
 // ------------------------------------------------------------------------------------------
 // STREAM OPERATIONS
 // ------------------------------------------------------------------------------------------
 void
 wpn_stream_dcadd(wpn_st_acc* s_acc, sgn_t offset)
 {
-    FOREACH_STREAM_CHANNEL (s_acc, c) {
+    foreach_stream_channel (s_acc, c) {
         wpn_ch_acc c_acc = wpn_stream_at(s_acc, c);
         wpn_channel_dcadd(&c_acc, offset);
     }
@@ -279,7 +380,7 @@ wpn_stream_dcadd(wpn_st_acc* s_acc, sgn_t offset)
 void
 wpn_stream_dcrem(wpn_st_acc* s_acc, sgn_t offset)
 {
-    FOREACH_STREAM_CHANNEL (s_acc, c) {
+    foreach_stream_channel (s_acc, c) {
         wpn_ch_acc c_acc = wpn_stream_at(s_acc, c);
         wpn_channel_dcrem(&c_acc, offset);
     }
@@ -288,7 +389,7 @@ wpn_stream_dcrem(wpn_st_acc* s_acc, sgn_t offset)
 void
 wpn_stream_mul(wpn_st_acc* s_acc, sgn_t ratio)
 {
-    FOREACH_STREAM_CHANNEL (s_acc, c) {
+    foreach_stream_channel (s_acc, c) {
         wpn_ch_acc c_acc = wpn_stream_at(s_acc, c);
         wpn_channel_mul(&c_acc, ratio);
     }
@@ -297,7 +398,7 @@ wpn_stream_mul(wpn_st_acc* s_acc, sgn_t ratio)
 void
 wpn_stream_div(wpn_st_acc* s_acc, sgn_t factor)
 {
-    FOREACH_STREAM_CHANNEL (s_acc, c) {
+    foreach_stream_channel (s_acc, c) {
         wpn_ch_acc c_acc = wpn_stream_at(s_acc, c);
         wpn_channel_dcadd(&c_acc, factor);
     }
@@ -312,7 +413,7 @@ wpn_stream_min(wpn_st_acc* s_acc)
 {
     sgn_t m = 0;
 
-    FOREACH_STREAM_CHANNEL (s_acc, c) {
+    foreach_stream_channel (s_acc, c) {
         wpn_ch_acc c_acc = wpn_stream_at(s_acc, c);
         m = wpnmin(wpn_channel_min(&c_acc), m);
     }
@@ -325,7 +426,7 @@ wpn_stream_max(wpn_st_acc* s_acc)
 {
     sgn_t m = 0;
 
-    FOREACH_STREAM_CHANNEL (s_acc, c) {
+    foreach_stream_channel (s_acc, c) {
         wpn_ch_acc c_acc = wpn_stream_at(s_acc, c);
         m = wpnmax(wpn_channel_max(&c_acc), m);
     }
@@ -636,6 +737,12 @@ wpn_graph_nconnect(wpn_graph *graph, wpn_node* source, wpn_node* dest)
     return wpn_graph_pconnect(graph, spin, dpin);
 }
 
+WPN_TODO wpn_connection*
+wpn_graph_connect(wpn_graph* graph, void* source, void* dest)
+{
+
+}
+
 //=================================================================================================
 //
 // GRAPH_RUN
@@ -730,7 +837,6 @@ wpn_connection_pull(wpn_connection* con, usize sz)
         wpn_stream_mul ( &acc, con->level );
         wpn_sync_pour  ( con->stream, sz );
     }
-
     // if connection is muted, do not draw/pour
     // just increment position
     else wpn_sync_skip(con->stream, sz);
@@ -786,10 +892,11 @@ sinetest_cf(sgn_t rate, u16 size, void* udata)
     sine->srate = rate;
     sine->phase = 0;
 
-    sgn_t* wt = sine->wtable;
+    sine->stream = wpn_stream_allocate(1, 16384);
 
     for ( u16 i = 0; i < 16384; ++i )
-          wt[i] = sin( i/16384*M_PI*2 );
+          sine->stream->channels[0][i] =
+                  sin( i/16384*M_PI*2 );
 }
 
 void
@@ -799,6 +906,15 @@ sinetest_rw(wpn_pool* uppool, wpn_pool* dnpool, void* udata)
 
     // we get output pin's stream
     wpn_st_acc* freq = wpn_streamext_l(uppool, "FREQUENCY");
-    wpn_st_acc* out  = wpn_streamext_l(dnpool, "OUTPUT");
+    wpn_st_acc* out  = wpn_streamext_l(dnpool, "MAIN");
+    wpn_st_acc  wt   = wpn_stream_access(sine->stream, 0, 16384, 0);
 
+    // get incrementation ratio
+    wpn_stream_div( freq, sine->srate );
+    wpn_stream_mul( freq, 16384 );
+
+    // get lookup
+    wpn_stream_lookup(&wt, out, freq, true);
+
+    // and... that's it..!
 }
