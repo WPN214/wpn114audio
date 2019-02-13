@@ -146,10 +146,28 @@ wpn_channel_cdiv(wpn_ch_acc* target, wpn_ch_acc* operator)
           target->begin[n] /= operator->begin[n];
 }
 
-WPN_TODO void
+WPN_EXAMINE WPN_TODO void
 wpn_channel_lookup(wpn_ch_acc* source, wpn_ch_acc* dest, wpn_ch_acc* head, bool increment)
 {
     assert(source->size == dest->size == head->size);
+
+    if ( increment )
+    {
+        for (usize n = 0; n < source->size; ++n)
+        {
+            // interpolation TODO: make a choice option
+            sgn_t idx = head->begin[n];
+            usize y = floor(idx);
+            sgn_t x = (sgn_t) idx-y;
+            sgn_t e = lininterp(x, source->begin[y], source->begin[y+1]);
+
+            dest->begin[n] = e;
+        }
+    }
+    else
+    {
+      WPN_TODO
+    }
 
 }
 
@@ -240,7 +258,6 @@ wpn_stream_allocate(u8 nchannels, usize size)
 wpn_stream_accessor
 wpn_stream_access(wpn_stream* stream, usize begin, usize size, usize pos)
 {
-
     WPN_STRUCT_CREATE_INITIALIZE
       ( wpn_st_acc, acc ) {
         .parent   = stream,
@@ -290,10 +307,18 @@ wpn_stream_vfill(wpn_st_acc* s_acc, sgn_t v)
     }
 }
 
-WPN_TODO void // COPY-REPLACE
+WPN_OK void // COPY-REPLACE
 wpn_stream_cprp(wpn_st_acc* source, wpn_st_acc* dest)
 {
+    usize sz  = wpnmin(source->parent->nchannels,
+                       dest->parent->nchannels);
 
+    for ( usize ch = 0; ch < sz; ++ch )
+    {
+        wpn_ch_acc s_acc = wpn_stream_at(source, ch);
+        wpn_ch_acc d_acc = wpn_stream_at(dest, ch);
+        wpn_channel_pour(&s_acc, &d_acc);
+    }
 }
 
 WPN_OK void
@@ -317,7 +342,7 @@ wpn_stream_pour(wpn_st_acc* source, wpn_st_acc* dest)
     wpn_stream_drain(dest);
 }
 
-WPN_REFACTOR void
+WPN_OK void
 wpn_stream_srem(wpn_st_acc* source, wpn_st_acc* operator)
 {
     usize sz = wpnmin(source->parent->nchannels,
@@ -331,7 +356,7 @@ wpn_stream_srem(wpn_st_acc* source, wpn_st_acc* operator)
     }
 }
 
-WPN_REFACTOR void
+WPN_OK void
 wpn_stream_smul(wpn_st_acc* source, wpn_st_acc* operator)
 {
     usize sz = wpnmin(source->parent->nchannels,
@@ -345,7 +370,7 @@ wpn_stream_smul(wpn_st_acc* source, wpn_st_acc* operator)
     }
 }
 
-WPN_REFACTOR void
+WPN_OK void
 wpn_stream_sdiv(wpn_st_acc* source, wpn_st_acc* operator)
 {
     usize sz = wpnmin(source->parent->nchannels,
@@ -359,16 +384,26 @@ wpn_stream_sdiv(wpn_st_acc* source, wpn_st_acc* operator)
     }
 }
 
-WPN_TODO void
+WPN_OK void
 wpn_stream_lookup(wpn_st_acc* source, wpn_st_acc* dest, wpn_st_acc* head, bool increment)
 {
+    // source would be a wavetable, or a sample file, for example
+    // dest is where the values are stored
+    assert(source->size == dest->size == head->size);
 
+    foreach_stream_channel(source, idx) {
+        wpn_ch_acc s_acc = wpn_stream_at(source, idx);
+        wpn_ch_acc d_acc = wpn_stream_at(dest, idx);
+        wpn_ch_acc h_acc = wpn_stream_at(head, idx);
+
+        wpn_channel_lookup(&s_acc, &d_acc, &h_acc, increment);
+    }
 }
 
 // ------------------------------------------------------------------------------------------
 // STREAM OPERATIONS
 // ------------------------------------------------------------------------------------------
-void
+WPN_OK void
 wpn_stream_dcadd(wpn_st_acc* s_acc, sgn_t offset)
 {
     foreach_stream_channel (s_acc, c) {
@@ -377,7 +412,7 @@ wpn_stream_dcadd(wpn_st_acc* s_acc, sgn_t offset)
     }
 }
 
-void
+WPN_OK void
 wpn_stream_dcrem(wpn_st_acc* s_acc, sgn_t offset)
 {
     foreach_stream_channel (s_acc, c) {
@@ -386,7 +421,7 @@ wpn_stream_dcrem(wpn_st_acc* s_acc, sgn_t offset)
     }
 }
 
-void
+WPN_OK void
 wpn_stream_mul(wpn_st_acc* s_acc, sgn_t ratio)
 {
     foreach_stream_channel (s_acc, c) {
@@ -395,7 +430,7 @@ wpn_stream_mul(wpn_st_acc* s_acc, sgn_t ratio)
     }
 }
 
-void
+WPN_OK void
 wpn_stream_div(wpn_st_acc* s_acc, sgn_t factor)
 {
     foreach_stream_channel (s_acc, c) {
@@ -408,7 +443,7 @@ wpn_stream_div(wpn_st_acc* s_acc, sgn_t factor)
 // ANALYSIS
 // ------------------------------------------------------------------------------------------
 
-sgn_t
+WPN_OK sgn_t
 wpn_stream_min(wpn_st_acc* s_acc)
 {
     sgn_t m = 0;
@@ -421,7 +456,7 @@ wpn_stream_min(wpn_st_acc* s_acc)
     return m;
 }
 
-sgn_t
+WPN_OK sgn_t
 wpn_stream_max(wpn_st_acc* s_acc)
 {
     sgn_t m = 0;
@@ -627,6 +662,19 @@ wpn_default_pin(wpn_node* node, enum polarity_t polarity)
     return nullptr_t;
 }
 
+WPN_OK wpn_pin*
+wpn_node_lookup(wpn_node* node, enum polarity_t polarity, const char* pin)
+{
+    wpn_pin_vector* pvec =
+            wpn_node_get_pin_vector(node, polarity);
+
+    for ( usize n = 0; n < pvec->sz; ++n )
+        if ( !strcmp(pvec->data[n].label, pin))
+              return &pvec->data[n];
+
+    return nullptr_t;
+}
+
 //==========================================================================================
 //
 // CONNECTIONS
@@ -737,10 +785,31 @@ wpn_graph_nconnect(wpn_graph *graph, wpn_node* source, wpn_node* dest)
     return wpn_graph_pconnect(graph, spin, dpin);
 }
 
-WPN_TODO wpn_connection*
+WPN_OK wpn_connection*
 wpn_graph_connect(wpn_graph* graph, void* source, void* dest)
 {
+    wpn_node* s_node = wpn_graph_lookup(graph, source);
+    wpn_node* d_node = wpn_graph_lookup(graph, dest);
 
+    return wpn_graph_nconnect(graph, s_node, d_node);
+}
+
+WPN_OK wpn_connection*
+wpn_graph_pin_connect(wpn_graph* graph, void* source, const char* s_pin_label,
+                                        void* dest, const char* d_pin_label)
+{
+    wpn_node* s_node = wpn_graph_lookup(graph, source);
+    wpn_node* d_node = wpn_graph_lookup(graph, dest);
+
+    wpn_pin* s_pin = s_pin_label == nullptr_t ?
+            wpn_default_pin(s_node, output) :
+            wpn_node_lookup(s_node, output, s_pin_label);
+
+    wpn_pin* d_pin = d_pin_label == nullptr_t ?
+            wpn_default_pin(d_node, input) :
+            wpn_node_lookup(d_node, input, d_pin_label);
+
+    return wpn_graph_pconnect(graph, s_pin, d_pin);
 }
 
 //=================================================================================================
@@ -812,7 +881,10 @@ wpn_node_process(wpn_node* node)
 
     // call the processing callback function
     node->uprocess_fn(&uppool, &dnpool, node->udata);
+
     node->pos += sz;
+    if ( node->pos >= node->properties.vecsz )
+         node->pos -= node->properties.vecsz;
 }
 
 WPN_OK void
@@ -886,16 +958,16 @@ sinetest_dcl(wpn_node* node)
 WPN_OK void
 sinetest_cf(sgn_t rate, u16 size, void* udata)
 {
-    // build wtable
     sinetest* sine = (sinetest*)udata;
     sine->frequency = 440;
     sine->srate = rate;
     sine->phase = 0;
 
+    // build/allocate & initialize wavetable
     sine->stream = wpn_stream_allocate(1, 16384);
 
     for ( u16 i = 0; i < 16384; ++i )
-          sine->stream->channels[0][i] =
+          sine->stream->channels[0].data[i] =
                   sin( i/16384*M_PI*2 );
 }
 

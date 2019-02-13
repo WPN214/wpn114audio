@@ -72,8 +72,8 @@ typedef WPN_USIZE usize;
 //-------------------------------------------------------------------------------------------------
 #define atodb(_s) log10(_s)*20
 #define dbtoa(_s) pow(10, _s*.05)
-#define lininterp(_x, _a, _b) a+x*(b-a)
-static sgn_t rms(sgn_t *dt, usize sz);
+#define lininterp(_x, _a, _b) _a+_x*(_b-_a)
+static sgn_t rms(sgn_t* dt, usize sz);
 //-------------------------------------------------------------------------------------------------
 // ENUM_TYPES
 //-------------------------------------------------------------------------------------------------
@@ -143,9 +143,9 @@ void wpn_channel_vfill      ( wpn_channel_accessor* accessor, sgn_t v);
 void wpn_channel_cpmg       ( wpn_channel_accessor* lhs, wpn_channel_accessor* rhs);
 void wpn_channel_pour       ( wpn_channel_accessor* lhs, wpn_channel_accessor* rhs);
 
-void wpn_channel_crem       ( wpn_channel_accessor* target, wpn_channel_accessor* operator);
-void wpn_channel_cmul       ( wpn_channel_accessor* target, wpn_channel_accessor* operator);
-void wpn_channel_cdiv       ( wpn_channel_accessor* target, wpn_channel_accessor* operator);
+void wpn_channel_crem       ( wpn_channel_accessor* target, wpn_channel_accessor* op);
+void wpn_channel_cmul       ( wpn_channel_accessor* target, wpn_channel_accessor* op);
+void wpn_channel_cdiv       ( wpn_channel_accessor* target, wpn_channel_accessor* op);
 
 void wpn_channel_lookup     ( wpn_channel_accessor* source,
                               wpn_channel_accessor* dest,
@@ -222,9 +222,9 @@ void wpn_stream_cprp        ( wpn_stream_accessor* source, wpn_stream_accessor* 
 void wpn_stream_cpmg        ( wpn_stream_accessor* source, wpn_stream_accessor* dest);
 void wpn_stream_pour        ( wpn_stream_accessor* source, wpn_stream_accessor* dest);
 
-void wpn_stream_srem        ( wpn_stream_accessor* target, wpn_stream_accessor* operator);
-void wpn_stream_smul        ( wpn_stream_accessor* target, wpn_stream_accessor* operator);
-void wpn_stream_sdiv        ( wpn_stream_accessor* target, wpn_stream_accessor* operator);
+void wpn_stream_srem        ( wpn_stream_accessor* target, wpn_stream_accessor* op);
+void wpn_stream_smul        ( wpn_stream_accessor* target, wpn_stream_accessor* op);
+void wpn_stream_sdiv        ( wpn_stream_accessor* target, wpn_stream_accessor* op);
 
 void wpn_stream_lookup      ( wpn_stream_accessor* source,
                               wpn_stream_accessor* dest,
@@ -309,6 +309,10 @@ wpn_graph_npconnect         ( wpn_graph* graph, wpn_node* source, wpn_pin* pin);
 wpn_connection*             //---------------------------------------------------------------
 wpn_graph_connect           ( wpn_graph* graph, void* source, void* dest);
 
+wpn_connection*
+wpn_graph_pin_connect       ( wpn_graph* graph, void* source, const char* s_pin,
+                                                void* dest, const char* d_pin);
+
 //-------------------------------------------------------------------------------------------
 
 int wpn_graph_run_exit(wpn_graph* graph, void* unit, usize ntimes);
@@ -365,6 +369,9 @@ wpn_node_get_pin_vector     ( wpn_node* node, enum polarity_t polarity);
 
 wpn_pin*                    //---------------------------------------------------------------
 wpn_default_pin             ( wpn_node* node, enum polarity_t polarity);
+
+wpn_pin*                    //---------------------------------------------------------------
+wpn_node_lookup             ( wpn_node* node, enum polarity_t polarity, const char* pin);
 
 //-------------------------------------------------------------------------------------------
 static void wpn_node_configure  ( wpn_node* node, gproperties properties);

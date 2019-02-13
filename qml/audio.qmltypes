@@ -35,7 +35,7 @@ Module
         name: "AudioStream"
         prototype: "StreamNode"
         exports: ["WPN114.Audio/AudioStream 1.0"]
-        exportsMetaObjectRevisions: [1]
+        exportMetaObjectRevisions: [1]
 
         Property { name: "sampleRate"; type: "int" }
         Property { name: "blockSize"; type: "int" }

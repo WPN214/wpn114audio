@@ -1,8 +1,5 @@
 #include "qml_plugin.hpp"
-
-#include <source/audio.hpp>
-#include <source/soundfile.hpp>
-
+#include <source/qtwrapper.hpp>
 #include <QQmlEngine>
 #include <qqml.h>
 
@@ -10,6 +7,11 @@ void qml_plugin::registerTypes(const char *uri)
 {
     Q_UNUSED    ( uri );
 
-    qmlRegisterUncreatableType<StreamNode, 1> ( "WPN114.Audio", 1, 0, "StreamNode","Uncreatable");
-    qmlRegisterType<WorldStream, 1> ( "WPN114.Audio", 1, 0, "Audiostream" );
+    qmlRegisterUncreatableType<Dispatch, 1>
+            ("WPN114.Audio", 1, 1, "Dispatch", "Uncreatable");
+
+    qmlRegisterUncreatableType<Node, 1>
+            ("WPN114.Audio", 1, 1, "Node", "Uncreatable");
+
+
 }

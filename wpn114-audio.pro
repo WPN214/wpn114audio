@@ -1,6 +1,6 @@
 TARGET = WPN114-audio
 TEMPLATE = lib
-CONFIG += c++11 dll
+CONFIG += c++14 dll
 QT += quick
 
 localmod: DESTDIR = $$QML_MODULE_DESTDIR/WPN114/Audio
@@ -31,15 +31,16 @@ linux {
     LIBS += -lpthread -ljack -lasound
 }
 
-HEADERS += $$PWD/external/rtaudio/RtAudio.h \
-    source/qtwrapper.hpp
-HEADERS += $$PWD/source/audio.hpp
-HEADERS += $$PWD/source/stream.hpp
-SOURCES += $$PWD/external/rtaudio/RtAudio.cpp \
-    source/qtwrapper.cpp
-SOURCES += $$PWD/source/audio.cpp
-SOURCES += $$PWD/source/stream.cpp
+HEADERS += $$PWD/external/rtaudio/RtAudio.h
+HEADERS += $$PWD/source/audio.h
+HEADERS += $$PWD/source/qtwrapper.hpp
 
+SOURCES += $$PWD/external/rtaudio/RtAudio.cpp
+SOURCES += $$PWD/source/audio.c
+SOURCES += $$PWD/source/qtwrapper.cpp
 
 SOURCES += $$PWD/qml_plugin.cpp
 HEADERS += $$PWD/qml_plugin.hpp
+
+DISTFILES += \
+    examples/Audio.qml
