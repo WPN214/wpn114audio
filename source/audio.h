@@ -299,6 +299,7 @@ wpn_graph_pconnect          ( wpn_graph* graph, wpn_pin* source, wpn_pin* dest);
 
 wpn_connection*             //---------------------------------------------------------------
 wpn_graph_nconnect          ( wpn_graph* graph, wpn_node* source, wpn_node* dest);
+                            // connects source node with
 
 wpn_connection*             //---------------------------------------------------------------
 wpn_graph_pnconnect         ( wpn_graph* graph, wpn_pin* source, wpn_node* dest);
@@ -398,9 +399,8 @@ wpn_stream_accessor* wpn_streamext_l(wpn_pool* pool, const char* pin);
 wpn_stream_accessor* wpn_streamext_i(wpn_pool* pool, u16 index);
 
 //-------------------------------------------------------------------------------------------
-struct wpn_connection
+struct wpn_connection {
 //-------------------------------------------------------------------------------------------
-{
     wpn_stream* stream;
     wpn_pin* source;
     wpn_pin* dest;
@@ -417,8 +417,7 @@ static void wpn_connection_pull(wpn_connection* con, usize size);
 //===========================================================================================
 
 typedef struct sinetest sinetest;
-struct sinetest
-{
+struct sinetest {
     wpn_node* node;
     sgn_t phase;
     sgn_t frequency;
@@ -433,8 +432,7 @@ void sinetest_rw    ( wpn_pool* uppool, wpn_pool* dnpool, void* udata);
 //-------------------------------------------------------------------------------------------
 
 typedef struct vca vca;
-struct vca
-{
+struct vca {
     wpn_node* node;
     sgn_t gain;
 };
@@ -446,8 +444,7 @@ void vca_rw     ( wpn_pool* uppool, wpn_pool* dnpool, void* udata);
 //-------------------------------------------------------------------------------------------
 
 typedef struct dummy_output dummy_output;
-struct dummy_output
-{
+struct dummy_output {
     wpn_node* node;
 };
 

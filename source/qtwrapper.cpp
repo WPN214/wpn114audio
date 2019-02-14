@@ -242,34 +242,39 @@ bool channel::slice::iterator::operator!=(channel::slice::iterator const& other)
 // STREAM
 //=================================================================================================
 
-WPN_TODO
-stream::stream()
+stream::stream() : m_size(0), m_nchannels(0)
 {
 
 }
 
-WPN_TODO
-stream::stream(size_t nchannels)
+WPN_REVISE
+stream::stream(size_t nchannels, size_t chsz, signal_t fill) :
+    m_size(chsz), m_nchannels(nchannels)
 {
-
+    allocate(nchannels, chsz);
+    operator()() <<= fill;
 }
 
-WPN_TODO
-stream::stream(size_t nchannels, size_t chsz, signal_t fill)
-{
-
-}
-
-WPN_TODO
+WPN_REVISE
 void stream::allocate(size_t nchannels, size_t size)
 {
-
+    for ( auto& ch : m_channels )
+          ch = new channel(size);
 }
-
-WPN_TODO
 stream::~stream()
 {
+    for ( auto& ch : m_channels )
+          delete ch;
+}
 
+size_t stream::size() const
+{
+    return m_size;
+}
+
+size_t stream::nchannels() const
+{
+    return m_nchannels;
 }
 
 channel& stream::operator[](size_t index)
@@ -287,44 +292,66 @@ stream::slice stream::operator()(size_t begin, size_t sz, size_t pos)
     return stream::slice(*this, begin, sz, pos);
 }
 
-WPN_TODO
-void stream::add_sync(stream& target, sync& s)
-{
+//-------------------------------------------------------------------------------------------------
+// STREAM SYNCS
+//-------------------------------------------------------------------------------------------------
 
-}
-
-WPN_TODO
+WPN_REVISE
 void stream::add_upsync(stream& target)
 {
-
+    m_upsync._stream = &target;
+    m_upsync.size = target.size();
+    m_upsync.pos = 0;
 }
 
-WPN_TODO
+WPN_REVISE
 void stream::add_dnsync(stream& target)
 {
-
+    m_dnsync._stream = &target;
+    m_dnsync.size = target.size();
+    m_dnsync.pos = 0;
 }
 
-WPN_TODO
+WPN_REVISE
 stream::slice stream::draw(size_t sz)
 {
+    auto acc = operator()(m_upsync.pos, sz);
+    auto& up = *m_upsync._stream;
+    acc << up(m_upsync.pos, sz);
 
+    m_upsync.pos += sz;
+    if ( m_upsync.pos >= m_upsync.size )
+         m_upsync.pos -= m_upsync.size;
+
+    return acc;
 }
 
-WPN_TODO
+WPN_REVISE
 void stream::pour(size_t sz)
 {
+    auto acc = operator()(m_dnsync.pos, sz);
+    auto& dn = *m_dnsync._stream;
+    acc << dn(m_dnsync.pos, sz);
 
+    m_dnsync.pos += sz;
+    if ( m_dnsync.pos >= m_dnsync.size )
+         m_dnsync.pos -= m_dnsync.size;
 }
 
-size_t stream::size() const
+WPN_REVISE
+void stream::draw_skip(size_t sz)
 {
-    return m_size;
+    m_upsync.pos += sz;
+    if ( m_upsync.pos >= m_upsync.size )
+         m_upsync.pos -= m_upsync.size;
 }
 
-size_t stream::nchannels() const
+WPN_REVISE
+void stream::pour_skip(size_t sz)
 {
-    return m_nchannels;
+    m_dnsync.pos += sz;
+    if ( m_dnsync.pos >= m_dnsync.size )
+         m_dnsync.pos -= m_dnsync.size;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -348,7 +375,8 @@ channel::slice stream::slice::operator[](size_t index)
 
 stream::slice::operator bool()
 {
-    //?
+    // not quite sure what to do of this...
+    return false;
 }
 
 size_t stream::slice::size() const
@@ -448,6 +476,13 @@ stream::slice& stream::slice::operator/=(channel::slice const& other)
           channel /= other;
     return *this;
 
+}
+
+stream::slice& stream::slice::operator<<=(signal_t const v)
+{
+    for ( auto& channel: m_cslices )
+          channel <<= v;
+    return *this;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -625,18 +660,23 @@ node::sgrd(node::pin& p)
 WPN_TODO inline void
 node::sgwr(node::pin& p, signal v)
 {
-    if ( v.is_sgnt())
-    {
-
-    }
-    else if ( v.is_qvariant())
-    {
-
-    }
+    if ( v.is_real())
+         p.stream()() <<= v.to_real();
 
     else if ( v.is_pin())
     {
+        // disconnect all
+        graph::disconnect(p);
 
+        // connect to pin
+        graph::connect(p, v.to_pin());
+    }
+
+    else if ( v.is_qvariant())
+    {
+        QVariant var = v.to_qvariant();
+        // parse it
+        WPN_TODO
     }
 }
 
@@ -663,44 +703,67 @@ stream::slice& node::pool::operator[](std::string str)
 
 //-------------------------------------------------------------------------------------------------
 
-WPN_TODO
 template<typename T> bool
 node::connected(T& other) const
 {
+    if ( other.polarity() == polarity::input )
+         for ( auto& pin: m_dnpins )
+               if ( pin->connected(other) )
+                    return true;
+
+    if ( other.polarity() == polarity::output )
+         for ( auto& pin: m_uppins )
+               if ( pin->connected(other) )
+                    return true;
+
     return false;
 }
 
 //-------------------------------------------------------------------------------------------------
 
-WPN_TODO
 node::pin& node::inpin()
 {
+    for ( auto& pin : m_uppins )
+          if ( pin->is_default() )
+               return *pin;
     assert( 0 );
 }
 
-WPN_TODO
 node::pin& node::inpin(QString ref)
 {
+    for ( auto& pin : m_uppins )
+          if (pin->label() == ref.toStdString())
+              return *pin;
     assert( 0 );
 }
 
-WPN_TODO
 node::pin& node::outpin()
 {
+    for ( auto& pin : m_dnpins )
+          if ( pin->is_default() )
+               return *pin;
     assert( 0 );
 }
 
 node::pin& node::outpin(QString ref)
 {
+    for ( auto& pin : m_dnpins )
+          if (pin->label() == ref.toStdString())
+              return *pin;
     assert( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
 
-WPN_TODO
 void node::initialize(graph_properties properties)
 {
     m_properties = properties;
+
+    for ( auto& pin : m_uppins )
+          pin->allocate(properties.vsz);
+
+    for ( auto& pin : m_dnpins )
+          pin->allocate(properties.vsz);
 }
 
 void node::process()

@@ -58,6 +58,7 @@ class channel
         // merge operators ---------------------------------
         slice& operator<<=(slice &);
         slice& operator>>=(slice &);
+        slice& operator<<=(signal_t const);
 
         // arithm. -----------------------------------------
         slice& operator+=(slice const&);
@@ -134,12 +135,11 @@ class stream
     // -----------------------------------------------
     struct sync
     {
-        std::shared_ptr<stream> _stream;
+        stream* _stream;
         size_t size;
         size_t pos;
     };
 
-    void add_sync(stream&, sync&);
     void add_upsync(stream&);
     void add_dnsync(stream&);
 
@@ -194,6 +194,7 @@ class stream
         slice& operator>>(slice&);
         slice& operator<<=(slice&);
         slice& operator>>=(slice&);
+        slice& operator<<=(signal_t const);
 
         void lookup(slice&, slice &, bool increment = false);
 

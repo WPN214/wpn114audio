@@ -10,7 +10,7 @@ void qml_plugin::registerTypes(const char *uri)
     qmlRegisterUncreatableType<Dispatch, 1>
             ("WPN114.Audio", 1, 1, "Dispatch", "Uncreatable");
 
-    qmlRegisterUncreatableType<Node, 1>
+    qmlRegisterUncreatableType<node, 1>
             ("WPN114.Audio", 1, 1, "Node", "Uncreatable");
 
 
