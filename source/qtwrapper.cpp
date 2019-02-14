@@ -977,12 +977,48 @@ stream::slice graph::run(node& target)
 }
 
 //=================================================================================================
-// SIGNAL
-//=================================================================================================
-
-//=================================================================================================
 // OUTPUT
 //=================================================================================================
+
+Output::Output()
+{
+
+}
+
+void Output::setRate(signal_t rate)
+{
+    m_rate = rate;
+}
+
+void Output::setVector(quint16 vector)
+{
+    m_vector = vector;
+}
+
+void Output::setFeedback(quint16 feedback)
+{
+    m_feedback = feedback;
+}
+
+void Output::setApi(QString api)
+{
+    m_api = api;
+}
+
+void Output::setDevice(QString device)
+{
+    m_device = device;
+}
+
+void Output::configure(graph_properties properties)
+{
+
+}
+
+void Output::rwrite(node::pool& inputs, node::pool& outputs, size_t sz)
+{
+
+}
 
 //=================================================================================================
 // SINETEST
@@ -1017,3 +1053,21 @@ void Sinetest::rwrite(node::pool& upstream, node::pool& dnstream, size_t sz)
 //=================================================================================================
 // VCA
 //=================================================================================================
+
+VCA::VCA()
+{
+
+}
+
+void VCA::configure(graph_properties properties) {}
+
+void VCA::rwrite(node::pool& upstream, node::pool& dnstream, size_t sz)
+{
+    auto in    = upstream["inputs"];
+    auto gain  = upstream["gain"];
+    auto out   = dnstream["outputs"];
+
+   in *= gain;
+   out << in;
+
+}

@@ -543,6 +543,18 @@ class Output : public node
     public:
     Output();
 
+    signal_t rate() const { return m_rate; }
+    quint16 vector() const { return m_vector; }
+    quint16 feedback() const { return m_feedback; }
+    QString api() const { return m_api; }
+    QString device() const { return m_device; }
+
+    void setRate(signal_t rate);
+    void setVector(quint16 vector);
+    void setFeedback(quint16 feedback);
+    void setApi(QString api);
+    void setDevice(QString device);
+
     private:
     signal_t m_rate;
     quint16 m_vector;

@@ -33,5 +33,4 @@ void qml_plugin::registerTypes(const char *uri)
     qmlRegisterType<Output, 1>("WPN114.Audio", 1, 1, "Audiostream");
     qmlRegisterType<Sinetest, 1>("WPN114.Audio", 1, 1, "Sinetest");
     qmlRegisterType<VCA, 1>("WPN114.Audio", 1, 1, "VCA");
-
 }
