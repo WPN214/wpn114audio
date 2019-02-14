@@ -4,9 +4,11 @@
 #include <QQmlParserStatus>
 #include <QVector>
 #include <QVector3D>
+#include <QVariant>
 #include <memory>
 
 using signal_t = qreal;
+#define lininterp(_x,_a,_b) _a+_x*(_b-_a)
 
 //=================================================================================================
 enum class polarity { output = 0, input  = 1 };
@@ -71,7 +73,6 @@ class channel
         slice& operator*=(const signal_t);
         slice& operator/=(const signal_t);
 
-
         // signal-related -------------------
         signal_t min();
         signal_t max();
@@ -80,7 +81,7 @@ class channel
         void drain();
         void normalize();
 
-        void lookup(slice&, slice const&, bool increment = false);
+        void lookup(slice&, slice&, bool increment = false);
 
         private:
         slice(channel&, signal_t* begin, signal_t* end, signal_t* pos );
@@ -259,20 +260,6 @@ class Dispatch
 #define OUTPUT polarity::output
 
 //=================================================================================================
-class signal : public QObject
-//=================================================================================================
-{
-    Q_OBJECT
-
-    public:
-    signal(qreal v);
-    signal(QVariant v);
-    signal(signal const&);
-
-    private:
-};
-
-//=================================================================================================
 #define WPN_OBJECT                                                                                 \
 Q_OBJECT                                                                                           \
 protected:                                                                                         \
@@ -292,7 +279,7 @@ void set##_s(signal v) {                                                        
     sgwr(m_##_s, v);                                                                               \
 }
 //=================================================================================================
-
+class signal;
 //=================================================================================================
 class node : public QObject, public QQmlParserStatus
 //=================================================================================================
@@ -343,13 +330,13 @@ class node : public QObject, public QQmlParserStatus
         std::string label() const;
         stream& stream();
 
-        QVector<connection*> connections();
+        std::vector<connection*> connections();
 
         private:
         node& m_parent;
         bool m_default;
         const enum polarity m_polarity;
-        QVector<connection*> m_connections;
+        std::vector<connection*> m_connections;
         std::string m_label;
         class stream m_stream;
         size_t m_nchannels;
@@ -407,6 +394,45 @@ class node : public QObject, public QQmlParserStatus
     signal_t m_height     = 0;
     signal_t m_width      = 0;
 };
+
+//=================================================================================================
+class signal : public QObject
+//=================================================================================================
+{
+    Q_OBJECT
+
+    public:
+
+    enum qtype
+    {
+        UNDEFINED = 0,
+        REAL = 1,
+        VAR  = 2,
+        PIN  = 3
+    };
+
+    signal(qreal v);
+    signal(QVariant v);
+    signal(node::pin&);
+    signal(signal const&);
+
+    ~signal();
+
+    bool is_real() const;
+    bool is_qvariant() const;
+    bool is_pin() const;
+
+    qreal to_real() const;
+    QVariant to_qvariant() const;
+    node::pin& to_pin() const;
+
+    private:
+    QVariant uvar    = 0;
+    qreal ureal      = 0;
+    node::pin* upin  = nullptr;
+    qtype m_qtype    = UNDEFINED;
+};
+
 //=================================================================================================
 class connection : public QObject
 //=================================================================================================
@@ -482,6 +508,9 @@ class graph : public QObject
             connection::pattern pattern);
 
     static void
+    disconnect(node::pin& target);
+
+    static void
     configure(signal_t rate = 44100.0,
               size_t vector_size = 512,
               size_t vector_feedback_size = 64);
@@ -551,7 +580,9 @@ class VCA : public node
     VCA();
 };
 
+//=================================================================================================
 class Pinktest : public node
+//=================================================================================================
 {
     WPN_OBJECT
     WPN_REGISTER_PIN ( output, DEFAULT, OUTPUT, 0 )

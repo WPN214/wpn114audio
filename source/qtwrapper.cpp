@@ -206,10 +206,23 @@ channel::slice::normalize()
 // CHANNEL/MISCELLANEOUS
 //-------------------------------------------------------------------------------------------------
 
-WPN_TODO
-void channel::slice::lookup(slice& source, const slice& head, bool increment)
+WPN_EXAMINE
+void channel::slice::lookup(slice& source, slice& head, bool increment)
 {
+    assert(m_size == source.size() == head.size());
 
+    if ( increment )
+    {
+        for (size_t n = 0; n < m_size; ++n)
+        {
+            signal_t idx = head[n];
+            size_t   y = floor(idx);
+            signal_t x = static_cast<signal_t>(idx-y);
+            signal_t e = lininterp(x, source[y], source[y+1]);
+
+            m_begin[n] = e;
+        }
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -528,7 +541,8 @@ void stream::slice::lookup(stream::slice& source,
     for ( auto& channel : m_cslices )
     {
         auto sch = source[n];
-        channel.lookup(sch, head[n], increment); // wtf?
+        auto hch = head[n];
+        channel.lookup(sch, hch, increment);
         ++n;
     }
 }
@@ -607,7 +621,8 @@ inline void node::pin::add_connection(connection& con)
 
 inline void node::pin::remove_connection(connection& con)
 {
-    m_connections.removeOne(&con);
+    std::remove(m_connections.begin(),
+                m_connections.end(), &con);
 }
 
 bool node::pin::connected() const
@@ -637,6 +652,17 @@ bool node::pin::connected(T& target) const
     }
     return false;
 }
+//=================================================================================================
+// QT-SIGNAL
+//=================================================================================================
+
+signal::signal(qreal v) : ureal(v), m_qtype(REAL) {}
+signal::signal(QVariant v) : uvar(v), m_qtype(VAR) {}
+signal::signal(node::pin& p) : upin(&p), m_qtype(PIN) {}
+
+WPN_TODO
+signal::signal(signal const& cp) {}
+
 //=================================================================================================
 // NODE
 //=================================================================================================
@@ -669,7 +695,7 @@ node::sgwr(node::pin& p, signal v)
         graph::disconnect(p);
 
         // connect to pin
-        graph::connect(p, v.to_pin());
+        graph::connect(p, v.to_pin(), connection::pattern::Merge);
     }
 
     else if ( v.is_qvariant())
@@ -932,6 +958,14 @@ connection& graph::connect(node::pin& source, node& dest, connection::pattern pa
     return s_connections.last();
 }
 
+void graph::disconnect(node::pin& target)
+{
+    for ( auto& connection : target.m_connections )
+          s_connections.removeOne(*connection);
+
+    target.m_connections.clear();
+}
+
 void graph::configure(signal_t rate, size_t vector_size, size_t feedback_size)
 {
     s_properties = { rate, vector_size, feedback_size };
@@ -945,7 +979,6 @@ stream::slice graph::run(node& target)
 //=================================================================================================
 // SIGNAL
 //=================================================================================================
-
 
 //=================================================================================================
 // OUTPUT

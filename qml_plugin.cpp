@@ -7,11 +7,31 @@ void qml_plugin::registerTypes(const char *uri)
 {
     Q_UNUSED    ( uri );
 
+    //=============================================================================================
+    // UNCREATABLE
+    //=============================================================================================
+
     qmlRegisterUncreatableType<Dispatch, 1>
-            ("WPN114.Audio", 1, 1, "Dispatch", "Uncreatable");
+    ("WPN114.Audio", 1, 1, "Dispatch", "Uncreatable");
 
     qmlRegisterUncreatableType<node, 1>
-            ("WPN114.Audio", 1, 1, "Node", "Uncreatable");
+    ("WPN114.Audio", 1, 1, "Node", "Uncreatable");
 
+    qmlRegisterUncreatableType<signal, 1>
+    ("WPN114.Audio", 1, 1, "Signal", "Uncreatable");
+
+    qmlRegisterUncreatableType<node::pin, 1>
+    ("WPN114.Audio", 1, 1, "Pin", "Uncreatable");
+
+    qmlRegisterUncreatableType<connection, 1>
+    ("WPN114.Audio", 1, 1, "Connection", "Uncreatable");
+
+    //=============================================================================================
+    // MODULES
+    //=============================================================================================
+
+    qmlRegisterType<Output, 1>("WPN114.Audio", 1, 1, "Audiostream");
+    qmlRegisterType<Sinetest, 1>("WPN114.Audio", 1, 1, "Sinetest");
+    qmlRegisterType<VCA, 1>("WPN114.Audio", 1, 1, "VCA");
 
 }
