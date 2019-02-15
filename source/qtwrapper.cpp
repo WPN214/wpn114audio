@@ -270,6 +270,19 @@ stream::stream(size_t nchannels, size_t chsz, signal_t fill) :
 }
 
 WPN_REVISE
+void stream::append(stream& other)
+{
+    for ( auto& ch : other.m_channels )
+          m_channels.push_back(ch);
+}
+
+WPN_REVISE
+void stream::append(channel& ch)
+{
+    m_channels.push_back(&ch);
+}
+
+WPN_REVISE
 void stream::allocate(size_t nchannels, size_t size)
 {
     for ( auto& ch : m_channels )
@@ -728,11 +741,9 @@ inline void node::add_pin(pin &pin)
     }
 }
 
-WPN_TODO inline signal
-node::sgrd(pin& p)
+inline signal node::sgrd(pin& p)
 {
-
-
+    return signal(p);
 }
 
 WPN_TODO inline void
@@ -833,6 +844,30 @@ pin& node::outpin(QString ref)
 
 //-------------------------------------------------------------------------------------------------
 
+WPN_REVISE
+stream::slice node::upstream()
+{
+    // gather all streams as one
+    // return it as a slice
+    // (without memory allocation)
+    stream s;
+    for ( auto& pin : m_uppins )
+         s.append(pin->get_stream());
+
+    return s();
+}
+
+WPN_REVISE
+stream::slice node::dnstream()
+{
+    stream s;
+    for ( auto& pin : m_dnpins )
+         s.append(pin->get_stream());
+
+    return s();
+
+}
+
 void node::initialize(graph_properties properties)
 {
     m_properties = properties;
@@ -844,7 +879,7 @@ void node::initialize(graph_properties properties)
           pin->allocate(properties.vsz);
 }
 
-stream::slice node::process()
+void node::process()
 {
     size_t sz = m_intertwined     ?
                 m_properties.vsz  :
@@ -862,7 +897,6 @@ stream::slice node::process()
 
     if ( m_stream_pos >= m_properties.vsz )
          m_stream_pos -= m_properties.vsz;
-
 
 }
 
@@ -1277,7 +1311,8 @@ int rwrite(void* out, void* in, unsigned int nframes,
 {
     Output& outmod = *static_cast<Output*>(udata);
     //outmod.audiostream().buffer_processed(time);
-    auto strm = outmod.process();
+
+    auto strm = graph::run(outmod);
     strm.interleaved(static_cast<signal_t*>(out));
 
     return 0;

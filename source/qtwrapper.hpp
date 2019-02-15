@@ -128,6 +128,9 @@ class stream
     stream(size_t nchannels);
     stream(size_t nchannels, size_t channel_size, signal_t fill = 0);
 
+    void append(stream&);
+    void append(channel&);
+
     void allocate(size_t nchannels, size_t size);
 
     ~stream();
@@ -441,8 +444,11 @@ class node : public QObject, public QQmlParserStatus
 
     //---------------------------------------------------------------------------------------------
     private:
-    stream::slice process();
+    void process();
     void initialize(graph_properties properties);
+
+    stream::slice upstream();
+    stream::slice dnstream();
 
     bool m_intertwined  = false;
     bool m_active = true;
@@ -494,10 +500,10 @@ class signal : public QObject
     pin& to_pin           ();
 
     private:
-    QVariant uvar    = 0;
-    qreal ureal      = 0;
-    pin* upin  = nullptr;
-    qtype m_qtype    = UNDEFINED;
+    QVariant uvar   = 0;
+    qreal ureal     = 0;
+    pin* upin       = nullptr;
+    qtype m_qtype   = UNDEFINED;
 };
 
 //=================================================================================================
