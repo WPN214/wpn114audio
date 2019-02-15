@@ -576,10 +576,10 @@ bool stream::slice::iterator::operator!=(stream::slice::iterator const& s)
 
 
 //=================================================================================================
-// NODE::PIN
+// pin
 //=================================================================================================
 
-node::pin::pin(node& parent, enum polarity p, std::string label, size_t nchannels, bool def) :
+pin::pin(node& parent, enum polarity p, std::string label, size_t nchannels, bool def) :
     m_parent(parent),
     m_polarity(p),
     m_label(label),
@@ -589,49 +589,49 @@ node::pin::pin(node& parent, enum polarity p, std::string label, size_t nchannel
     parent.add_pin(*this);
 }
 
-node& node::pin::parent()
+node& pin::get_parent()
 {
     return m_parent;
 }
 
-std::string node::pin::label() const
+std::string pin::get_label() const
 {
     return m_label;
 }
 
-bool node::pin::is_default() const
+bool pin::is_default() const
 {
     return m_default;
 }
 
-polarity node::pin::polarity() const
+polarity pin::get_polarity() const
 {
     return m_polarity;
 }
 
-inline void node::pin::allocate(size_t sz)
+inline void pin::allocate(size_t sz)
 {
     m_stream.allocate(m_nchannels, sz);
 }
 
-inline void node::pin::add_connection(connection& con)
+inline void pin::add_connection(connection& con)
 {
     m_connections.push_back(&con);
 }
 
-inline void node::pin::remove_connection(connection& con)
+inline void pin::remove_connection(connection& con)
 {
     std::remove(m_connections.begin(),
                 m_connections.end(), &con);
 }
 
-bool node::pin::connected() const
+bool pin::connected() const
 {
     return m_connections.size();
 }
 
 template<typename T>
-bool node::pin::connected(T& target) const
+bool pin::connected(T& target) const
 {
     switch( m_polarity )
     {
@@ -658,18 +658,69 @@ bool node::pin::connected(T& target) const
 
 signal::signal(qreal v) : ureal(v), m_qtype(REAL) {}
 signal::signal(QVariant v) : uvar(v), m_qtype(VAR) {}
-signal::signal(node::pin& p) : upin(&p), m_qtype(PIN) {}
+signal::signal(pin& p) : upin(&p), m_qtype(PIN) {}
 
 WPN_TODO
-signal::signal(signal const& cp) {}
+signal::signal(signal const& cp)
+{
+
+}
+
+WPN_TODO
+signal::signal(signal&& mv)
+{
+
+}
+
+WPN_TODO
+signal& signal::operator=(signal const& cp)
+{
+
+}
+
+WPN_TODO
+signal& signal::operator=(signal&& mv)
+{
+
+}
+
+bool signal::is_pin() const
+{
+    return m_qtype == PIN;
+}
+
+bool signal::is_real() const
+{
+    return m_qtype == REAL;
+}
+
+bool signal::is_qvariant() const
+{
+    return m_qtype == VAR;
+}
+
+pin& signal::to_pin()
+{
+    return *upin;
+}
+
+QVariant signal::to_qvariant() const
+{
+    return uvar;
+}
+
+qreal signal::to_real() const
+{
+    return ureal;
+}
 
 //=================================================================================================
 // NODE
 //=================================================================================================
 
-inline void node::add_pin(node::pin &pin)
+inline void node::add_pin(pin &pin)
 {
-    switch(pin.polarity())
+    switch(pin.get_polarity())
     {
     case polarity::input: m_uppins.push_back(&pin); break;
     case polarity::output: m_dnpins.push_back(&pin); break;
@@ -677,17 +728,17 @@ inline void node::add_pin(node::pin &pin)
 }
 
 WPN_TODO inline signal
-node::sgrd(node::pin& p)
+node::sgrd(pin& p)
 {
 
 
 }
 
 WPN_TODO inline void
-node::sgwr(node::pin& p, signal v)
+node::sgwr(pin& p, signal v)
 {
     if ( v.is_real())
-         p.stream()() <<= v.to_real();
+         p.get_stream()() <<= v.to_real();
 
     else if ( v.is_pin())
     {
@@ -706,13 +757,13 @@ node::sgwr(node::pin& p, signal v)
     }
 }
 
-node::pool::pool(std::vector<node::pin*>& vector, size_t pos, size_t sz)
+node::pool::pool(std::vector<pin*>& vector, size_t pos, size_t sz)
 {
     for ( auto& pin : vector )
     {
         node::pstream ps = {
-            pin->label(),
-            pin->stream()(pos, sz, 0)
+            pin->get_label(),
+            pin->get_stream()(pos, sz, 0)
         };
 
         streams.push_back(ps);
@@ -747,7 +798,7 @@ node::connected(T& other) const
 
 //-------------------------------------------------------------------------------------------------
 
-node::pin& node::inpin()
+pin& node::inpin()
 {
     for ( auto& pin : m_uppins )
           if ( pin->is_default() )
@@ -755,15 +806,15 @@ node::pin& node::inpin()
     assert( 0 );
 }
 
-node::pin& node::inpin(QString ref)
+pin& node::inpin(QString ref)
 {
     for ( auto& pin : m_uppins )
-          if (pin->label() == ref.toStdString())
+          if (pin->get_label() == ref.toStdString())
               return *pin;
     assert( 0 );
 }
 
-node::pin& node::outpin()
+pin& node::outpin()
 {
     for ( auto& pin : m_dnpins )
           if ( pin->is_default() )
@@ -771,10 +822,10 @@ node::pin& node::outpin()
     assert( 0 );
 }
 
-node::pin& node::outpin(QString ref)
+pin& node::outpin(QString ref)
 {
     for ( auto& pin : m_dnpins )
-          if (pin->label() == ref.toStdString())
+          if (pin->get_label() == ref.toStdString())
               return *pin;
     assert( 0 );
 }
@@ -840,8 +891,41 @@ void connection::pull(size_t sz)
 
 //-----------------------------------------------------------------------------
 
-connection::connection(node::pin& source, node::pin& dest, pattern pattern) :
+connection::connection(pin& source, pin& dest, pattern pattern) :
     m_source(source), m_dest(dest), m_pattern(pattern) { }
+
+WPN_TODO
+connection::connection(connection const& cp) :
+    m_source(cp.m_source), m_dest(cp.m_dest)
+{
+
+}
+
+WPN_TODO
+connection::connection(connection&& mv) :
+    m_source(mv.m_source), m_dest(mv.m_dest)
+{
+
+}
+
+WPN_TODO
+connection& connection::operator=(connection const& cp)
+{
+
+}
+
+WPN_TODO
+connection& connection::operator=(connection&& mv)
+{
+
+}
+
+WPN_REVISE
+bool connection::operator==(connection const& other)
+{
+    return ( &m_source == &other.m_source ) &&
+           ( &m_dest == &other.m_dest );
+}
 
 void connection::allocate(size_t sz)
 {
@@ -901,11 +985,11 @@ connection& connection::operator/=(signal_t v)
 template<> bool
 connection::is_source(node& target) const
 {
-    return &m_source.parent() == &target;
+    return &m_source.get_parent() == &target;
 }
 
 template<> bool
-connection::is_source(node::pin& target) const
+connection::is_source(pin& target) const
 {
     return &m_source == &target;
 }
@@ -913,11 +997,11 @@ connection::is_source(node::pin& target) const
 template<> bool
 connection::is_dest(node& target) const
 {
-    return &m_dest.parent() == &target;
+    return &m_dest.get_parent() == &target;
 }
 
 template<> bool
-connection::is_dest(node::pin& target) const
+connection::is_dest(pin& target) const
 {
     return &m_dest == &target;
 }
@@ -926,44 +1010,52 @@ connection::is_dest(node::pin& target) const
 // GRAPH
 //=================================================================================================
 
-connection& graph::connect(node::pin& source, node::pin& dest, connection::pattern pattern)
+connection& graph::connect(pin& source, pin& dest, connection::pattern pattern)
 {
-    connection con(source, dest, pattern);
-    s_connections.push_back(con);
-
-    return s_connections.last();
+    s_connections.emplace_back(source, dest, pattern);
+    return s_connections.back();
 }
 
 connection& graph::connect(node& source, node& dest, connection::pattern pattern)
 {
-    connection con(source.outpin(), dest.inpin(), pattern);
-    s_connections.push_back(con);
-
-    return s_connections.last();
+    s_connections.emplace_back(source.outpin(), dest.inpin(), pattern);
+    return s_connections.back();
 }
 
-connection& graph::connect(node& source, node::pin& dest, connection::pattern pattern)
+connection& graph::connect(node& source, pin& dest, connection::pattern pattern)
 {
-    connection con(source.outpin(), dest, pattern);
-    s_connections.push_back(con);
-
-    return s_connections.last();
+    s_connections.emplace_back(source.outpin(), dest, pattern);
+    return s_connections.back();
 }
 
-connection& graph::connect(node::pin& source, node& dest, connection::pattern pattern)
+connection& graph::connect(pin& source, node& dest, connection::pattern pattern)
 {
-    connection con(source, dest.inpin(), pattern);
-    s_connections.push_back(con);
-
-    return s_connections.last();
+    s_connections.emplace_back(source, dest.inpin(), pattern);
+    return s_connections.back();
 }
 
-void graph::disconnect(node::pin& target)
+void graph::disconnect(pin& target)
 {
-    for ( auto& connection : target.m_connections )
-          s_connections.removeOne(*connection);
+    for ( const auto& connection : target.m_connections )
+          std::remove(s_connections.begin(), s_connections.end(), *connection);
 
     target.m_connections.clear();
+}
+
+void graph::disconnect(pin& source, pin& dest)
+{
+    connection* target = nullptr;
+
+    for ( auto& connection : source.m_connections )
+          if ( connection->is_source(source) &&
+               connection->is_dest(dest))
+               target = connection;
+
+    if ( !target ) return;
+
+    source.remove_connection(*target);
+    dest.remove_connection(*target);
+    std::remove(s_connections.begin(), s_connections.end(), *target);
 }
 
 void graph::configure(signal_t rate, size_t vector_size, size_t feedback_size)

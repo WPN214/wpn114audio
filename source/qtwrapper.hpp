@@ -245,8 +245,10 @@ struct graph_properties
 //=================================================================================================
 class connection;
 
-class Dispatch
+class Dispatch : public QObject
 {
+    Q_OBJECT
+    public:
     enum Values
     {
         Parent  = 0,
@@ -254,11 +256,11 @@ class Dispatch
     };
 };
 
+//=================================================================================================
 #define DEFAULT true
 #define NONDEFAULT false
 #define INPUT  polarity::input
 #define OUTPUT polarity::output
-
 //=================================================================================================
 #define WPN_OBJECT                                                                                 \
 Q_OBJECT                                                                                           \
@@ -269,7 +271,7 @@ virtual void configure(graph_properties properties) override;
 #define WPN_REGISTER_PIN(_s, _d, _p, _n)                                                           \
 Q_PROPERTY(signal _s READ get##_s WRITE set##_s NOTIFY notify##_s)                                 \
 signals: void notify##_s();                                                                        \
-protected: node::pin m_##_s { *this, _p, #_s, _n, _d };                                            \
+protected: pin m_##_s { *this, _p, #_s, _n, _d };                                                  \
                                                                                                    \
 signal get##_s() {                                                                                 \
     return sgrd(m_##_s);                                                                           \
@@ -280,67 +282,70 @@ void set##_s(signal v) {                                                        
 }
 //=================================================================================================
 class signal;
+class node;
+//=============================================================================================
+class pin : public QObject
+//=============================================================================================
+{
+    Q_OBJECT
+
+    friend class node;
+    friend class connection;
+    friend class graph;
+
+    public:
+    pin ( node& parent,
+          polarity p,
+          std::string label,
+          size_t nchannels = 1,
+          bool def = false );
+
+    template<typename T>
+    bool connected(T&) const;
+    bool connected() const;
+
+    void allocate(size_t sz);
+    void add_connection(connection& con);
+    void remove_connection(connection& con);
+
+    node& get_parent();
+    polarity get_polarity() const;
+    bool is_default() const;
+    std::string get_label() const;
+    stream& get_stream();
+
+    std::vector<connection*> connections();
+
+    private:
+    node& m_parent;
+    bool m_default;
+    const polarity m_polarity;
+    std::vector<connection*> m_connections;
+    std::string m_label;
+    stream m_stream;
+    size_t m_nchannels;
+};
+
 //=================================================================================================
 class node : public QObject, public QQmlParserStatus
 //=================================================================================================
 {
     Q_OBJECT
-    Q_PROPERTY ( Dispatch dispatch READ dispatch WRITE setDispatch )
+    Q_PROPERTY   ( Dispatch::Values dispatch READ dispatch WRITE setDispatch )
+    Q_INTERFACES ( QQmlParserStatus )
 
     friend class connection;
     friend class graph;
-    public: class pin;
+    friend class pin;
 
-    void add_pin(node::pin& pin);
+    void add_pin(pin& pin);
 
     protected:
     //=============================================================================================
-    signal sgrd(node::pin& pin);
-    void sgwr(node::pin& pin, signal s);
+    signal sgrd(pin& pin);
+    void sgwr(pin& pin, signal s);
 
     public:
-    //=============================================================================================
-    class pin : public QObject
-    //=============================================================================================
-    {
-        Q_OBJECT
-
-        friend class node;
-        friend class connection;
-        friend class graph;
-
-        public:
-        pin ( node& parent,
-              polarity p,
-              std::string label,
-              size_t nchannels = 1,
-              bool def = false );
-
-        template<typename T>
-        bool connected(T&) const;
-        bool connected() const;
-
-        void allocate(size_t sz);
-        void add_connection(connection& con);
-        void remove_connection(connection& con);
-
-        node& parent();
-        polarity polarity() const;
-        bool is_default() const;
-        std::string label() const;
-        stream& stream();
-
-        std::vector<connection*> connections();
-
-        private:
-        node& m_parent;
-        bool m_default;
-        const enum polarity m_polarity;
-        std::vector<connection*> m_connections;
-        std::string m_label;
-        class stream m_stream;
-        size_t m_nchannels;
-    };
     //=============================================================================================
     struct pstream
     //=============================================================================================
@@ -380,6 +385,9 @@ class node : public QObject, public QQmlParserStatus
     template<typename T>
     bool connected(T& other) const;
 
+    void setDispatch(Dispatch::Values d);
+    Dispatch::Values dispatch() const;
+
     //---------------------------------------------------------------------------------------------
     private:
     void process     ();
@@ -387,12 +395,14 @@ class node : public QObject, public QQmlParserStatus
 
     bool m_intertwined  = false;
 
-    std::vector<node::pin*> m_uppins;
-    std::vector<node::pin*> m_dnpins;
+    std::vector<pin*> m_uppins;
+    std::vector<pin*> m_dnpins;
+    Dispatch::Values m_dispatch;
 
     size_t m_stream_pos   = 0;
     signal_t m_height     = 0;
     signal_t m_width      = 0;
+
 };
 
 //=================================================================================================
@@ -413,8 +423,12 @@ class signal : public QObject
 
     signal(qreal v);
     signal(QVariant v);
-    signal(node::pin&);
+    signal(pin&);
     signal(signal const&);
+    signal(signal&&);
+
+    signal& operator=(signal const&);
+    signal& operator=(signal&&);
 
     ~signal();
 
@@ -424,12 +438,12 @@ class signal : public QObject
 
     qreal to_real() const;
     QVariant to_qvariant() const;
-    node::pin& to_pin() const;
+    pin& to_pin();
 
     private:
     QVariant uvar    = 0;
     qreal ureal      = 0;
-    node::pin* upin  = nullptr;
+    pin* upin  = nullptr;
     qtype m_qtype    = UNDEFINED;
 };
 
@@ -439,7 +453,6 @@ class connection : public QObject
 {
     friend class node;
     friend class graph;
-
     Q_OBJECT
 
     public:
@@ -449,6 +462,15 @@ class connection : public QObject
         Merge   = 1,
         Split   = 2
     };
+
+    connection(pin& source, pin& dest, pattern pattern);
+    connection(connection const&);
+    connection(connection&&);
+
+    connection& operator=(connection const&);
+    connection& operator=(connection&&);
+
+    bool operator==(connection const&);
 
     void mute    ();
     void unmute  ();
@@ -468,8 +490,6 @@ class connection : public QObject
     bool is_dest(T&) const;
 
     private:
-    connection(node::pin& source, node::pin& dest, pattern pattern);
-
     void pull      ( size_t sz );
     void allocate  ( size_t sz );
 
@@ -478,8 +498,8 @@ class connection : public QObject
     bool m_active       = true;
     signal_t m_level    = 1;
 
-    node::pin& m_source;
-    node::pin& m_dest;
+    pin& m_source;
+    pin& m_dest;
     pattern m_pattern;
     stream m_stream;
 };
@@ -492,7 +512,7 @@ class graph : public QObject
 
     public:
     static connection&
-    connect(node::pin& source, node::pin& dest,
+    connect(pin& source, pin& dest,
             connection::pattern pattern);
 
     static connection&
@@ -500,15 +520,18 @@ class graph : public QObject
             connection::pattern pattern);
 
     static connection&
-    connect(node& source, node::pin& dest,
+    connect(node& source, pin& dest,
             connection::pattern pattern);
 
     static connection&
-    connect(node::pin& source, node& dest,
+    connect(pin& source, node& dest,
             connection::pattern pattern);
 
     static void
-    disconnect(node::pin& target);
+    disconnect(pin& target);
+
+    static void
+    disconnect(pin& source, pin& dest);
 
     static void
     configure(signal_t rate = 44100.0,
@@ -519,8 +542,8 @@ class graph : public QObject
     run(node& target);
 
     private:
-    static QVector<connection> s_connections;
-    static QVector<node*> s_nodes;
+    static std::vector<connection> s_connections;
+    static std::vector<node*> s_nodes;
     static graph_properties s_properties;
 };
 
@@ -554,6 +577,13 @@ class Output : public node
     void setFeedback(quint16 feedback);
     void setApi(QString api);
     void setDevice(QString device);
+
+    signals:
+    void rateChanged();
+    void vectorChanged();
+    void feedbackChanged();
+    void apiChanged();
+    void deviceChanged();
 
     private:
     signal_t m_rate;
