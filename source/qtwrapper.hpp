@@ -5,7 +5,9 @@
 #include <QVector>
 #include <QVector3D>
 #include <QVariant>
+#include <QThread>
 #include <memory>
+#include <external/rtaudio/RtAudio.h>
 
 using signal_t = qreal;
 #define lininterp(_x,_a,_b) _a+_x*(_b-_a)
@@ -26,7 +28,8 @@ class channel
     channel();
     channel(size_t size, signal_t fill = 0);
 
-    slice operator()(size_t begin = 0, size_t sz = 0, size_t pos = 0);
+    slice operator()(size_t begin = 0, size_t sz = 0, size_t pos = 0);    
+    operator slice();
 
     private:
     signal_t  m_rate;
@@ -78,13 +81,17 @@ class channel
         signal_t max();
         signal_t rms();
 
-        void drain();
-        void normalize();
+        // transform  -------------------------------------------
+        void lookup     (slice&, slice&, bool increment = false);
+        void drain      ();
+        void normalize  ();
 
-        void lookup(slice&, slice&, bool increment = false);
+        // cast ---------------------
+        operator signal_t*();
 
         private:
         slice(channel&, signal_t* begin, signal_t* end, signal_t* pos );
+
         slice* minsz(slice& lhs, slice const& rhs);
         channel& m_parent;
         signal_t* m_begin;
@@ -197,12 +204,20 @@ class stream
         slice& operator>>=(slice&);
         slice& operator<<=(signal_t const);
 
-        void lookup(slice&, slice &, bool increment = false);
+        // others ------------------------------------------------
+        void lookup     (slice&, slice &, bool increment = false);
+        void drain      ();
+        void normalize  ();
 
-        size_t size() const;
-        size_t nchannels() const;
-        void drain();
-        void normalize();
+        // properties ---------------
+        size_t size         () const;
+        size_t nchannels    () const;
+
+        // cast ---------------------
+        // note: these two are equivalent
+        operator signal_t*();
+        signal_t* interleaved();
+        void interleaved(signal_t*);
 
         private:
         slice(stream& parent, size_t begin, size_t size, size_t pos);
@@ -243,11 +258,10 @@ struct graph_properties
 };
 
 //=================================================================================================
-class connection;
-
 class Dispatch : public QObject
 {
     Q_OBJECT
+
     public:
     enum Values
     {
@@ -283,6 +297,7 @@ void set##_s(signal v) {                                                        
 //=================================================================================================
 class signal;
 class node;
+class connection;
 //=============================================================================================
 class pin : public QObject
 //=============================================================================================
@@ -308,11 +323,11 @@ class pin : public QObject
     void add_connection(connection& con);
     void remove_connection(connection& con);
 
-    node& get_parent();
-    polarity get_polarity() const;
-    bool is_default() const;
-    std::string get_label() const;
-    stream& get_stream();
+    node& get_parent        ();
+    polarity get_polarity   () const;
+    bool is_default         () const;
+    std::string get_label   () const;
+    stream& get_stream      ();
 
     std::vector<connection*> connections();
 
@@ -332,11 +347,18 @@ class node : public QObject, public QQmlParserStatus
 {
     Q_OBJECT
     Q_PROPERTY   ( Dispatch::Values dispatch READ dispatch WRITE setDispatch )
+    Q_PROPERTY   ( bool active READ active WRITE setActive NOTIFY activeChanged )
+    Q_PROPERTY   ( bool muted READ muted WRITE setMuted NOTIFY mutedChanged )
+    Q_PROPERTY   ( qreal level READ level WRITE setLevel NOTIFY levelChanged )
+
     Q_INTERFACES ( QQmlParserStatus )
 
     friend class connection;
     friend class graph;
     friend class pin;
+
+    friend int rwrite(void*, void*, unsigned int,
+                      double, RtAudioStreamStatus, void*);
 
     void add_pin(pin& pin);
 
@@ -373,14 +395,43 @@ class node : public QObject, public QQmlParserStatus
     virtual void configure  ( graph_properties properties) = 0;
 
     graph_properties m_properties;
-    QVector3D m_position {};
+    QVector3D m_position {};   
+
+    signals:
+    void activeChanged();
+    void mutedChanged();
+    void levelChanged();
 
     public:
-    Q_INVOKABLE pin& inpin();
-    Q_INVOKABLE pin& inpin(QString);
+    pin& inpin();
+    pin& inpin(QString);
 
-    Q_INVOKABLE pin& outpin();
-    Q_INVOKABLE pin& outpin(QString);
+    pin& outpin();
+    pin& outpin(QString);
+
+    bool active() const {
+        return m_active;
+    }
+
+    bool muted() const {
+        return m_muted;
+    }
+
+    qreal level() const {
+        return m_level;
+    }
+
+    void setActive(bool active) {
+        m_active = active;
+    }
+
+    void setMuted(bool muted) {
+        m_muted = muted;
+    }
+
+    void setLevel(qreal level) {
+        m_level = level;
+    }
 
     template<typename T>
     bool connected(T& other) const;
@@ -390,10 +441,13 @@ class node : public QObject, public QQmlParserStatus
 
     //---------------------------------------------------------------------------------------------
     private:
-    void process     ();
-    void initialize  ( graph_properties properties );
+    stream::slice process();
+    void initialize(graph_properties properties);
 
     bool m_intertwined  = false;
+    bool m_active = true;
+    bool m_muted = false;
+    qreal m_level = 1;
 
     std::vector<pin*> m_uppins;
     std::vector<pin*> m_dnpins;
@@ -402,7 +456,6 @@ class node : public QObject, public QQmlParserStatus
     size_t m_stream_pos   = 0;
     signal_t m_height     = 0;
     signal_t m_width      = 0;
-
 };
 
 //=================================================================================================
@@ -432,13 +485,13 @@ class signal : public QObject
 
     ~signal();
 
-    bool is_real() const;
-    bool is_qvariant() const;
-    bool is_pin() const;
+    bool is_real        () const;
+    bool is_qvariant    () const;
+    bool is_pin         () const;
 
-    qreal to_real() const;
-    QVariant to_qvariant() const;
-    pin& to_pin();
+    qreal to_real         () const;
+    QVariant to_qvariant  () const;
+    pin& to_pin           ();
 
     private:
     QVariant uvar    = 0;
@@ -547,7 +600,7 @@ class graph : public QObject
     static graph_properties s_properties;
 };
 
-
+class Audiostream;
 //=================================================================================================
 class Output : public node
 //=================================================================================================
@@ -558,6 +611,7 @@ class Output : public node
     WPN_REGISTER_PIN  ( outputs, DEFAULT, OUTPUT, 0 )
 
     Q_PROPERTY  ( signal_t rate READ rate WRITE setRate NOTIFY rateChanged )
+    Q_PROPERTY  ( int nchannels READ nchannels WRITE setNchannels NOTIFY nchannelsChanged )
     Q_PROPERTY  ( int vector READ vector WRITE setVector NOTIFY vectorChanged )
     Q_PROPERTY  ( int feedback READ feedback WRITE setFeedback NOTIFY feedbackChanged )
     Q_PROPERTY  ( QString api READ api WRITE setApi NOTIFY apiChanged )
@@ -566,32 +620,80 @@ class Output : public node
     public:
     Output();
 
-    signal_t rate() const { return m_rate; }
-    quint16 vector() const { return m_vector; }
-    quint16 feedback() const { return m_feedback; }
-    QString api() const { return m_api; }
-    QString device() const { return m_device; }
+    virtual void componentComplete() override;
 
-    void setRate(signal_t rate);
-    void setVector(quint16 vector);
-    void setFeedback(quint16 feedback);
-    void setApi(QString api);
-    void setDevice(QString device);
+    signal_t rate       () const { return m_rate; }
+    quint16 nchannels   () const { return m_nchannels; }
+    quint16 vector      () const { return m_vector; }
+    quint16 feedback    () const { return m_feedback; }
+    QString api         () const { return m_api; }
+    QString device      () const { return m_device; }
+
+    void setRate        ( signal_t rate);
+    void setNchannels   ( quint16 nchannels);
+    void setVector      ( quint16 vector);
+    void setFeedback    ( quint16 feedback);
+    void setApi         ( QString api);
+    void setDevice      ( QString device);
 
     signals:
-    void rateChanged();
-    void vectorChanged();
-    void feedbackChanged();
-    void apiChanged();
-    void deviceChanged();
+    void rateChanged        ();
+    void nchannelsChanged   ();
+    void vectorChanged      ();
+    void feedbackChanged    ();
+    void apiChanged         ();
+    void deviceChanged      ();
+
+    void preconfigure   ();
+    void start          ();
+    void stop           ();
+    void restart        ();
+    void exit           ();
 
     private:
     signal_t m_rate;
+    quint16 m_nchannels;
     quint16 m_vector;
     quint16 m_feedback;
     QString m_api;
     QString m_device;
+
+    std::unique_ptr<Audiostream> m_stream;
+    QThread m_audiothread;
 };
+//=================================================================================================
+class Audiostream : public QObject
+//=================================================================================================
+{
+    Q_OBJECT
+
+    public:
+    Audiostream ( Output& out,
+                  RtAudio::StreamParameters parameters,
+                  RtAudio::DeviceInfo info,
+                  RtAudio::StreamOptions options);
+
+    public slots:
+    void preconfigure   ();
+    void start          ();
+    void stop           ();
+    void restart        ();
+    void exit           ();
+
+    private:
+    Output& m_outmodule;
+    std::unique_ptr<RtAudio> m_stream;
+    RtAudioFormat m_format;
+    RtAudio::DeviceInfo m_device_info;
+    RtAudio::StreamParameters m_parameters;
+    RtAudio::StreamOptions m_options;
+    quint32 m_vector;
+};
+
+// the main audio callback
+int rwrite(void* out, void* in, unsigned int nframes,
+           double time, RtAudioStreamStatus status,
+           void* udata);
 
 //=================================================================================================
 class Sinetest : public node

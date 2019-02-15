@@ -1,5 +1,6 @@
 #include "qtwrapper.hpp"
 #include <math.h>
+#include <QtDebug>
 
 #define WPN_TODO
 #define WPN_REFACTOR
@@ -843,7 +844,7 @@ void node::initialize(graph_properties properties)
           pin->allocate(properties.vsz);
 }
 
-void node::process()
+stream::slice node::process()
 {
     size_t sz = m_intertwined     ?
                 m_properties.vsz  :
@@ -861,6 +862,8 @@ void node::process()
 
     if ( m_stream_pos >= m_properties.vsz )
          m_stream_pos -= m_properties.vsz;
+
+
 }
 
 //=================================================================================================
@@ -1082,6 +1085,11 @@ void Output::setRate(signal_t rate)
     m_rate = rate;
 }
 
+void Output::setNchannels(quint16 nchannels)
+{
+    m_nchannels = nchannels;
+}
+
 void Output::setVector(quint16 vector)
 {
     m_vector = vector;
@@ -1102,6 +1110,69 @@ void Output::setDevice(QString device)
     m_device = device;
 }
 
+void Output::componentComplete()
+{
+    RtAudio::Api api = RtAudio::UNSPECIFIED;
+    if ( m_api == "JACK" )
+         api = RtAudio::UNIX_JACK;
+    else if ( m_api == "CORE" )
+         api = RtAudio::MACOSX_CORE;
+    else if ( m_api == "ALSA" )
+         api = RtAudio::LINUX_ALSA;
+    else if ( m_api == "PULSE" )
+         api = RtAudio::LINUX_PULSE;
+
+    RtAudio audio(api);
+    RtAudio::StreamParameters parameters;
+    RtAudio::DeviceInfo info;
+    RtAudio::StreamOptions options;
+
+    auto ndevices = audio.getDeviceCount();
+
+    if ( !m_device.isEmpty())
+    {
+        for ( quint32 d = 0; d < ndevices; ++d )
+        {
+            info = audio.getDeviceInfo(d);
+            auto name = QString::fromStdString(info.name);
+
+            if (name.contains(m_device))
+            {
+                parameters.deviceId = d;
+                break;
+            }
+        }
+    }
+    else
+    {
+        parameters.deviceId = audio.getDefaultOutputDevice();
+    }
+
+    auto selected_info = audio.getDeviceInfo(parameters.deviceId);
+
+    qDebug() << "AUDIO_SELECTED_DEVICE"
+             << QString::fromStdString(selected_info.name);
+
+    parameters.nChannels    = m_nchannels;
+    options.streamName      = "WPN114";
+    options.flags           = RTAUDIO_SCHEDULE_REALTIME;
+    options.priority        = 10;
+
+    m_stream = std::make_unique<Audiostream>
+               (*this, parameters, info, options);
+
+    m_stream->moveToThread(&m_audiothread);
+
+    QObject::connect(this, &Output::preconfigure, &*m_stream, &Audiostream::preconfigure);
+    QObject::connect(this, &Output::start, &*m_stream, &Audiostream::start);
+    QObject::connect(this, &Output::stop, &*m_stream, &Audiostream::stop);
+    QObject::connect(this, &Output::restart, &*m_stream, &Audiostream::restart);
+    QObject::connect(this, &Output::exit, &*m_stream, &Audiostream::exit);
+
+    emit preconfigure();
+    m_audiothread.start(QThread::TimeCriticalPriority);
+}
+
 void Output::configure(graph_properties properties)
 {
 
@@ -1110,6 +1181,106 @@ void Output::configure(graph_properties properties)
 void Output::rwrite(node::pool& inputs, node::pool& outputs, size_t sz)
 {
 
+}
+
+//=================================================================================================
+// AUDIOSTREAM
+//=================================================================================================
+
+Audiostream::Audiostream(Output& out,
+    RtAudio::StreamParameters parameters,
+    RtAudio::DeviceInfo info,
+    RtAudio::StreamOptions options) :
+    m_outmodule(out),
+    m_device_info(info),
+    m_options(options),
+    m_stream(std::make_unique<RtAudio>())
+{
+
+}
+
+void Audiostream::preconfigure()
+{
+    m_format = RTAUDIO_FLOAT64;
+    m_vector = m_outmodule.vector();
+
+    try
+    {
+        m_stream->openStream(
+            &m_parameters,
+            nullptr,
+            m_format,
+            m_outmodule.rate(),
+            &m_vector,
+            &rwrite,
+            static_cast<void*>(&m_outmodule),
+            &m_options,
+            nullptr
+        );
+    }
+
+    catch(RtAudioError const& e)
+    {
+        qDebug() << "OPENSTREAM_ERROR!"
+                 << QString::fromStdString(e.getMessage());
+    }
+}
+
+void Audiostream::start()
+{
+    try     { m_stream->startStream(); }
+    catch   ( RtAudioError const& e )
+    {
+        qDebug() << "STARTSTREAM_ERROR!"
+                 << QString::fromStdString(e.getMessage());
+    }
+}
+
+void Audiostream::stop()
+{
+    try     { m_stream->stopStream(); }
+    catch   ( RtAudioError const& e )
+    {
+        qDebug() << "STOPSTREAM_ERROR!"
+                 << QString::fromStdString(e.getMessage());
+    }
+}
+
+WPN_TODO
+void Audiostream::restart()
+{
+
+}
+
+void Audiostream::exit()
+{
+    try
+    {
+        m_stream->stopStream();
+        m_stream->closeStream();
+    }
+
+    catch ( RtAudioError const& e)
+    {
+        qDebug() << "ERROR_ON_EXIT!"
+                 << QString::fromStdString(e.getMessage());
+    }
+}
+
+//=================================================================================================
+// MAIN_AUDIO_CALLBACK
+//=================================================================================================
+
+int rwrite(void* out, void* in, unsigned int nframes,
+           double time, RtAudioStreamStatus status,
+           void* udata)
+{
+    Output& outmod = *static_cast<Output*>(udata);
+    //outmod.audiostream().buffer_processed(time);
+    auto strm = outmod.process();
+    strm.interleaved(static_cast<signal_t*>(out));
+
+    return 0;
 }
 
 //=================================================================================================
