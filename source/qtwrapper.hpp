@@ -192,14 +192,20 @@ class stream
         size_t pos;
     };
 
+    private:
+    void add_sync(sync& target, stream& s);
+    stream::slice synchronize(sync& target, size_t sz);
+    void synchronize_skip(sync& target, size_t sz);
+
+    public:
     void add_upsync(stream&);
     void add_dnsync(stream&);
 
-    void draw_skip(size_t);
-    void pour_skip(size_t);
+    stream::slice sync_draw(size_t);
+    void sync_pour(size_t);
 
-    slice draw(size_t);
-    void pour(size_t);
+    void upsync_skip(size_t);
+    void dnsync_skip(size_t);
 
     size_t size() const;
     size_t nchannels() const;

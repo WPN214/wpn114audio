@@ -179,7 +179,7 @@ signal_t channel::slice::rms()
     for ( auto s : *this )
           m += s;
 
-    return std::sqrt(1.0/m_size/m);
+    return std::sqrt( 1.0/m_size/m );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -245,7 +245,6 @@ bool channel::slice::iterator::operator!=(channel::slice::iterator const& other)
 {
     return m_data != other.m_data;
 }
-
 
 //=================================================================================================
 // STREAM
@@ -319,62 +318,68 @@ stream::slice stream::operator()(size_t begin, size_t sz, size_t pos)
 // STREAM SYNCS
 //-------------------------------------------------------------------------------------------------
 
-WPN_REVISE
-void stream::add_upsync(stream& target)
+inline void
+stream::add_sync(sync& target, stream& s)
 {
-    m_upsync._stream = &target;
-    m_upsync.size = target.size();
-    m_upsync.pos = 0;
+    target._stream = &s;
+    target.size = s.size();
+    target.pos = 0;
 }
 
-WPN_REVISE
-void stream::add_dnsync(stream& target)
+inline stream::slice
+stream::synchronize(sync& target, size_t sz)
 {
-    m_dnsync._stream = &target;
-    m_dnsync.size = target.size();
-    m_dnsync.pos = 0;
-}
+    auto acc    = operator()(target.pos, sz);
+    auto& strm  = *target._stream;
 
-WPN_REVISE
-stream::slice stream::draw(size_t sz)
-{
-    auto acc = operator()(m_upsync.pos, sz);
-    auto& up = *m_upsync._stream;
-    acc << up(m_upsync.pos, sz);
-
-    m_upsync.pos += sz;
-    if ( m_upsync.pos >= m_upsync.size )
-         m_upsync.pos -= m_upsync.size;
+    acc << strm(target.pos, sz);
+    synchronize_skip(target, sz);
 
     return acc;
 }
 
-WPN_REVISE
-void stream::pour(size_t sz)
+inline void
+stream::synchronize_skip(sync& target, size_t sz)
 {
-    auto acc = operator()(m_dnsync.pos, sz);
-    auto& dn = *m_dnsync._stream;
-    acc << dn(m_dnsync.pos, sz);
-
-    m_dnsync.pos += sz;
-    if ( m_dnsync.pos >= m_dnsync.size )
-         m_dnsync.pos -= m_dnsync.size;
+    target.pos += sz;
+    if ( target.pos >= target.size)
+         target.pos -= target.size;
 }
 
-WPN_REVISE
-void stream::draw_skip(size_t sz)
+void
+stream::add_upsync(stream& target)
 {
-    m_upsync.pos += sz;
-    if ( m_upsync.pos >= m_upsync.size )
-         m_upsync.pos -= m_upsync.size;
+    add_sync(m_upsync, target);
 }
 
-WPN_REVISE
-void stream::pour_skip(size_t sz)
+void
+stream::add_dnsync(stream& target)
 {
-    m_dnsync.pos += sz;
-    if ( m_dnsync.pos >= m_dnsync.size )
-         m_dnsync.pos -= m_dnsync.size;
+    add_sync(m_dnsync, target);
+}
+
+stream::slice
+stream::sync_draw(size_t sz)
+{
+    return synchronize(m_upsync, sz);
+}
+
+void
+stream::sync_pour(size_t sz)
+{
+    synchronize(m_dnsync, sz);
+}
+
+void
+stream::upsync_skip(size_t sz)
+{
+    synchronize_skip(m_upsync, sz);
+}
+
+void
+stream::dnsync_skip(size_t sz)
+{
+    synchronize_skip(m_dnsync, sz);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -548,6 +553,7 @@ void stream::slice::lookup(stream::slice& source,
 {
     assert(source.size() == head.size() == m_size);
     size_t n = 0;
+
     for ( auto& channel : m_cslices )
     {
         auto sch = source[n];
@@ -583,7 +589,6 @@ bool stream::slice::iterator::operator!=(stream::slice::iterator const& s)
 {
     return m_data != s.m_data;
 }
-
 
 //=================================================================================================
 // pin
@@ -802,7 +807,6 @@ node::connected(T& other) const
          for ( auto& pin: m_uppins )
                if ( pin->connected(other) )
                     return true;
-
     return false;
 }
 
@@ -906,14 +910,14 @@ void connection::pull(size_t sz)
 
     if ( m_muted )
     {
-        auto slice = m_stream.draw(sz);
+        auto slice = m_stream.sync_draw(sz);
         slice *= m_level;
-        m_stream.pour(sz);
+        m_stream.sync_pour(sz);
     }
     else
     {
-        m_stream.draw_skip(sz);
-        m_stream.pour_skip(sz);
+        m_stream.upsync_skip(sz);
+        m_stream.dnsync_skip(sz);
     }
 }
 
@@ -1172,10 +1176,7 @@ void Output::componentComplete()
             }
         }
     }
-    else
-    {
-        parameters.deviceId = audio.getDefaultOutputDevice();
-    }
+    else parameters.deviceId = audio.getDefaultOutputDevice();
 
     auto selected_info = audio.getDeviceInfo(parameters.deviceId);
 
@@ -1242,8 +1243,7 @@ void Audiostream::preconfigure()
         );
     }
 
-    catch(RtAudioError const& e)
-    {
+    catch (RtAudioError const& e) {
         qDebug() << "OPENSTREAM_ERROR!"
                  << QString::fromStdString(e.getMessage());
     }
