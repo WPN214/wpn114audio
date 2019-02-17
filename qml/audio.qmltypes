@@ -4,23 +4,20 @@ Module
 {
     Component
     {
-        name: "StreamNode"
+        name: "Node"
         prototype: "QObject"
         isCreatable: false
 
-        exports: ["WPN114.Audio/StreamNode 1.0"]
+        exports: ["WPN114.Audio/Node 1.1"]
         exportMetaObjectRevisions: [1]
         defaultProperty: "subnodes"
 
         Property { name: "mute"; type: "bool" }
         Property { name: "active"; type: "bool" }
-        Property { name: "numInputs"; type: "int" }
-        Property { name: "numOutputs"; type: "int" }
-        Property { name: "parentChannels"; type: "QVariant" }
         Property { name: "level"; type: "qreal" }
         Property { name: "dBlevel"; type: "qreal" }
-        Property { name: "subnodes"; type: "StreamNode"; isList: true }
-        Property { name: "parentStream"; type: "StreamNode"; isPointer: true }
+        Property { name: "subnodes"; type: "Node"; isList: true }
+        Property { name: "parentStream"; type: "Node"; isPointer: true }
 
         Signal { name: "muteChanged" }
         Signal { name: "activeChanged" }
@@ -32,23 +29,21 @@ Module
 
     Component
     {
-        name: "AudioStream"
-        prototype: "StreamNode"
-        exports: ["WPN114.Audio/AudioStream 1.0"]
+        name: "Audiostream"
+        prototype: "QObject"
+        exports: ["WPN114.Audio/Audiostream 1.1"]
         exportMetaObjectRevisions: [1]
 
-        Property { name: "sampleRate"; type: "int" }
-        Property { name: "blockSize"; type: "int" }
+        Property { name: "rate"; type: "int" }
+        Property { name: "vector"; type: "int" }
+        Property { name: "feedback"; type: "int" }
         Property { name: "offset"; type: "int" }
-        Property { name: "inDevice"; type: "string" }
-        Property { name: "outDevice"; type: "string" }
+        Property { name: "device"; type: "string" }
         Property { name: "api"; type: "string" }
-        Property { name: "inserts"; type: "StreamNode"; isList: true }
 
         Method { name: "start" }
         Method { name: "stop" }
-        Method { name: "inDevices"; type: "QStringList" }
-        Method { name: "outDevices"; type: "QStringList" }
+        Method { name: "devices"; type: "QStringList" }
 
         Signal
         {
@@ -56,9 +51,10 @@ Module
             Parameter { name: "tick"; type: "int" }
         }
 
-        Signal { name: "sampleRateChanged" }
-        Signal { name: "blockSizeChanged" }
-        Signal { name: "inDeviceChanged" }
-        Signal { name: "outDeviceChanged" }
+        Signal { name: "rateChanged" }
+        Signal { name: "vectorChanged" }
+        Signal { name: "feedbackChanged" }
+        Signal { name: "deviceChanged" }
+        Signal { name: "apiChanged" }
     }
 }

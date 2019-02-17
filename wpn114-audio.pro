@@ -40,5 +40,7 @@ SOURCES += $$PWD/source/qtwrapper.cpp
 SOURCES += $$PWD/qml_plugin.cpp
 HEADERS += $$PWD/qml_plugin.hpp
 
+DEFINES += WPN_DOUBLE_PRECISION
+
 DISTFILES += \
     examples/Audio.qml

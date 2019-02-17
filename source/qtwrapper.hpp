@@ -9,13 +9,55 @@
 #include <memory>
 #include <external/rtaudio/RtAudio.h>
 
-using signal_t = qreal;
-#define lininterp(_x,_a,_b) _a+_x*(_b-_a)
+//=================================================================================================
+#define WPN_TODO
+#define WPN_REFACTOR
+#define WPN_OPTIMIZE
+#define WPN_DEPRECATED
+#define WPN_UNSAFE
+#define WPN_EXAMINE
+#define WPN_REVISE
+#define WPN_OK
+//=================================================================================================
+#ifdef WPN_SINGLE_PRECISION
+using signal_t = float;
+#define WPN_RT_PRECISION RTAUDIO_FLOAT32
+#endif
 
+#ifdef WPN_DOUBLE_PRECISION
+using signal_t = qreal;
+#define WPN_RT_PRECISION RTAUDIO_FLOAT64
+#endif
+//=================================================================================================
+#define DEFAULT true
+#define NONDEFAULT false
+#define INPUT  polarity::input
+#define OUTPUT polarity::output
+//=================================================================================================
+#define WPN_OBJECT                                                                                 \
+Q_OBJECT                                                                                           \
+protected:                                                                                         \
+virtual void rwrite(node::pool& inputs, node::pool& outputs, size_t sz) override;                  \
+virtual void configure(graph_properties properties) override;
+//=================================================================================================
+#define WPN_REGISTER_PIN(_s, _d, _p, _n)                                                           \
+Q_PROPERTY(SVariant _s READ get##_s WRITE set##_s NOTIFY notify##_s)                               \
+signals: void notify##_s();                                                                        \
+protected: pin m_##_s { *this, _p, #_s, _n, _d };                                                  \
+                                                                                                   \
+SVariant get##_s() {                                                                               \
+    return sgrd(m_##_s);                                                                           \
+}                                                                                                  \
+                                                                                                   \
+void set##_s(SVariant v) {                                                                         \
+    sgwr(m_##_s, v);                                                                               \
+}
+//=================================================================================================
+#define lininterp(_x,_a,_b) _a+_x*(_b-_a)
+#define atodb(_s) log10(_s)*20
+#define dbtoa(_s) pow(10, _s*.05)
 //=================================================================================================
 enum class polarity { output = 0, input  = 1 };
-//=================================================================================================
-
 //=================================================================================================
 class channel
 //=================================================================================================
@@ -32,9 +74,9 @@ class channel
     operator slice();
 
     private:
-    signal_t  m_rate;
-    signal_t* m_data;
-    signal_t  m_size;
+    signal_t  m_rate = 0;
+    signal_t* m_data = nullptr;
+    size_t m_size = 0;
 
     public:
     //=============================================================================================
@@ -82,7 +124,7 @@ class channel
         signal_t rms();
 
         // transform  -------------------------------------------
-        void lookup     (slice&, slice&, bool increment = false);
+        void lookup     ( slice&, slice&, bool increment = false );
         void drain      ();
         void normalize  ();
 
@@ -92,12 +134,11 @@ class channel
         private:
         slice(channel&, signal_t* begin, signal_t* end, signal_t* pos );
 
-        slice* minsz(slice& lhs, slice const& rhs);
         channel& m_parent;
-        signal_t* m_begin;
-        signal_t* m_end;
-        signal_t* m_pos;
-        size_t m_size;
+        signal_t* m_begin = nullptr;
+        signal_t* m_end = nullptr;
+        signal_t* m_pos = nullptr;
+        size_t m_size = 0;
 
         public:
         //----------------------------------------------------------------------------------
@@ -225,9 +266,9 @@ class stream
         private:
         slice(stream& parent, size_t begin, size_t size, size_t pos);
         stream& m_parent;
-        size_t m_begin;
-        size_t m_size;
-        size_t m_pos;
+        size_t m_begin = 0;
+        size_t m_size = 0;
+        size_t m_pos = 0;
 
         std::vector<channel::slice> m_cslices;
 
@@ -255,9 +296,9 @@ class stream
 //=================================================================================================
 struct graph_properties
 {
-    signal_t rate;
-    size_t vsz;
-    size_t fvsz;
+    signal_t rate = 44100;
+    size_t vsz = 512;
+    size_t fvsz = 64;
 };
 
 //=================================================================================================
@@ -273,32 +314,9 @@ class Dispatch : public QObject
     };
 };
 
+
 //=================================================================================================
-#define DEFAULT true
-#define NONDEFAULT false
-#define INPUT  polarity::input
-#define OUTPUT polarity::output
-//=================================================================================================
-#define WPN_OBJECT                                                                                 \
-Q_OBJECT                                                                                           \
-protected:                                                                                         \
-virtual void rwrite(node::pool& inputs, node::pool& outputs, size_t sz) override;                  \
-virtual void configure(graph_properties properties) override;
-//=================================================================================================
-#define WPN_REGISTER_PIN(_s, _d, _p, _n)                                                           \
-Q_PROPERTY(signal _s READ get##_s WRITE set##_s NOTIFY notify##_s)                                 \
-signals: void notify##_s();                                                                        \
-protected: pin m_##_s { *this, _p, #_s, _n, _d };                                                  \
-                                                                                                   \
-signal get##_s() {                                                                                 \
-    return sgrd(m_##_s);                                                                           \
-}                                                                                                  \
-                                                                                                   \
-void set##_s(signal v) {                                                                           \
-    sgwr(m_##_s, v);                                                                               \
-}
-//=================================================================================================
-class signal;
+class SVariant;
 class node;
 class connection;
 //=============================================================================================
@@ -332,16 +350,20 @@ class pin : public QObject
     std::string get_label   () const;
     stream& get_stream      ();
 
-    std::vector<connection*> connections();
+    std::vector<std::shared_ptr<connection>>
+    connections();
 
     private:
     node& m_parent;
     bool m_default;
     const polarity m_polarity;
-    std::vector<connection*> m_connections;
+
+    std::vector<std::shared_ptr<connection>>
+    m_connections;
+
     std::string m_label;
     stream m_stream;
-    size_t m_nchannels;
+    size_t m_nchannels = 0;
 };
 
 //=================================================================================================
@@ -367,8 +389,8 @@ class node : public QObject, public QQmlParserStatus
 
     protected:
     //=============================================================================================
-    signal sgrd(pin& pin);
-    void sgwr(pin& pin, signal s);
+    SVariant sgrd(pin& pin);
+    void sgwr(pin& pin, SVariant s);
 
     public:
     //=============================================================================================
@@ -447,8 +469,7 @@ class node : public QObject, public QQmlParserStatus
     void process();
     void initialize(graph_properties properties);
 
-    stream::slice upstream();
-    stream::slice dnstream();
+    stream::slice collect(polarity);
 
     bool m_intertwined  = false;
     bool m_active = true;
@@ -465,7 +486,8 @@ class node : public QObject, public QQmlParserStatus
 };
 
 //=================================================================================================
-class signal : public QObject
+class SVariant : public QObject
+// convenience class allowing flexible qml-bindings
 //=================================================================================================
 {
     Q_OBJECT
@@ -480,16 +502,16 @@ class signal : public QObject
         PIN  = 3
     };
 
-    signal(qreal v);
-    signal(QVariant v);
-    signal(pin&);
-    signal(signal const&);
-    signal(signal&&);
+    SVariant(qreal v);
+    SVariant(QVariant v);
+    SVariant(pin&);
+    SVariant(SVariant const&);
+    SVariant(SVariant&&);
 
-    signal& operator=(signal const&);
-    signal& operator=(signal&&);
+    SVariant& operator=(SVariant const&);
+    SVariant& operator=(SVariant&&);
 
-    ~signal();
+    ~SVariant();
 
     bool is_real        () const;
     bool is_qvariant    () const;
@@ -512,6 +534,7 @@ class connection : public QObject
 {
     friend class node;
     friend class graph;
+
     Q_OBJECT
 
     public:
@@ -602,6 +625,9 @@ class graph : public QObject
 
     private:
     static std::vector<connection> s_connections;
+
+    // TODO, emplace_back nodes
+    // graph has ownership
     static std::vector<node*> s_nodes;
     static graph_properties s_properties;
 };

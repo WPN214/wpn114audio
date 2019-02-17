@@ -2,29 +2,17 @@
 #include <math.h>
 #include <QtDebug>
 
-#define WPN_TODO
-#define WPN_REFACTOR
-#define WPN_OPTIMIZE
-#define WPN_DEPRECATED
-#define WPN_UNSAFE
-#define WPN_EXAMINE
-#define WPN_REVISE
-#define WPN_OK
-
 //=================================================================================================
 // CHANNEL
 //=================================================================================================
 
-WPN_TODO
-channel::channel()
-{
+channel::channel() { }
 
-}
-
-WPN_TODO
+WPN_OPTIMIZE // template it + allocator option
 channel::channel(size_t sz, signal_t fill)
 {
-
+    m_data = new signal_t[sz];
+    operator()() <<= fill;
 }
 
 channel::slice channel::operator()(size_t begin, size_t sz, size_t pos)
@@ -38,7 +26,12 @@ channel::slice channel::operator()(size_t begin, size_t sz, size_t pos)
 // channel-slice
 //-------------------------------------------------------------------------------------------------
 
-channel::slice::slice(channel& parent) : m_parent(parent) { }
+channel::slice::slice(channel& parent) : m_parent(parent)
+{
+    m_begin  = m_pos = parent.m_data;
+    m_size   = parent.m_size;
+    m_end    = &parent.m_data[m_size];
+}
 
 channel::slice::iterator channel::slice::begin()
 {
@@ -63,13 +56,10 @@ size_t channel::slice::size() const
 //-------------------------------------------------------------------------------------------------
 
 // copy-merge contents of other into this
+// equivalent to operator +=
 channel::slice& channel::slice::operator<<(channel::slice const& other)
 {
-    auto sz = std::min(m_size, other.m_size);
-    for ( size_t n = 0; n < sz; ++n )
-          m_begin[n] += other.m_begin[n];
-
-    return *this;
+    return operator+=(other);
 }
 
 // same, but reverted
@@ -93,7 +83,11 @@ channel::slice& channel::slice::operator>>=(channel::slice& other)
 
 channel::slice& channel::slice::operator<<(const signal_t v)
 {
-    *m_pos++ = v; return *this;
+    if ( m_pos == m_end )
+         return *this;
+
+    *m_pos++ = v;
+    return *this;
 }
 
 channel::slice& channel::slice::operator>>(signal_t& v)
@@ -208,6 +202,7 @@ channel::slice::normalize()
 //-------------------------------------------------------------------------------------------------
 
 WPN_EXAMINE
+WPN_TODO // <-- make an option for the interpolation type
 void channel::slice::lookup(slice& source, slice& head, bool increment)
 {
     assert(m_size == source.size() == head.size());
@@ -258,7 +253,7 @@ bool channel::slice::iterator::operator!=(channel::slice::iterator const& other)
 
 stream::stream() : m_size(0), m_nchannels(0)
 {
-
+    m_channels.reserve(2);
 }
 
 WPN_REVISE
@@ -285,9 +280,10 @@ void stream::append(channel& ch)
 WPN_REVISE
 void stream::allocate(size_t nchannels, size_t size)
 {
-    for ( auto& ch : m_channels )
-          ch = new channel(size);
+    for ( size_t n = 0; n < nchannels; ++n )
+          m_channels.push_back(new channel(size));
 }
+
 stream::~stream()
 {
     for ( auto& ch : m_channels )
@@ -630,13 +626,14 @@ inline void pin::allocate(size_t sz)
 
 inline void pin::add_connection(connection& con)
 {
-    m_connections.push_back(&con);
+    m_connections.push_back(std::make_shared<connection>(con));
 }
 
 inline void pin::remove_connection(connection& con)
 {
     std::remove(m_connections.begin(),
-                m_connections.end(), &con);
+                m_connections.end(),
+                std::make_shared<connection>(con));
 }
 
 bool pin::connected() const
@@ -670,60 +667,61 @@ bool pin::connected(T& target) const
 // QT-SIGNAL
 //=================================================================================================
 
-signal::signal(qreal v) : ureal(v), m_qtype(REAL) {}
-signal::signal(QVariant v) : uvar(v), m_qtype(VAR) {}
-signal::signal(pin& p) : upin(&p), m_qtype(PIN) {}
+SVariant::SVariant(qreal v) : ureal(v), m_qtype(REAL) {}
+SVariant::SVariant(QVariant v) : uvar(v), m_qtype(VAR) {}
+SVariant::SVariant(pin& p) : upin(&p), m_qtype(PIN) {}
 
 WPN_TODO
-signal::signal(signal const& cp)
+SVariant::SVariant(SVariant const& cp)
+{
+
+
+}
+
+WPN_TODO
+SVariant::SVariant(SVariant&& mv)
 {
 
 }
 
 WPN_TODO
-signal::signal(signal&& mv)
+SVariant& SVariant::operator=(SVariant const& cp)
 {
 
 }
 
 WPN_TODO
-signal& signal::operator=(signal const& cp)
+SVariant& SVariant::operator=(SVariant&& mv)
 {
 
 }
 
-WPN_TODO
-signal& signal::operator=(signal&& mv)
-{
-
-}
-
-bool signal::is_pin() const
+bool SVariant::is_pin() const
 {
     return m_qtype == PIN;
 }
 
-bool signal::is_real() const
+bool SVariant::is_real() const
 {
     return m_qtype == REAL;
 }
 
-bool signal::is_qvariant() const
+bool SVariant::is_qvariant() const
 {
     return m_qtype == VAR;
 }
 
-pin& signal::to_pin()
+pin& SVariant::to_pin()
 {
     return *upin;
 }
 
-QVariant signal::to_qvariant() const
+QVariant SVariant::to_qvariant() const
 {
     return uvar;
 }
 
-qreal signal::to_real() const
+qreal SVariant::to_real() const
 {
     return ureal;
 }
@@ -741,13 +739,13 @@ inline void node::add_pin(pin &pin)
     }
 }
 
-inline signal node::sgrd(pin& p)
+inline SVariant node::sgrd(pin& p)
 {
-    return signal(p);
+    return SVariant(p);
 }
 
 WPN_TODO inline void
-node::sgwr(pin& p, signal v)
+node::sgwr(pin& p, SVariant v)
 {
     if ( v.is_real())
          p.get_stream()() <<= v.to_real();
@@ -844,28 +842,21 @@ pin& node::outpin(QString ref)
 
 //-------------------------------------------------------------------------------------------------
 
-WPN_REVISE
-stream::slice node::upstream()
+
+stream::slice node::collect(polarity p)
 {
-    // gather all streams as one
-    // return it as a slice
-    // (without memory allocation)
+    std::vector<pin*>* target;
+    switch(p)
+    {
+    case polarity::input: target = &m_uppins; break;
+    case polarity::output: target = &m_dnpins;
+    }
+
     stream s;
-    for ( auto& pin : m_uppins )
-         s.append(pin->get_stream());
+    for ( auto& pin : *target )
+          s.append(pin->get_stream());
 
     return s();
-}
-
-WPN_REVISE
-stream::slice node::dnstream()
-{
-    stream s;
-    for ( auto& pin : m_dnpins )
-         s.append(pin->get_stream());
-
-    return s();
-
 }
 
 void node::initialize(graph_properties properties)
@@ -1049,6 +1040,8 @@ connection::is_dest(pin& target) const
 
 connection& graph::connect(pin& source, pin& dest, connection::pattern pattern)
 {
+    // TODO: store and move node references into this
+    // nodes are owned by the graph
     s_connections.emplace_back(source, dest, pattern);
     return s_connections.back();
 }
@@ -1086,7 +1079,7 @@ void graph::disconnect(pin& source, pin& dest)
     for ( auto& connection : source.m_connections )
           if ( connection->is_source(source) &&
                connection->is_dest(dest))
-               target = connection;
+               target = connection.get();
 
     if ( !target ) return;
 
@@ -1103,6 +1096,7 @@ void graph::configure(signal_t rate, size_t vector_size, size_t feedback_size)
 stream::slice graph::run(node& target)
 {
     target.process();
+    return target.collect(polarity::input);
 }
 
 //=================================================================================================
@@ -1146,6 +1140,7 @@ void Output::setDevice(QString device)
 
 void Output::componentComplete()
 {
+    WPN_REFACTOR
     RtAudio::Api api = RtAudio::UNSPECIFIED;
     if ( m_api == "JACK" )
          api = RtAudio::UNIX_JACK;
@@ -1167,8 +1162,8 @@ void Output::componentComplete()
     {
         for ( quint32 d = 0; d < ndevices; ++d )
         {
-            info = audio.getDeviceInfo(d);
-            auto name = QString::fromStdString(info.name);
+            auto name = QString::fromStdString(
+                        audio.getDeviceInfo(d).name);
 
             if (name.contains(m_device))
             {
@@ -1184,13 +1179,13 @@ void Output::componentComplete()
 
     auto selected_info = audio.getDeviceInfo(parameters.deviceId);
 
-    qDebug() << "AUDIO_SELECTED_DEVICE"
+    qDebug() << "SELECTED_AUDIO_DEVICE"
              << QString::fromStdString(selected_info.name);
 
     parameters.nChannels    = m_nchannels;
     options.streamName      = "WPN114";
     options.flags           = RTAUDIO_SCHEDULE_REALTIME;
-    options.priority        = 10;
+    options.priority        = 40;
 
     m_stream = std::make_unique<Audiostream>
                (*this, parameters, info, options);
@@ -1207,15 +1202,8 @@ void Output::componentComplete()
     m_audiothread.start(QThread::TimeCriticalPriority);
 }
 
-void Output::configure(graph_properties properties)
-{
-
-}
-
-void Output::rwrite(node::pool& inputs, node::pool& outputs, size_t sz)
-{
-
-}
+void Output::configure(graph_properties properties) {}
+void Output::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) {}
 
 //=================================================================================================
 // AUDIOSTREAM
@@ -1225,6 +1213,7 @@ Audiostream::Audiostream(Output& out,
     RtAudio::StreamParameters parameters,
     RtAudio::DeviceInfo info,
     RtAudio::StreamOptions options) :
+    m_parameters(parameters),
     m_outmodule(out),
     m_device_info(info),
     m_options(options),
@@ -1235,21 +1224,21 @@ Audiostream::Audiostream(Output& out,
 
 void Audiostream::preconfigure()
 {
-    m_format = RTAUDIO_FLOAT64;
+    m_format = WPN_RT_PRECISION;
     m_vector = m_outmodule.vector();
 
     try
     {
         m_stream->openStream(
-            &m_parameters,
-            nullptr,
-            m_format,
-            m_outmodule.rate(),
-            &m_vector,
-            &rwrite,
-            static_cast<void*>(&m_outmodule),
-            &m_options,
-            nullptr
+            &m_parameters,                      // parameters
+            nullptr,                            // dunno
+            m_format,                           // format
+            m_outmodule.rate(),                 // sample-rate
+            &m_vector,                          // vector-size
+            &rwrite,                            // audio callback
+            static_cast<void*>(&m_outmodule),   // user-data
+            &m_options,                         // options
+            nullptr                             // dunno
         );
     }
 
@@ -1365,7 +1354,6 @@ void VCA::rwrite(node::pool& upstream, node::pool& dnstream, size_t sz)
     auto gain  = upstream["gain"];
     auto out   = dnstream["outputs"];
 
-   in *= gain;
-   out << in;
-
+    in *= gain;
+    out << in;
 }
