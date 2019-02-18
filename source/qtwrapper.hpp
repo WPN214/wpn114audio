@@ -2,13 +2,13 @@
 
 #include <QObject>
 #include <QQmlParserStatus>
+#include <QQmlListProperty>
 #include <QVector>
 #include <QVector3D>
 #include <QVariant>
 #include <QThread>
 #include <memory>
 #include <external/rtaudio/RtAudio.h>
-
 //=================================================================================================
 #define WPN_TODO
 #define WPN_REFACTOR
@@ -315,11 +315,12 @@ class Dispatch : public QObject
     public:
     enum Values
     {
-        Parent  = 0,
-        FXChain = 1
+        Upwards    = 0,
+        Downwards  = 1
     };
-};
 
+    Q_ENUM ( Values )
+};
 
 //=================================================================================================
 class SVariant;
@@ -381,20 +382,22 @@ class node : public QObject, public QQmlParserStatus
     Q_PROPERTY   ( bool active READ active WRITE setActive NOTIFY activeChanged )
     Q_PROPERTY   ( bool muted READ muted WRITE setMuted NOTIFY mutedChanged )
     Q_PROPERTY   ( qreal level READ level WRITE setLevel NOTIFY levelChanged )
+    Q_PROPERTY   ( QQmlListProperty<node> subnodes READ subnodes )
 
+    Q_CLASSINFO  ( "DefaultProperty", "subnodes" )
     Q_INTERFACES ( QQmlParserStatus )
 
     friend class connection;
     friend class graph;
     friend class pin;
 
-    friend int rwrite(void*, void*, unsigned int,
-                      double, RtAudioStreamStatus, void*);
-
-    void add_pin(pin& pin);
+    friend int
+    rwrite(void*, void*, unsigned int, double, RtAudioStreamStatus, void*);
 
     protected:
     //=============================================================================================
+    void add_pin(pin& pin);
+
     SVariant sgrd(pin& pin);
     void sgwr(pin& pin, SVariant s);
 
@@ -429,16 +432,33 @@ class node : public QObject, public QQmlParserStatus
     QVector3D m_position {};   
 
     signals:
-    void activeChanged();
-    void mutedChanged();
-    void levelChanged();
+    void activeChanged  ();
+    void mutedChanged   ();
+    void levelChanged   ();
 
     public:
+    // --------------------------------------------------------------------------------------------
     pin& inpin();
     pin& inpin(QString);
-
     pin& outpin();
     pin& outpin(QString);
+    // --------------------------------------------------------------------------------------------
+    QQmlListProperty<node> subnodes();
+
+    Q_INVOKABLE void append_subnode(node*);
+    Q_INVOKABLE int nsubnodes() const;
+    Q_INVOKABLE node* subnode(int) const;
+    Q_INVOKABLE void clear_subnodes();
+
+    static void append_subnode  ( QQmlListProperty<node>*, node*);
+    static int nsubnodes        ( QQmlListProperty<node>*);
+    static node* subnode        ( QQmlListProperty<node>*, int);
+    static void clear_subnodes  ( QQmlListProperty<node>*);
+
+    void setDispatch(Dispatch::Values);
+    Dispatch::Values dispatch() const;
+
+    // --------------------------------------------------------------------------------------------
 
     bool active() const {
         return m_active;
@@ -464,16 +484,15 @@ class node : public QObject, public QQmlParserStatus
         m_level = level;
     }
 
+    // --------------------------------------------------------------------------------------------
+
     template<typename T>
     bool connected(T& other) const;
 
-    void setDispatch(Dispatch::Values d);
-    Dispatch::Values dispatch() const;
-
     //---------------------------------------------------------------------------------------------
     private:
-    void process();
     void initialize(graph_properties properties);
+    void process();
 
     stream::slice collect(polarity);
 
@@ -484,6 +503,7 @@ class node : public QObject, public QQmlParserStatus
 
     std::vector<pin*> m_uppins;
     std::vector<pin*> m_dnpins;
+    std::vector<node*> m_subnodes;
     Dispatch::Values m_dispatch;
 
     size_t m_stream_pos   = 0;
@@ -633,7 +653,7 @@ class graph : public QObject
     static std::vector<connection> s_connections;
 
     // TODO, emplace_back nodes
-    // graph has ownership
+    // graph has ownership over them
     static std::vector<node*> s_nodes;
     static graph_properties s_properties;
 };
@@ -689,10 +709,10 @@ class Output : public node
     void exit           ();
 
     private:
-    signal_t m_rate;
-    quint16 m_nchannels;
-    quint16 m_vector;
-    quint16 m_feedback;
+    signal_t m_rate      = 44100;
+    quint16 m_nchannels  = 2;
+    quint16 m_vector     = 512;
+    quint16 m_feedback   = 64;
     QString m_api;
     QString m_device;
 

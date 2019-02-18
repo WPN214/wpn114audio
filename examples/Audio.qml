@@ -23,21 +23,21 @@ Item
             // it can be assigned different types of values:
             // -------------------------------------------------------
             // - an int/real
-            frequency: 440.0
+            // frequency: 440.0
 
             // - another pin/signal (this will be feedback)
             frequency: vca.output
 
             // - an array of pins
-            frequency: [ vca.output ]
+            // frequency: [ vca.output ]
 
             // - a node
-            frequency: vca
+            // frequency: vca
 
             // ------------------------------------------
             // this dispatch option means
             // that VCA's output will be the audiostream
-            dispatch: WPN114.FXChain
+            dispatch: WPN114.Dispatch.Downwards
             // equivalent to:
             output: vca
 
@@ -54,7 +54,7 @@ Item
                 output: connection(audiostream.inputs[1], 0.25);
 
                 // this is implicit
-                output: audiostream
+                // output: audiostream
             }
         }
     }

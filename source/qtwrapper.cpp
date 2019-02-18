@@ -846,6 +846,60 @@ pin& node::outpin(QString ref)
 
 //-------------------------------------------------------------------------------------------------
 
+QQmlListProperty<node> node::subnodes()
+{
+    return QQmlListProperty<node>(
+        this, this,
+        &node::append_subnode,
+        &node::nsubnodes,
+        &node::subnode,
+        &node::clear_subnodes );
+}
+
+node* node::subnode(int index) const
+{
+    WPN_TODO // check size
+    return m_subnodes[index];
+}
+
+void node::append_subnode(node* n)
+{
+    m_subnodes.push_back(n);
+}
+
+int node::nsubnodes() const
+{
+    return m_subnodes.size();
+}
+
+void node::clear_subnodes()
+{
+    m_subnodes.clear();
+}
+
+// --------------------------------------
+
+void node::append_subnode(QQmlListProperty<node>* l, node * n)
+{
+    reinterpret_cast<node*>(l->data)->append_subnode(n);
+}
+
+void node::clear_subnodes(QQmlListProperty<node>* l)
+{
+    reinterpret_cast<node*>(l->data)->clear_subnodes();
+}
+
+node* node::subnode(QQmlListProperty<node>* l, int i)
+{
+    return reinterpret_cast<node*>(l->data)->subnode(i);
+}
+
+int node::nsubnodes(QQmlListProperty<node>* l)
+{
+    return reinterpret_cast<node*>(l->data)->nsubnodes();
+}
+
+// --------------------------------------
 
 stream::slice node::collect(polarity p)
 {
