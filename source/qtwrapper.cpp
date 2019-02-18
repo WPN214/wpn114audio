@@ -672,13 +672,36 @@ bool pin::connected(T& target) const
 // QT-SIGNAL
 //=================================================================================================
 
-SVariant::SVariant(qreal v) : ureal(v), m_qtype(REAL) {}
-SVariant::SVariant(QVariant v) : uvar(v), m_qtype(VAR) {}
-SVariant::SVariant(pin& p) : upin(&p), m_qtype(PIN) {}
+// this is the constructor
+// used by node class
+SVariant::SVariant(pin& p)
+{
+    m_source = &p;
+    m_vtype = vtype::Pin;
+}
 
 SVariant::SVariant(SVariant const& cp)
 {
     operator=(cp);
+}
+
+SVariant::SVariant(qreal v)
+{
+    value.u_real = v;
+    m_vtype = vtype::Real;
+}
+
+SVariant::SVariant(QVariant v)
+{
+    value.u_var = v;
+    m_vtype = vtype::Variant;
+}
+
+SVariant::u_value&
+SVariant::u_value::operator=(u_value const& cp)
+{
+    memcpy(this, &cp, sizeof(u_value));
+    return *this;
 }
 
 SVariant::SVariant(SVariant&& mv)
@@ -688,10 +711,9 @@ SVariant::SVariant(SVariant&& mv)
 
 SVariant& SVariant::operator=(SVariant const& cp)
 {
-    uvar     = cp.uvar;
-    ureal    = cp.ureal;
-    upin     = cp.upin;
-    m_qtype  = cp.m_qtype;
+    m_source   = cp.m_source;
+    m_vtype    = cp.m_vtype;
+    value      = cp.value;
 
     return *this;
 }
@@ -702,34 +724,24 @@ SVariant& SVariant::operator=(SVariant&& mv)
     return *this;
 }
 
-bool SVariant::is_pin() const
+SVariant::vtype SVariant::type() const
 {
-    return m_qtype == PIN;
+    return m_vtype;
 }
 
-bool SVariant::is_real() const
+template<> pin& SVariant::get()
 {
-    return m_qtype == REAL;
+    return *value.u_pin;
 }
 
-bool SVariant::is_qvariant() const
+template<> qreal SVariant::get()
 {
-    return m_qtype == VAR;
+    return value.u_real;
 }
 
-pin& SVariant::to_pin()
+template<> QVariant SVariant::get()
 {
-    return *upin;
-}
-
-QVariant SVariant::to_qvariant() const
-{
-    return uvar;
-}
-
-qreal SVariant::to_real() const
-{
-    return ureal;
+    return value.u_var;
 }
 
 //=================================================================================================
@@ -740,36 +752,56 @@ inline void node::add_pin(pin &pin)
 {
     switch(pin.get_polarity())
     {
-    case polarity::input: m_uppins.push_back(&pin); break;
-    case polarity::output: m_dnpins.push_back(&pin); break;
+    case polarity::input:
+    {
+        m_uppins.push_back(&pin); break;
+    }
+    case polarity::output:
+    {
+        m_dnpins.push_back(&pin); break;
+    }
     }
 }
 
-inline SVariant node::sgrd(pin& p)
+inline SVariant
+node::sgrd(pin& p)
 {
     return SVariant(p);
 }
 
-WPN_TODO inline void
+inline void
 node::sgwr(pin& p, SVariant v)
 {
-    if ( v.is_real())
-         p.get_stream()() <<= v.to_real();
-
-    else if ( v.is_pin())
+    switch(v.type())
     {
-        // disconnect all
-        graph::disconnect(p);
-
-        // connect to pin
-        graph::connect(p, v.to_pin(), connection::pattern::Merge);
+    case SVariant::Undefined:
+    {
+         return;
     }
-
-    else if ( v.is_qvariant())
+    case SVariant::Real:
     {
-        QVariant var = v.to_qvariant();
-        // parse it
+        p.get_stream()() <<= v.get<qreal>();
+        break;
+    }
+    case SVariant::Pin:
+    {
+        graph::disconnect(p);
+        graph::connect(p, v.get<pin&>());
+        break;
+    }
+    case SVariant::Connection:
+    {
+//        auto con = v.get<connection>();
         WPN_TODO
+        break;
+
+    }
+    case SVariant::Variant:
+    {
+        auto var = v.get<QVariant>();
+        WPN_TODO
+        break;
+    }
     }
 }
 
@@ -873,6 +905,15 @@ node& node::chainout()
         else return *m_subnodes.back();
     }
     }
+}
+
+void node::setTarget(QQmlProperty const& p)
+{
+    // when a node is bound to another node's signal property
+    SVariant& s = *qobject_cast<SVariant*>(p.object());
+    pin& source = s.source();
+    graph::disconnect(source);
+    graph::connect(*this, source);
 }
 
 void node::componentComplete()

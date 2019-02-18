@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QQmlParserStatus>
 #include <QQmlListProperty>
+#include <QQmlProperty>
+#include <QQmlPropertyValueSource>
 #include <QVector>
 #include <QVector3D>
 #include <QVariant>
@@ -432,7 +434,7 @@ class connection : public QObject
 };
 
 //=================================================================================================
-class node : public QObject, public QQmlParserStatus
+class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
 //=================================================================================================
 {
     Q_OBJECT
@@ -480,7 +482,7 @@ class node : public QObject, public QQmlParserStatus
 
     protected:
     //=============================================================================================
-
+    virtual void setTarget(QQmlProperty const&) override;
     virtual void componentComplete() override;
     virtual void classBegin() override {}
 
@@ -590,13 +592,13 @@ class SVariant : public QObject
     Q_OBJECT
 
     public:
-
-    enum qtype
+    enum vtype
     {
-        UNDEFINED = 0,
-        REAL = 1,
-        VAR  = 2,
-        PIN  = 3
+        Undefined   = 0,
+        Real        = 1,
+        Variant     = 2,
+        Pin         = 3,
+        Connection  = 4
     };
 
     SVariant(qreal v);
@@ -610,19 +612,27 @@ class SVariant : public QObject
 
     ~SVariant();
 
-    bool is_real        () const;
-    bool is_qvariant    () const;
-    bool is_pin         () const;
-
-    qreal to_real         () const;
-    QVariant to_qvariant  () const;
-    pin& to_pin           ();
+    vtype type() const;
+    pin& source();
+    template<typename T> T get();
 
     private:
-    QVariant uvar   = 0;
-    qreal ureal     = 0;
-    pin* upin       = nullptr;
-    qtype m_qtype   = UNDEFINED;
+
+    union u_value
+    {
+       qreal u_real;
+       pin*  u_pin;
+       QVariant u_var;
+
+       u_value()  { memset(this, 0, sizeof(u_value)); }
+       ~u_value() { }
+
+       u_value& operator=(u_value const&);
+
+    } value;
+
+    pin* m_source = nullptr;
+    vtype m_vtype = Undefined;
 };
 
 //=================================================================================================
@@ -683,6 +693,7 @@ class Output : public node
 
     Q_PROPERTY  ( signal_t rate READ rate WRITE setRate NOTIFY rateChanged )
     Q_PROPERTY  ( int nchannels READ nchannels WRITE setNchannels NOTIFY nchannelsChanged )
+    Q_PROPERTY  ( int offset READ offset WRITE setOffset NOTIFY offsetChanged )
     Q_PROPERTY  ( int vector READ vector WRITE setVector NOTIFY vectorChanged )
     Q_PROPERTY  ( int feedback READ feedback WRITE setFeedback NOTIFY feedbackChanged )
     Q_PROPERTY  ( QString api READ api WRITE setApi NOTIFY apiChanged )
@@ -695,6 +706,7 @@ class Output : public node
 
     signal_t rate       () const { return m_rate; }
     quint16 nchannels   () const { return m_nchannels; }
+    quint16 offset      () const { return m_offset; }
     quint16 vector      () const { return m_vector; }
     quint16 feedback    () const { return m_feedback; }
     QString api         () const { return m_api; }
@@ -702,6 +714,7 @@ class Output : public node
 
     void setRate        ( signal_t rate);
     void setNchannels   ( quint16 nchannels);
+    void setOffset      ( quint16 offset);
     void setVector      ( quint16 vector);
     void setFeedback    ( quint16 feedback);
     void setApi         ( QString api);
@@ -710,6 +723,7 @@ class Output : public node
     signals:
     void rateChanged        ();
     void nchannelsChanged   ();
+    void offsetChanged      ();
     void vectorChanged      ();
     void feedbackChanged    ();
     void apiChanged         ();
@@ -724,6 +738,7 @@ class Output : public node
     private:
     signal_t m_rate      = 44100;
     quint16 m_nchannels  = 2;
+    quint16 m_offset     = 0;
     quint16 m_vector     = 512;
     quint16 m_feedback   = 64;
     QString m_api;

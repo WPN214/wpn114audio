@@ -15,24 +15,8 @@ Item
             id: sinetest
             frequency: 440.0
 
-            dispatch: WPN114.Dispatch.Downwards
-
-            WPN114.VCA
-            {
-                id: vca
-                gain: -6
-
-                WPN114.Sinetest
-                {
-
-                }
-            }
-
-            WPN114.VCA
-            {
-                id: vca2
-                gain: -12
-            }
+            frequency: connection(vca, 0.5);
+            WPN114.VCA on output { gaindB: -6 }
         }
 
 //        WPN114.VCA

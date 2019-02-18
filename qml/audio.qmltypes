@@ -17,7 +17,7 @@ Module
         Property { name: "level"; type: "qreal" }
         Property { name: "dBlevel"; type: "qreal" }
         Property { name: "subnodes"; type: "Node"; isList: true }
-        Property { name: "parentStream"; type: "Node"; isPointer: true }
+        Property { name: "parent"; type: "Node"; isPointer: true }
 
         Signal { name: "muteChanged" }
         Signal { name: "activeChanged" }
@@ -35,23 +35,26 @@ Module
         exportMetaObjectRevisions: [1]
 
         Property { name: "rate"; type: "int" }
+        Property { name: "nchannels"; type: "int" }
+        Property { name: "offset"; type: "int" }
         Property { name: "vector"; type: "int" }
         Property { name: "feedback"; type: "int" }
-        Property { name: "offset"; type: "int" }
         Property { name: "device"; type: "string" }
         Property { name: "api"; type: "string" }
 
-        Method { name: "start" }
-        Method { name: "stop" }
+        Signal { name: "start" }
+        Signal { name: "stop" }
         Method { name: "devices"; type: "QStringList" }
 
         Signal
         {
             name: "tick"
             Parameter { name: "tick"; type: "int" }
-        }
+        }                
 
         Signal { name: "rateChanged" }
+        Signal { name: "nchannelsChanged" }
+        Signal { name: "offsetChanged" }
         Signal { name: "vectorChanged" }
         Signal { name: "feedbackChanged" }
         Signal { name: "deviceChanged" }
