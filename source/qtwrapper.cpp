@@ -12,7 +12,13 @@ WPN_OPTIMIZE // template it + allocator option
 channel::channel(size_t sz, signal_t fill)
 {
     m_data = new signal_t[sz];
+    m_size = sz;
     operator()() <<= fill;
+}
+
+channel::operator slice()
+{
+    return operator()();
 }
 
 channel::slice channel::operator()(size_t begin, size_t sz, size_t pos)
@@ -32,6 +38,13 @@ channel::slice::slice(channel& parent) : m_parent(parent)
     m_size   = parent.m_size;
     m_end    = &parent.m_data[m_size];
 }
+
+channel::slice::slice(slice const& cp) :
+    m_parent(cp.m_parent),
+    m_begin(cp.m_begin),
+    m_end(cp.m_end),
+    m_pos(cp.m_pos),
+    m_size(cp.m_size) { }
 
 channel::slice::iterator channel::slice::begin()
 {
@@ -54,23 +67,24 @@ size_t channel::slice::size() const
 }
 
 //-------------------------------------------------------------------------------------------------
-
-// copy-merge contents of other into this
-// equivalent to operator +=
+// CHANNEl: stream operators
+//-------------------------------------------------------------------------------------------------
 channel::slice& channel::slice::operator<<(channel::slice const& other)
 {
+    // copy-merge contents of other into this
+    // equivalent to operator +=
     return operator+=(other);
 }
 
-// same, but reverted
 channel::slice& channel::slice::operator>>(channel::slice& other)
 {
+    // same, but reverted
     other << *this; return *this;
 }
 
-// merge (drain other afterwards)
 channel::slice& channel::slice::operator<<=(channel::slice& other)
 {
+    // merge (copy and drain other afterwards)
     *this << other; other.drain(); return *this;
 }
 
@@ -79,15 +93,10 @@ channel::slice& channel::slice::operator>>=(channel::slice& other)
     other <<= *this; return *this;
 }
 
-//-------------------------------------------------------------------------------------------------
-
 channel::slice& channel::slice::operator<<(const signal_t v)
 {
-    if ( m_pos == m_end )
-         return *this;
-
-    *m_pos++ = v;
-    return *this;
+    if ( m_pos == m_end ) return *this;
+    *m_pos++ = v; return *this;
 }
 
 channel::slice& channel::slice::operator>>(signal_t& v)
@@ -95,6 +104,14 @@ channel::slice& channel::slice::operator>>(signal_t& v)
     v = *m_pos++; return *this;
 }
 
+//-------------------------------------------------------------------------------------------------
+// CHANNEl: arithmetics
+//-------------------------------------------------------------------------------------------------
+#define FOREACH_SAMPLE_OPERATOR(_o)                                                                \
+    auto sz = std::min(m_size, other.m_size);                                                      \
+    for ( size_t n = 0; n < sz; ++n )                                                              \
+          m_begin[n] _o other.m_begin[n];                                                          \
+    return *this;
 //-------------------------------------------------------------------------------------------------
 
 channel::slice& channel::slice::operator*=(const signal_t v)
@@ -125,14 +142,6 @@ channel::slice& channel::slice::operator-=(const signal_t v)
     return *this;
 }
 
-//-------------------------------------------------------------------------------------------------
-#define FOREACH_SAMPLE_OPERATOR(_o)                                         \
-    auto sz = std::min(m_size, other.m_size);                               \
-    for ( size_t n = 0; n < sz; ++n )                                       \
-          m_begin[n] _o other.m_begin[n];                                   \
-    return *this;
-//-------------------------------------------------------------------------------------------------
-
 channel::slice& channel::slice::operator*=(channel::slice const& other)
 {
     FOREACH_SAMPLE_OPERATOR(*=);
@@ -154,7 +163,7 @@ channel::slice& channel::slice::operator-=(channel::slice const& other)
 }
 
 //-------------------------------------------------------------------------------------------------
-// CHANNEL/ANALYSIS
+// CHANNEL: analysis
 //-------------------------------------------------------------------------------------------------
 
 signal_t channel::slice::min()
@@ -183,7 +192,7 @@ signal_t channel::slice::rms()
 }
 
 //-------------------------------------------------------------------------------------------------
-// CHANNEL/GLOBAL OPERATIONS
+// CHANNEL: global operations
 //-------------------------------------------------------------------------------------------------
 
 void channel::slice::drain()
@@ -196,10 +205,6 @@ channel::slice::normalize()
 {
 
 }
-
-//-------------------------------------------------------------------------------------------------
-// CHANNEL/MISCELLANEOUS
-//-------------------------------------------------------------------------------------------------
 
 WPN_EXAMINE
 WPN_TODO // <-- make an option for the interpolation type
@@ -222,7 +227,7 @@ void channel::slice::lookup(slice& source, slice& head, bool increment)
 }
 
 //-------------------------------------------------------------------------------------------------
-// CHANNEL/ITERATORS
+// CHANNEL: slice iterators
 //-------------------------------------------------------------------------------------------------
 channel::slice::iterator::iterator(signal_t *data) : m_data(data) { }
 
@@ -236,12 +241,12 @@ signal_t& channel::slice::iterator::operator*()
     return *m_data;
 }
 
-bool channel::slice::iterator::operator==(channel::slice::iterator const& other)
+bool channel::slice::iterator::operator==(slice::iterator const& other)
 {
     return m_data == other.m_data;
 }
 
-bool channel::slice::iterator::operator!=(channel::slice::iterator const& other)
+bool channel::slice::iterator::operator!=(slice::iterator const& other)
 {
     return m_data != other.m_data;
 }
@@ -342,8 +347,7 @@ inline void
 stream::synchronize_skip(sync& target, size_t sz)
 {
     target.pos += sz;
-    if ( target.pos >= target.size)
-         target.pos -= target.size;
+    wrap(target.pos, target.size);
 }
 
 void
@@ -1048,11 +1052,9 @@ void node::process()
                dnpool(m_dnpins, m_stream_pos, sz);
 
     rwrite(uppool, dnpool, sz);
-    m_stream_pos += sz;
 
-    if ( m_stream_pos >= m_properties.vsz )
-         m_stream_pos -= m_properties.vsz;
-
+    m_stream_pos += sz;    
+    wrap(m_stream_pos, m_properties.vsz);
 }
 
 //=================================================================================================
@@ -1257,6 +1259,12 @@ void graph::configure(signal_t rate, size_t vector_size, size_t feedback_size)
     s_properties = { rate, vector_size, feedback_size };
 }
 
+void graph::initialize()
+{
+    for ( auto& node : s_nodes )
+          node->initialize(s_properties);
+}
+
 stream::slice graph::run(node& target)
 {
     target.process();
@@ -1300,6 +1308,12 @@ void Output::setApi(QString api)
 void Output::setDevice(QString device)
 {
     m_device = device;
+}
+
+void Output::start()
+{
+    graph::initialize();
+    emit startStream();
 }
 
 void Output::componentComplete()
@@ -1353,13 +1367,14 @@ void Output::componentComplete()
 
     m_stream->moveToThread(&m_audiothread);
 
-    QObject::connect(this, &Output::preconfigure, &*m_stream, &Audiostream::preconfigure);
-    QObject::connect(this, &Output::start, &*m_stream, &Audiostream::start);
-    QObject::connect(this, &Output::stop, &*m_stream, &Audiostream::stop);
-    QObject::connect(this, &Output::restart, &*m_stream, &Audiostream::restart);
-    QObject::connect(this, &Output::exit, &*m_stream, &Audiostream::exit);
+    QObject::connect(this, &Output::configureStream, &*m_stream, &Audiostream::preconfigure);
+    QObject::connect(this, &Output::startStream, &*m_stream, &Audiostream::start);
+    QObject::connect(this, &Output::stopStream, &*m_stream, &Audiostream::stop);
+    QObject::connect(this, &Output::restartStream, &*m_stream, &Audiostream::restart);
+    QObject::connect(this, &Output::exitStream, &*m_stream, &Audiostream::exit);
 
-    emit preconfigure();
+    emit configureStream();
+    graph::configure(m_rate, m_vector, m_feedback);
     m_audiothread.start(QThread::TimeCriticalPriority);
 }
 
@@ -1410,7 +1425,7 @@ void Audiostream::preconfigure()
 }
 
 void Audiostream::start()
-{
+{    
     try     { m_stream->startStream(); }
     catch   ( RtAudioError const& e )
     {

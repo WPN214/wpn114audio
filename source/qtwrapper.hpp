@@ -58,6 +58,7 @@ void set##_s(SVariant v) {                                                      
 #define lininterp(_x,_a,_b) _a+_x*(_b-_a)
 #define atodb(_s) log10(_s)*20
 #define dbtoa(_s) pow(10, _s*.05)
+#define wrap(_a, _b) if( _a >=_b ) _a -= _b;
 //=================================================================================================
 enum class polarity { output = 0, input  = 1 };
 //=================================================================================================
@@ -103,8 +104,6 @@ class channel
         slice& operator>>(slice &);
         slice& operator<<(signal_t const);
         slice& operator>>(signal_t&);
-
-        // merge operators ---------------------------------
         slice& operator<<=(slice &);
         slice& operator>>=(slice &);
         slice& operator<<=(signal_t const);
@@ -446,7 +445,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Q_PROPERTY   ( node* parent READ parent WRITE setParent NOTIFY parentChanged )
 
     Q_CLASSINFO  ( "DefaultProperty", "subnodes" )
-    Q_INTERFACES ( QQmlParserStatus )
+    Q_INTERFACES ( QQmlParserStatus QQmlPropertyValueSource )
 
     friend class connection;
     friend class graph;
@@ -475,8 +474,9 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     //=============================================================================================
     {
         friend class node;
-        std::vector<pstream> streams;
         pool(std::vector<pin*>& vector, size_t pos, size_t sz);
+        std::vector<pstream> streams;
+
         public: stream::slice& operator[](std::string);
     };
 
@@ -485,9 +485,10 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     virtual void setTarget(QQmlProperty const&) override;
     virtual void componentComplete() override;
     virtual void classBegin() override {}
-
+    //=============================================================================================
     virtual void rwrite     ( pool& inputs, pool& outputs, size_t sz) = 0;
     virtual void configure  ( graph_properties properties) = 0;
+    //=============================================================================================
 
     graph_properties m_properties;
     QVector3D m_position {};   
@@ -522,7 +523,6 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     void setParent(node*);
     node* parent() const;
-
     node& chainout();
 
     // --------------------------------------------------------------------------------------------
@@ -552,11 +552,10 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     }
 
     // --------------------------------------------------------------------------------------------
-
     template<typename T>
     bool connected(T& other) const;
-
     //---------------------------------------------------------------------------------------------
+
     private:
     void initialize(graph_properties properties);
     void process();
@@ -601,11 +600,12 @@ class SVariant : public QObject
         Connection  = 4
     };
 
-    SVariant(qreal v);
-    SVariant(QVariant v);
     SVariant(pin&);
     SVariant(SVariant const&);
     SVariant(SVariant&&);
+
+    SVariant(qreal v);
+    SVariant(QVariant v);
 
     SVariant& operator=(SVariant const&);
     SVariant& operator=(SVariant&&);
@@ -669,6 +669,8 @@ class graph : public QObject
               size_t vector_size = 512,
               size_t vector_feedback_size = 64);
 
+    static void initialize();
+
     static stream::slice
     run(node& target);
 
@@ -720,6 +722,10 @@ class Output : public node
     void setApi         ( QString api);
     void setDevice      ( QString device);
 
+    Q_INVOKABLE void start();
+    Q_INVOKABLE void stop();
+    Q_INVOKABLE void restart();
+
     signals:
     void rateChanged        ();
     void nchannelsChanged   ();
@@ -729,11 +735,11 @@ class Output : public node
     void apiChanged         ();
     void deviceChanged      ();
 
-    void preconfigure   ();
-    void start          ();
-    void stop           ();
-    void restart        ();
-    void exit           ();
+    void configureStream    ();
+    void startStream        ();
+    void stopStream         ();
+    void restartStream      ();
+    void exitStream         ();
 
     private:
     signal_t m_rate      = 44100;
