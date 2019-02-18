@@ -676,29 +676,30 @@ SVariant::SVariant(qreal v) : ureal(v), m_qtype(REAL) {}
 SVariant::SVariant(QVariant v) : uvar(v), m_qtype(VAR) {}
 SVariant::SVariant(pin& p) : upin(&p), m_qtype(PIN) {}
 
-WPN_TODO
 SVariant::SVariant(SVariant const& cp)
 {
-
-
+    operator=(cp);
 }
 
-WPN_TODO
 SVariant::SVariant(SVariant&& mv)
 {
-
+    operator=(mv);
 }
 
-WPN_TODO
 SVariant& SVariant::operator=(SVariant const& cp)
 {
+    uvar     = cp.uvar;
+    ureal    = cp.ureal;
+    upin     = cp.upin;
+    m_qtype  = cp.m_qtype;
 
+    return *this;
 }
 
-WPN_TODO
 SVariant& SVariant::operator=(SVariant&& mv)
 {
-
+    operator=(mv);
+    return *this;
 }
 
 bool SVariant::is_pin() const
@@ -846,6 +847,69 @@ pin& node::outpin(QString ref)
 
 //-------------------------------------------------------------------------------------------------
 
+node* node::parent() const
+{
+    return m_parent;
+}
+
+void node::setParent(node* n)
+{
+    if ( m_parent == n ) return;
+    m_parent = n;
+}
+
+node& node::chainout()
+{
+    switch( m_dispatch )
+    {
+    case Dispatch::Values::Upwards:
+    {
+        return *this;
+    }
+    case Dispatch::Values::Downwards:
+    {
+        if ( !m_subnodes.size() )
+             return *this;
+        else return *m_subnodes.back();
+    }
+    }
+}
+
+void node::componentComplete()
+{
+    if ( m_subnodes.empty()) return;
+
+    for ( auto& subnode : m_subnodes )
+          subnode->setParent(this);
+
+    // node mustn't take care of the connections
+    // to be established with its parent,
+    // but only with its subnodes
+
+    switch( m_dispatch )
+    {
+    case Dispatch::Values::Upwards:
+    {
+        for ( auto& subnode : m_subnodes )
+              graph::connect(subnode->chainout(), *this);
+        break;
+    }
+    case Dispatch::Values::Downwards:
+    {
+        auto& front = *m_subnodes.front();
+        graph::connect(*this, front.chainout());
+
+        for ( size_t n = 0; n < m_subnodes.size()-1; ++n)
+        {
+            auto& source = m_subnodes[n]->chainout();
+            auto& dest = m_subnodes[n+1]->chainout();
+
+            graph::connect(source, dest);
+        }
+    }
+    }
+}
+
 QQmlListProperty<node> node::subnodes()
 {
     return QQmlListProperty<node>(
@@ -901,6 +965,7 @@ int node::nsubnodes(QQmlListProperty<node>* l)
 
 // --------------------------------------
 
+WPN_REVISE
 stream::slice node::collect(polarity p)
 {
     std::vector<pin*>* target;

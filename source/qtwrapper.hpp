@@ -374,187 +374,6 @@ class pin : public QObject
 };
 
 //=================================================================================================
-class node : public QObject, public QQmlParserStatus
-//=================================================================================================
-{
-    Q_OBJECT
-    Q_PROPERTY   ( Dispatch::Values dispatch READ dispatch WRITE setDispatch )
-    Q_PROPERTY   ( bool active READ active WRITE setActive NOTIFY activeChanged )
-    Q_PROPERTY   ( bool muted READ muted WRITE setMuted NOTIFY mutedChanged )
-    Q_PROPERTY   ( qreal level READ level WRITE setLevel NOTIFY levelChanged )
-    Q_PROPERTY   ( QQmlListProperty<node> subnodes READ subnodes )
-
-    Q_CLASSINFO  ( "DefaultProperty", "subnodes" )
-    Q_INTERFACES ( QQmlParserStatus )
-
-    friend class connection;
-    friend class graph;
-    friend class pin;
-
-    friend int
-    rwrite(void*, void*, unsigned int, double, RtAudioStreamStatus, void*);
-
-    protected:
-    //=============================================================================================
-    void add_pin(pin& pin);
-
-    SVariant sgrd(pin& pin);
-    void sgwr(pin& pin, SVariant s);
-
-    public:
-    //=============================================================================================
-    struct pstream
-    //=============================================================================================
-    {
-        std::string const& label;
-        stream::slice slice;
-    };
-    //=============================================================================================
-    class pool
-    //=============================================================================================
-    {
-        friend class node;
-        std::vector<pstream> streams;
-        pool(std::vector<pin*>& vector, size_t pos, size_t sz);
-        public: stream::slice& operator[](std::string);
-    };
-
-    protected:
-    //=============================================================================================
-
-    virtual void componentComplete() override {}
-    virtual void classBegin() override {}
-
-    virtual void rwrite     ( pool& inputs, pool& outputs, size_t sz) = 0;
-    virtual void configure  ( graph_properties properties) = 0;
-
-    graph_properties m_properties;
-    QVector3D m_position {};   
-
-    signals:
-    void activeChanged  ();
-    void mutedChanged   ();
-    void levelChanged   ();
-
-    public:
-    // --------------------------------------------------------------------------------------------
-    pin& inpin();
-    pin& inpin(QString);
-    pin& outpin();
-    pin& outpin(QString);
-    // --------------------------------------------------------------------------------------------
-    QQmlListProperty<node> subnodes();
-
-    Q_INVOKABLE void append_subnode(node*);
-    Q_INVOKABLE int nsubnodes() const;
-    Q_INVOKABLE node* subnode(int) const;
-    Q_INVOKABLE void clear_subnodes();
-
-    static void append_subnode  ( QQmlListProperty<node>*, node*);
-    static int nsubnodes        ( QQmlListProperty<node>*);
-    static node* subnode        ( QQmlListProperty<node>*, int);
-    static void clear_subnodes  ( QQmlListProperty<node>*);
-
-    void setDispatch(Dispatch::Values);
-    Dispatch::Values dispatch() const;
-
-    // --------------------------------------------------------------------------------------------
-
-    bool active() const {
-        return m_active;
-    }
-
-    bool muted() const {
-        return m_muted;
-    }
-
-    qreal level() const {
-        return m_level;
-    }
-
-    void setActive(bool active) {
-        m_active = active;
-    }
-
-    void setMuted(bool muted) {
-        m_muted = muted;
-    }
-
-    void setLevel(qreal level) {
-        m_level = level;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    template<typename T>
-    bool connected(T& other) const;
-
-    //---------------------------------------------------------------------------------------------
-    private:
-    void initialize(graph_properties properties);
-    void process();
-
-    stream::slice collect(polarity);
-
-    bool m_intertwined  = false;
-    bool m_active = true;
-    bool m_muted = false;
-    qreal m_level = 1;
-
-    std::vector<pin*> m_uppins;
-    std::vector<pin*> m_dnpins;
-    std::vector<node*> m_subnodes;
-    Dispatch::Values m_dispatch;
-
-    size_t m_stream_pos   = 0;
-    signal_t m_height     = 0;
-    signal_t m_width      = 0;
-};
-
-//=================================================================================================
-class SVariant : public QObject
-// convenience class allowing flexible qml-bindings
-//=================================================================================================
-{
-    Q_OBJECT
-
-    public:
-
-    enum qtype
-    {
-        UNDEFINED = 0,
-        REAL = 1,
-        VAR  = 2,
-        PIN  = 3
-    };
-
-    SVariant(qreal v);
-    SVariant(QVariant v);
-    SVariant(pin&);
-    SVariant(SVariant const&);
-    SVariant(SVariant&&);
-
-    SVariant& operator=(SVariant const&);
-    SVariant& operator=(SVariant&&);
-
-    ~SVariant();
-
-    bool is_real        () const;
-    bool is_qvariant    () const;
-    bool is_pin         () const;
-
-    qreal to_real         () const;
-    QVariant to_qvariant  () const;
-    pin& to_pin           ();
-
-    private:
-    QVariant uvar   = 0;
-    qreal ureal     = 0;
-    pin* upin       = nullptr;
-    qtype m_qtype   = UNDEFINED;
-};
-
-//=================================================================================================
 class connection : public QObject
 //=================================================================================================
 {
@@ -613,6 +432,200 @@ class connection : public QObject
 };
 
 //=================================================================================================
+class node : public QObject, public QQmlParserStatus
+//=================================================================================================
+{
+    Q_OBJECT
+    Q_PROPERTY   ( Dispatch::Values dispatch READ dispatch WRITE setDispatch )
+    Q_PROPERTY   ( bool active READ active WRITE setActive NOTIFY activeChanged )
+    Q_PROPERTY   ( bool muted READ muted WRITE setMuted NOTIFY mutedChanged )
+    Q_PROPERTY   ( qreal level READ level WRITE setLevel NOTIFY levelChanged )
+    Q_PROPERTY   ( QQmlListProperty<node> subnodes READ subnodes )
+    Q_PROPERTY   ( node* parent READ parent WRITE setParent NOTIFY parentChanged )
+
+    Q_CLASSINFO  ( "DefaultProperty", "subnodes" )
+    Q_INTERFACES ( QQmlParserStatus )
+
+    friend class connection;
+    friend class graph;
+    friend class pin;
+
+    friend int
+    rwrite(void*, void*, unsigned int, double, RtAudioStreamStatus, void*);
+
+    protected:
+    //=============================================================================================
+    void add_pin(pin& pin);
+
+    SVariant sgrd(pin& pin);
+    void sgwr(pin& pin, SVariant s);
+
+    public:
+    //=============================================================================================
+    struct pstream
+    //=============================================================================================
+    {
+        std::string const& label;
+        stream::slice slice;
+    };
+    //=============================================================================================
+    class pool
+    //=============================================================================================
+    {
+        friend class node;
+        std::vector<pstream> streams;
+        pool(std::vector<pin*>& vector, size_t pos, size_t sz);
+        public: stream::slice& operator[](std::string);
+    };
+
+    protected:
+    //=============================================================================================
+
+    virtual void componentComplete() override;
+    virtual void classBegin() override {}
+
+    virtual void rwrite     ( pool& inputs, pool& outputs, size_t sz) = 0;
+    virtual void configure  ( graph_properties properties) = 0;
+
+    graph_properties m_properties;
+    QVector3D m_position {};   
+
+    signals:
+    void activeChanged  ();
+    void mutedChanged   ();
+    void levelChanged   ();
+    void parentChanged  ();
+
+    public:
+    // --------------------------------------------------------------------------------------------
+    pin& inpin();
+    pin& inpin(QString);
+    pin& outpin();
+    pin& outpin(QString);
+    // --------------------------------------------------------------------------------------------
+    QQmlListProperty<node> subnodes();
+
+    Q_INVOKABLE void append_subnode(node*);
+    Q_INVOKABLE int nsubnodes() const;
+    Q_INVOKABLE node* subnode(int) const;
+    Q_INVOKABLE void clear_subnodes();
+
+    static void append_subnode  ( QQmlListProperty<node>*, node*);
+    static int nsubnodes        ( QQmlListProperty<node>*);
+    static node* subnode        ( QQmlListProperty<node>*, int);
+    static void clear_subnodes  ( QQmlListProperty<node>*);
+
+    void setDispatch(Dispatch::Values);
+    Dispatch::Values dispatch() const;
+
+    void setParent(node*);
+    node* parent() const;
+
+    node& chainout();
+
+    // --------------------------------------------------------------------------------------------
+
+    bool active() const {
+        return m_active;
+    }
+
+    bool muted() const {
+        return m_muted;
+    }
+
+    qreal level() const {
+        return m_level;
+    }
+
+    void setActive(bool active) {
+        m_active = active;
+    }
+
+    void setMuted(bool muted) {
+        m_muted = muted;
+    }
+
+    void setLevel(qreal level) {
+        m_level = level;
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    template<typename T>
+    bool connected(T& other) const;
+
+    //---------------------------------------------------------------------------------------------
+    private:
+    void initialize(graph_properties properties);
+    void process();
+
+    stream::slice collect(polarity);
+
+    bool m_intertwined  = false;
+    bool m_active = true;
+    bool m_muted = false;
+    qreal m_level = 1;
+
+    node* m_parent = nullptr;
+    std::vector<pin*> m_uppins;
+    std::vector<pin*> m_dnpins;
+    std::vector<node*> m_subnodes;
+
+    Dispatch::Values m_dispatch
+        = Dispatch::Values::Upwards;
+
+    connection::pattern m_connection_pattern
+        = connection::pattern::Merge;
+
+    size_t m_stream_pos   = 0;
+    signal_t m_height     = 0;
+    signal_t m_width      = 0;
+};
+
+//=================================================================================================
+class SVariant : public QObject
+// convenience class allowing flexible qml-bindings
+//=================================================================================================
+{
+    Q_OBJECT
+
+    public:
+
+    enum qtype
+    {
+        UNDEFINED = 0,
+        REAL = 1,
+        VAR  = 2,
+        PIN  = 3
+    };
+
+    SVariant(qreal v);
+    SVariant(QVariant v);
+    SVariant(pin&);
+    SVariant(SVariant const&);
+    SVariant(SVariant&&);
+
+    SVariant& operator=(SVariant const&);
+    SVariant& operator=(SVariant&&);
+
+    ~SVariant();
+
+    bool is_real        () const;
+    bool is_qvariant    () const;
+    bool is_pin         () const;
+
+    qreal to_real         () const;
+    QVariant to_qvariant  () const;
+    pin& to_pin           ();
+
+    private:
+    QVariant uvar   = 0;
+    qreal ureal     = 0;
+    pin* upin       = nullptr;
+    qtype m_qtype   = UNDEFINED;
+};
+
+//=================================================================================================
 class graph : public QObject
 //=================================================================================================
 {
@@ -621,19 +634,19 @@ class graph : public QObject
     public:
     static connection&
     connect(pin& source, pin& dest,
-            connection::pattern pattern);
+            connection::pattern pattern = connection::pattern::Merge);
 
     static connection&
     connect(node& source, node& dest,
-            connection::pattern pattern);
+            connection::pattern pattern = connection::pattern::Merge);
 
     static connection&
     connect(node& source, pin& dest,
-            connection::pattern pattern);
+            connection::pattern pattern = connection::pattern::Merge);
 
     static connection&
     connect(pin& source, node& dest,
-            connection::pattern pattern);
+            connection::pattern pattern = connection::pattern::Merge);
 
     static void
     disconnect(pin& target);
@@ -766,7 +779,6 @@ class Sinetest : public node
 
     private:
     stream m_wavetable;
-
 };
 
 //=================================================================================================
@@ -791,5 +803,4 @@ class Pinktest : public node
 
     public:
     Pinktest();
-
 };
