@@ -692,6 +692,11 @@ SVariant::SVariant(SVariant const& cp)
     operator=(cp);
 }
 
+SVariant::SVariant(SVariant&& mv)
+{
+    operator=(mv);
+}
+
 SVariant::SVariant(qreal v)
 {
     value.u_real = v;
@@ -709,11 +714,6 @@ SVariant::u_value::operator=(u_value const& cp)
 {
     memcpy(this, &cp, sizeof(u_value));
     return *this;
-}
-
-SVariant::SVariant(SVariant&& mv)
-{
-    operator=(mv);
 }
 
 SVariant& SVariant::operator=(SVariant const& cp)
@@ -1235,6 +1235,9 @@ connection::is_dest(pin& target) const
 //=================================================================================================
 // GRAPH
 //=================================================================================================
+std::vector<connection> graph::s_connections;
+std::vector<node*> graph::s_nodes;
+graph_properties graph::s_properties;
 
 connection& graph::connect(pin& source, pin& dest, connection::pattern pattern)
 {
@@ -1566,4 +1569,23 @@ void VCA::rwrite(node::pool& upstream, node::pool& dnstream, size_t sz)
 
     in *= gain;
     out << in;
+}
+
+//=================================================================================================
+// PINK
+//=================================================================================================
+
+Pinktest::Pinktest()
+{
+
+}
+
+void Pinktest::configure(graph_properties properties)
+{
+
+}
+
+void Pinktest::rwrite(node::pool& inputs, node::pool& outputs, size_t sz)
+{
+
 }

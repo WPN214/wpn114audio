@@ -43,8 +43,7 @@ virtual void rwrite(node::pool& inputs, node::pool& outputs, size_t sz) override
 virtual void configure(graph_properties properties) override;
 //=================================================================================================
 #define WPN_REGISTER_PIN(_s, _d, _p, _n)                                                           \
-Q_PROPERTY(SVariant _s READ get##_s WRITE set##_s NOTIFY notify##_s)                               \
-signals: void notify##_s();                                                                        \
+private: Q_PROPERTY(SVariant _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                     \
 protected: pin m_##_s { *this, _p, #_s, _n, _d };                                                  \
                                                                                                    \
 SVariant get##_s() {                                                                               \
@@ -53,7 +52,8 @@ SVariant get##_s() {                                                            
                                                                                                    \
 void set##_s(SVariant v) {                                                                         \
     sgwr(m_##_s, v);                                                                               \
-}
+}                                                                                                  \
+Q_SIGNAL void _s##Changed();
 //=================================================================================================
 #define lininterp(_x,_a,_b) _a+_x*(_b-_a)
 #define atodb(_s) log10(_s)*20
@@ -617,8 +617,6 @@ class SVariant : public QObject
     SVariant& operator=(SVariant const&);
     SVariant& operator=(SVariant&&);
 
-    ~SVariant();
-
     vtype type() const;
     pin& source();
     template<typename T> T get();
@@ -696,16 +694,16 @@ class Output : public node
 {
     WPN_OBJECT
 
-    WPN_REGISTER_PIN  ( inputs, DEFAULT, INPUT, 0 )
-    WPN_REGISTER_PIN  ( outputs, DEFAULT, OUTPUT, 0 )
-
-    Q_PROPERTY  ( signal_t rate READ rate WRITE setRate NOTIFY rateChanged )
+    Q_PROPERTY  ( qreal rate READ rate WRITE setRate NOTIFY rateChanged )
     Q_PROPERTY  ( int nchannels READ nchannels WRITE setNchannels NOTIFY nchannelsChanged )
     Q_PROPERTY  ( int offset READ offset WRITE setOffset NOTIFY offsetChanged )
     Q_PROPERTY  ( int vector READ vector WRITE setVector NOTIFY vectorChanged )
     Q_PROPERTY  ( int feedback READ feedback WRITE setFeedback NOTIFY feedbackChanged )
     Q_PROPERTY  ( QString api READ api WRITE setApi NOTIFY apiChanged )
     Q_PROPERTY  ( QString device READ device WRITE setDevice NOTIFY deviceChanged )
+
+    WPN_REGISTER_PIN  ( inputs, DEFAULT, INPUT, 0 )
+    WPN_REGISTER_PIN  ( outputs, DEFAULT, OUTPUT, 0 )
 
     public:
     Output();
