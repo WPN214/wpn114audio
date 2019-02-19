@@ -233,6 +233,21 @@ class stream
         channel::slice operator[](size_t);
         operator bool();
 
+        // properties ---------------
+        size_t size         () const;
+        size_t nchannels    () const;
+
+        // others ------------------------------------------------
+        void lookup     (slice&, slice &, bool increment = false);
+        void drain      ();
+        void normalize  ();
+
+        // cast ---------------------
+        // note: these two are equivalent
+        operator signal_t*();
+        signal_t* interleaved();
+        void interleaved(signal_t*);
+
         // arithm. -------------------------
         slice& operator+=(signal_t);
         slice& operator-=(signal_t);
@@ -254,21 +269,6 @@ class stream
         slice& operator<<=(slice&);
         slice& operator>>=(slice&);
         slice& operator<<=(signal_t const);
-
-        // others ------------------------------------------------
-        void lookup     (slice&, slice &, bool increment = false);
-        void drain      ();
-        void normalize  ();
-
-        // properties ---------------
-        size_t size         () const;
-        size_t nchannels    () const;
-
-        // cast ---------------------
-        // note: these two are equivalent
-        operator signal_t*();
-        signal_t* interleaved();
-        void interleaved(signal_t*);
 
         private:
         slice(stream& parent, size_t begin, size_t size, size_t pos);

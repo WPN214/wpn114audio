@@ -390,6 +390,15 @@ stream::dnsync_skip(size_t sz)
 // STREAM SLICE
 //-------------------------------------------------------------------------------------------------
 
+stream::slice::slice(stream& parent, size_t begin, size_t size, size_t pos) :
+    m_parent(parent),
+    m_begin(begin),
+    m_size(size),
+    m_pos(pos)
+{
+
+}
+
 stream::slice::iterator stream::slice::begin()
 {
     return stream::slice::iterator(m_cslices.begin());
@@ -419,6 +428,24 @@ size_t stream::slice::size() const
 size_t stream::slice::nchannels() const
 {
     return m_cslices.size();
+}
+
+stream::slice::operator signal_t*()
+{
+    return interleaved();
+}
+
+WPN_TODO
+signal_t* stream::slice::interleaved()
+{
+    return nullptr;
+}
+
+void stream::slice::interleaved(signal_t* dest)
+{
+    for ( auto& channel : m_cslices )
+         for ( auto& sample : channel )
+               *dest++ = sample;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -626,6 +653,16 @@ bool pin::is_default() const
 polarity pin::get_polarity() const
 {
     return m_polarity;
+}
+
+std::vector<std::shared_ptr<connection>> pin::connections()
+{
+    return m_connections;
+}
+
+stream& pin::get_stream()
+{
+    return m_stream;
 }
 
 inline void
