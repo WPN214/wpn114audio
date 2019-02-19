@@ -39,6 +39,12 @@ channel::slice::slice(channel& parent) : m_parent(parent)
     m_end    = &parent.m_data[m_size];
 }
 
+channel::slice::slice(channel& parent, signal_t* begin, signal_t* end, signal_t* pos) :
+    m_parent(parent), m_begin(begin), m_end(end), m_pos(pos), m_size(parent.m_size)
+{
+
+}
+
 channel::slice::slice(slice const& cp) :
     m_parent(cp.m_parent),
     m_begin(cp.m_begin),
@@ -54,6 +60,11 @@ channel::slice::iterator channel::slice::begin()
 channel::slice::iterator channel::slice::end()
 {
     return channel::slice::iterator(m_end);
+}
+
+channel::slice::operator signal_t*()
+{
+    return m_begin;
 }
 
 signal_t& channel::slice::operator[](size_t index)
@@ -99,6 +110,7 @@ channel::slice& channel::slice::operator<<(const signal_t v)
     *m_pos++ = v; return *this;
 }
 
+
 channel::slice& channel::slice::operator>>(signal_t& v)
 {
     v = *m_pos++; return *this;
@@ -139,6 +151,14 @@ channel::slice& channel::slice::operator-=(const signal_t v)
 {
     for ( auto& sample : *this )
           sample -= v;
+    return *this;
+}
+
+
+channel::slice& channel::slice::operator<<=(const signal_t v)
+{
+    for ( auto& sample : *this )
+          sample = v;
     return *this;
 }
 
@@ -443,9 +463,11 @@ signal_t* stream::slice::interleaved()
 
 void stream::slice::interleaved(signal_t* dest)
 {
-    for ( auto& channel : m_cslices )
-         for ( auto& sample : channel )
-               *dest++ = sample;
+    // this being a column major function
+    // we will have to optimize the memory allocation
+    for ( size_t n = 0; n < m_size; ++n )
+        for ( auto& channel : m_cslices )
+              *dest++ = channel[n];
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1529,7 +1551,7 @@ void VCA::rwrite(node::pool& upstream, node::pool& dnstream, size_t sz)
 }
 
 //=================================================================================================
-// PINK
+// PINKNOISE TESTING
 //=================================================================================================
 
 Pinktest::Pinktest()
