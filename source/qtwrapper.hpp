@@ -502,10 +502,10 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     public:
     // --------------------------------------------------------------------------------------------
-    pin& inpin();
-    pin& inpin(QString);
-    pin& outpin();
-    pin& outpin(QString);
+    pin* inpin();
+    pin* inpin(QString);
+    pin* outpin();
+    pin* outpin(QString);
     // --------------------------------------------------------------------------------------------
     Q_INVOKABLE QVariant connection(QVariant v, qreal level, QVariant map);
     Q_INVOKABLE qreal db(qreal a);

@@ -742,7 +742,7 @@ node::sgrd(pin& p)
     return QVariant::fromValue(&p);
 }
 
-inline void
+void
 node::sgwr(pin& p, QVariant v)
 {    
     if ( v.canConvert<pin*>())
@@ -826,36 +826,36 @@ node::connected(pin& other)
 
 //-------------------------------------------------------------------------------------------------
 
-pin& node::inpin()
+pin* node::inpin()
 {
     for ( auto& pin : m_uppins )
           if ( pin->is_default() )
-               return *pin;
-    assert( 0 );
+               return pin;
+    return nullptr;
 }
 
-pin& node::inpin(QString ref)
+pin* node::inpin(QString ref)
 {
     for ( auto& pin : m_uppins )
           if (pin->get_label() == ref.toStdString())
-              return *pin;
-    assert( 0 );
+              return pin;
+    return nullptr;
 }
 
-pin& node::outpin()
+pin* node::outpin()
 {
     for ( auto& pin : m_dnpins )
           if ( pin->is_default() )
-               return *pin;
-    assert( 0 );
+               return pin;
+    return nullptr;
 }
 
-pin& node::outpin(QString ref)
+pin* node::outpin(QString ref)
 {
     for ( auto& pin : m_dnpins )
           if ( pin->get_label() == ref.toStdString())
-               return *pin;
-    assert( 0 );
+               return pin;
+    return nullptr;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -892,10 +892,14 @@ void node::setTarget(QQmlProperty const& p)
 {
     // when a node is bound to another node's signal property
     auto _node = qobject_cast<node*>(p.object());
-    auto& _pin = _node->inpin(p.name());
+    assert(_node);
 
-    graph::disconnect(_pin);
-    graph::connect(*this, _pin);
+    auto _pin = _node->inpin(p.name());
+    if ( !_pin ) _pin = _node->outpin(p.name());
+
+    assert(_pin);
+    graph::disconnect(*_pin);
+    graph::connect(*this, *_pin);
 }
 
 void node::componentComplete()
@@ -1202,19 +1206,19 @@ connection& graph::connect(pin& source, pin& dest, connection::pattern pattern)
 
 connection& graph::connect(node& source, node& dest, connection::pattern pattern)
 {
-    s_connections.emplace_back(source.outpin(), dest.inpin(), pattern);
+    s_connections.emplace_back(*source.outpin(), *dest.inpin(), pattern);
     return s_connections.back();
 }
 
 connection& graph::connect(node& source, pin& dest, connection::pattern pattern)
 {
-    s_connections.emplace_back(source.outpin(), dest, pattern);
+    s_connections.emplace_back(*source.outpin(), dest, pattern);
     return s_connections.back();
 }
 
 connection& graph::connect(pin& source, node& dest, connection::pattern pattern)
 {
-    s_connections.emplace_back(source, dest.inpin(), pattern);
+    s_connections.emplace_back(source, *dest.inpin(), pattern);
     return s_connections.back();
 }
 
