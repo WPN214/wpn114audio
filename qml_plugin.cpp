@@ -17,9 +17,6 @@ void qml_plugin::registerTypes(const char *uri)
     qmlRegisterUncreatableType<node, 1>
     ("WPN114.Audio", 1, 1, "Node", "Uncreatable");
 
-    qmlRegisterUncreatableType<SVariant, 1>
-    ("WPN114.Audio", 1, 1, "Signal", "Uncreatable");
-
     qmlRegisterUncreatableType<pin, 1>
     ("WPN114.Audio", 1, 1, "Pin", "Uncreatable");
 

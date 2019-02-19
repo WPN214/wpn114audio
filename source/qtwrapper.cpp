@@ -712,81 +712,6 @@ bool pin::connected(T& target) const
     }
     return false;
 }
-//=================================================================================================
-// QT-SIGNAL
-//=================================================================================================
-
-// this is the constructor
-// used by node class
-SVariant::SVariant(pin& p)
-{
-    m_source = &p;
-    m_vtype = vtype::Pin;
-}
-
-SVariant::SVariant(SVariant const& cp)
-{
-    operator=(cp);
-}
-
-SVariant::SVariant(SVariant&& mv)
-{
-    operator=(mv);
-}
-
-SVariant::SVariant(qreal v)
-{
-    value.u_real = v;
-    m_vtype = vtype::Real;
-}
-
-SVariant::SVariant(QVariant v)
-{
-    value.u_var = v;
-    m_vtype = vtype::Variant;
-}
-
-SVariant::u_value&
-SVariant::u_value::operator=(u_value const& cp)
-{
-    memcpy(this, &cp, sizeof(u_value));
-    return *this;
-}
-
-SVariant& SVariant::operator=(SVariant const& cp)
-{
-    m_source   = cp.m_source;
-    m_vtype    = cp.m_vtype;
-    value      = cp.value;
-
-    return *this;
-}
-
-SVariant& SVariant::operator=(SVariant&& mv)
-{
-    operator=(mv);
-    return *this;
-}
-
-SVariant::vtype SVariant::type() const
-{
-    return m_vtype;
-}
-
-template<> pin& SVariant::get()
-{
-    return *value.u_pin;
-}
-
-template<> qreal SVariant::get()
-{
-    return value.u_real;
-}
-
-template<> QVariant SVariant::get()
-{
-    return value.u_var;
-}
 
 //=================================================================================================
 // NODE
@@ -811,54 +736,36 @@ node::add_pin(pin &pin)
     pvec.push_back(&pin);
 }
 
-inline SVariant
+inline QVariant
 node::sgrd(pin& p)
 {
-    return SVariant(p);
+    return QVariant::fromValue(&p);
 }
 
 inline void
-node::sgwr(pin& p, SVariant v)
-{
-    switch(v.type())
-    {
-    case SVariant::Undefined:
-    {
-         return;
-    }
-    case SVariant::Real:
-    {
-        p.get_stream()() <<= v.get<qreal>();
-        break;
-    }
-    case SVariant::Pin:
+node::sgwr(pin& p, QVariant v)
+{    
+    if ( v.canConvert<pin*>())
     {
         graph::disconnect(p);
-        graph::connect(p, v.get<pin&>());
-        break;
+        graph::connect(p, *v.value<pin*>());
     }
-    case SVariant::Connection:
+    else if ( v.canConvert<QVariantList>())
     {
-//        auto con = v.get<connection>();
-        WPN_TODO
-        break;
 
     }
-    case SVariant::Variant:
+    else if ( v.canConvert<qreal>())
     {
-        auto var = v.get<QVariant>();
-        WPN_TODO
-        break;
-    }
+        p.get_stream()() <<= v.value<qreal>();
     }
 }
 
 WPN_TODO
-SVariant node::connection(SVariant svar, qreal level, QVariant map)
+QVariant node::connection(QVariant svar, qreal level, QVariant map)
 {
     // establish an explicit connection
     // with level and map parameters
-    return SVariant(0);
+    return QVariant(0);
 }
 
 qreal node::db(qreal v)
@@ -984,9 +891,11 @@ node& node::chainout()
 void node::setTarget(QQmlProperty const& p)
 {
     // when a node is bound to another node's signal property
-    auto& source = qobject_cast<SVariant*>(p.object())->source();
-    graph::disconnect(source);
-    graph::connect(*this, source);
+    auto _node = qobject_cast<node*>(p.object());
+    auto& _pin = _node->inpin(p.name());
+
+    graph::disconnect(_pin);
+    graph::connect(*this, _pin);
 }
 
 void node::componentComplete()
@@ -1083,13 +992,20 @@ WPN_REVISE
 stream::slice node::collect(polarity p)
 {
     std::vector<pin*>* target;
+    stream s;
+
     switch(p)
     {
-    case polarity::input: target = &m_uppins; break;
-    case polarity::output: target = &m_dnpins;
+    case polarity::input:
+    {
+        target = &m_uppins; break;
+    }
+    case polarity::output:
+    {
+        target = &m_dnpins;
+    }
     }
 
-    stream s;
     for ( auto& pin : *target )
           s.append(pin->get_stream());
 

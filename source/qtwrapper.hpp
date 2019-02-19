@@ -43,14 +43,14 @@ virtual void rwrite(node::pool& inputs, node::pool& outputs, size_t sz) override
 virtual void configure(graph_properties properties) override;
 //=================================================================================================
 #define WPN_REGISTER_PIN(_s, _d, _p, _n)                                                           \
-private: Q_PROPERTY(SVariant _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                     \
+private: Q_PROPERTY(QVariant _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                     \
 protected: pin m_##_s { *this, _p, #_s, _n, _d };                                                  \
                                                                                                    \
-SVariant get##_s() {                                                                               \
+QVariant get##_s() {                                                                               \
     return sgrd(m_##_s);                                                                           \
 }                                                                                                  \
                                                                                                    \
-void set##_s(SVariant v) {                                                                         \
+void set##_s(QVariant v) {                                                                         \
     sgwr(m_##_s, v);                                                                               \
 }                                                                                                  \
 Q_SIGNAL void _s##Changed();
@@ -324,7 +324,6 @@ class Dispatch : public QObject
 };
 
 //=================================================================================================
-class SVariant;
 class node;
 class connection;
 //=============================================================================================
@@ -460,8 +459,8 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     protected:
     //=============================================================================================
     void        add_pin(pin& pin);
-    void        sgwr(pin& pin, SVariant s);
-    SVariant    sgrd(pin& pin);
+    void        sgwr(pin& pin, QVariant s);
+    QVariant    sgrd(pin& pin);
 
     public:
     //=============================================================================================
@@ -508,7 +507,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     pin& outpin();
     pin& outpin(QString);
     // --------------------------------------------------------------------------------------------
-    Q_INVOKABLE SVariant connection(SVariant v, qreal level, QVariant map);
+    Q_INVOKABLE QVariant connection(QVariant v, qreal level, QVariant map);
     Q_INVOKABLE qreal db(qreal a);
     // --------------------------------------------------------------------------------------------
     QQmlListProperty<node> subnodes();
@@ -588,55 +587,6 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     size_t m_stream_pos   = 0;
     signal_t m_height     = 0;
     signal_t m_width      = 0;
-};
-
-//=================================================================================================
-class SVariant : public QObject
-// convenience class allowing flexible qml-bindings
-//=================================================================================================
-{
-    Q_OBJECT
-
-    public:
-    enum vtype
-    {
-        Undefined   = 0,
-        Real        = 1,
-        Variant     = 2,
-        Pin         = 3,
-        Connection  = 4
-    };
-
-    SVariant(pin&);
-    SVariant(SVariant const&);
-    SVariant(SVariant&&);
-
-    SVariant(qreal v);
-    SVariant(QVariant v);
-
-    SVariant& operator=(SVariant const&);
-    SVariant& operator=(SVariant&&);
-
-    vtype type() const;
-    pin& source();
-    template<typename T> T get();
-
-    private:
-
-    union u_value
-    {
-        QVariant u_var;
-        qreal u_real;
-        pin*  u_pin;
-
-        u_value()  { memset(this, 0, sizeof(u_value)); }
-        ~u_value() { }
-        u_value& operator=(u_value const&);
-
-    } value;
-
-    pin* m_source = nullptr;
-    vtype m_vtype = Undefined;
 };
 
 //=================================================================================================
