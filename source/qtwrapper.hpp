@@ -391,6 +391,8 @@ class connection : public QObject
         Split   = 2
     };
 
+    Q_ENUM(pattern)
+
     connection(pin& source, pin& dest, pattern pattern);
     connection(connection const&);
     connection(connection&&);
@@ -452,14 +454,14 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     friend class pin;
 
     friend int
-    rwrite(void*, void*, unsigned int, double, RtAudioStreamStatus, void*);
+    rwrite (void*, void*, unsigned int, double,
+           RtAudioStreamStatus, void*);
 
     protected:
     //=============================================================================================
-    void add_pin(pin& pin);
-
-    SVariant sgrd(pin& pin);
-    void sgwr(pin& pin, SVariant s);
+    void        add_pin(pin& pin);
+    void        sgwr(pin& pin, SVariant s);
+    SVariant    sgrd(pin& pin);
 
     public:
     //=============================================================================================
@@ -505,6 +507,9 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     pin& inpin(QString);
     pin& outpin();
     pin& outpin(QString);
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE SVariant connection(SVariant v, qreal level, QVariant map);
+    Q_INVOKABLE qreal db(qreal a);
     // --------------------------------------------------------------------------------------------
     QQmlListProperty<node> subnodes();
 
@@ -553,7 +558,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     // --------------------------------------------------------------------------------------------
     template<typename T>
-    bool connected(T& other) const;
+    bool connected(T& other);
     //---------------------------------------------------------------------------------------------
 
     private:
@@ -571,6 +576,8 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     std::vector<pin*> m_uppins;
     std::vector<pin*> m_dnpins;
     std::vector<node*> m_subnodes;
+
+    std::vector<pin*>& pvector(polarity);
 
     Dispatch::Values m_dispatch
         = Dispatch::Values::Upwards;
@@ -620,14 +627,13 @@ class SVariant : public QObject
 
     union u_value
     {
-       qreal u_real;
-       pin*  u_pin;
-       QVariant u_var;
+        QVariant u_var;
+        qreal u_real;
+        pin*  u_pin;
 
-       u_value()  { memset(this, 0, sizeof(u_value)); }
-       ~u_value() { }
-
-       u_value& operator=(u_value const&);
+        u_value()  { memset(this, 0, sizeof(u_value)); }
+        ~u_value() { }
+        u_value& operator=(u_value const&);
 
     } value;
 

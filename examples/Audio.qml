@@ -6,17 +6,24 @@ Item
     WPN114.Audiostream
     {
         id: audiostream
+
+        // we instantiate an Output module
+        // when component is complete
+        // we configure the global graph with the following parameters:
         rate: 44100
         vector: 512
         feedback: 64
 
+        // output module looks for selected output device
+        // or choose the default one if unspecified
+        // the audio thread is created, initialized and started
+
         WPN114.Sinetest
         {
             id: sinetest
-            frequency: 440.0
 
-            frequency: connection(vca, 0.5);
-            WPN114.VCA on output { gaindB: -6 }
+            frequency: 440.0
+            WPN114.VCA on output { id: vca; gain: db(-6) }
         }
 
 //        WPN114.VCA
@@ -31,6 +38,11 @@ Item
 //            }
 //        }
     }
+
+    // on audio start
+    // graph first initializes all the registered nodes
+    // allocating the different i/o pins
+    // and then allocates the connection streams
 
     Component.onCompleted: audiostream.start();
 }

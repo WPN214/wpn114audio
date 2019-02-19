@@ -628,17 +628,20 @@ polarity pin::get_polarity() const
     return m_polarity;
 }
 
-inline void pin::allocate(size_t sz)
+inline void
+pin::allocate(size_t sz)
 {
     m_stream.allocate(m_nchannels, sz);
 }
 
-inline void pin::add_connection(connection& con)
+inline void
+pin::add_connection(connection& con)
 {
     m_connections.push_back(std::make_shared<connection>(con));
 }
 
-inline void pin::remove_connection(connection& con)
+inline void
+pin::remove_connection(connection& con)
 {
     std::remove(m_connections.begin(),
                 m_connections.end(),
@@ -652,7 +655,7 @@ bool pin::connected() const
 
 template<typename T>
 bool pin::connected(T& target) const
-{
+{                 
     switch( m_polarity )
     {
     case polarity::input:
@@ -752,19 +755,23 @@ template<> QVariant SVariant::get()
 // NODE
 //=================================================================================================
 
-inline void node::add_pin(pin &pin)
+inline std::vector<pin*>&
+node::pvector(polarity p)
 {
-    switch(pin.get_polarity())
+    switch(p)
     {
     case polarity::input:
-    {
-        m_uppins.push_back(&pin); break;
-    }
+         return m_uppins;
     case polarity::output:
-    {
-        m_dnpins.push_back(&pin); break;
+         return m_dnpins;
     }
-    }
+}
+
+inline void
+node::add_pin(pin &pin)
+{
+    auto& pvec = pvector(pin.get_polarity());
+    pvec.push_back(&pin);
 }
 
 inline SVariant
@@ -809,6 +816,24 @@ node::sgwr(pin& p, SVariant v)
     }
 }
 
+WPN_TODO
+SVariant node::connection(SVariant svar, qreal level, QVariant map)
+{
+    // establish an explicit connection
+    // with level and map parameters
+    return SVariant(0);
+}
+
+qreal node::db(qreal v)
+{
+    // this is not an a->db function
+    // it is a useful, readable and declarative way to signal that the value
+    // used within qml is of the db unit.
+    // consequently, it returns the value as a normal linear amplitude value.
+    // in general, to ease-up calculations, the db should be calculated once and upfront
+    return dbtoa(v);
+}
+
 node::pool::pool(std::vector<pin*>& vector, size_t pos, size_t sz)
 {
     for ( auto& pin : vector )
@@ -822,7 +847,8 @@ node::pool::pool(std::vector<pin*>& vector, size_t pos, size_t sz)
     }
 }
 
-stream::slice& node::pool::operator[](std::string str)
+stream::slice&
+node::pool::operator[](std::string str)
 {
     for ( auto& stream : streams )
           if ( stream.label == str )
@@ -832,18 +858,25 @@ stream::slice& node::pool::operator[](std::string str)
 
 //-------------------------------------------------------------------------------------------------
 
-template<typename T> bool
-node::connected(T& other) const
+template<> bool
+node::connected(node& other)
 {
-    if ( other.polarity() == polarity::input )
-         for ( auto& pin: m_dnpins )
-               if ( pin->connected(other) )
-                    return true;
+    for (auto& pin : m_dnpins)
+        if (pin->connected(other))
+            return true;
 
-    if ( other.polarity() == polarity::output )
-         for ( auto& pin: m_uppins )
-               if ( pin->connected(other) )
-                    return true;
+    for (auto& pin : m_uppins)
+        if (pin->connected(other))
+            return true;
+    return false;
+}
+
+template<> bool
+node::connected(pin& other)
+{
+    for ( auto& pin : pvector(other.get_polarity()))
+        if ( pin->connected(other))
+             return true;
     return false;
 }
 
@@ -876,8 +909,8 @@ pin& node::outpin()
 pin& node::outpin(QString ref)
 {
     for ( auto& pin : m_dnpins )
-          if (pin->get_label() == ref.toStdString())
-              return *pin;
+          if ( pin->get_label() == ref.toStdString())
+               return *pin;
     assert( 0 );
 }
 
@@ -914,8 +947,7 @@ node& node::chainout()
 void node::setTarget(QQmlProperty const& p)
 {
     // when a node is bound to another node's signal property
-    SVariant& s = *qobject_cast<SVariant*>(p.object());
-    pin& source = s.source();
+    auto& source = qobject_cast<SVariant*>(p.object())->source();
     graph::disconnect(source);
     graph::connect(*this, source);
 }
@@ -986,7 +1018,7 @@ void node::clear_subnodes()
     m_subnodes.clear();
 }
 
-// --------------------------------------
+// ------------------------------------------------------------------------------------------------
 
 void node::append_subnode(QQmlListProperty<node>* l, node * n)
 {
@@ -1008,7 +1040,7 @@ int node::nsubnodes(QQmlListProperty<node>* l)
     return reinterpret_cast<node*>(l->data)->nsubnodes();
 }
 
-// --------------------------------------
+// ------------------------------------------------------------------------------------------------
 
 WPN_REVISE
 stream::slice node::collect(polarity p)
@@ -1263,6 +1295,9 @@ void graph::initialize()
 {
     for ( auto& node : s_nodes )
           node->initialize(s_properties);
+
+    for ( auto& connection : s_connections )
+          connection.allocate(s_properties.vsz);
 }
 
 stream::slice graph::run(node& target)
