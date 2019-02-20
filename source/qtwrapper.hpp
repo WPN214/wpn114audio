@@ -156,6 +156,15 @@ class channel
     {
         friend class channel;
 
+        slice(channel&, T* begin, T* end, T* pos );
+        channel& m_parent;
+
+        T* m_begin  = nullptr;
+        T* m_end    = nullptr;
+        T* m_pos    = nullptr;
+
+        size_t m_size = 0;
+
         public:
         slice(channel& parent);
         slice(slice const&);
@@ -167,7 +176,20 @@ class channel
         T& operator[](size_t);
         size_t size() const;
 
-        // stream operators --------------------------------
+        // signal-related -----------------------------------------------------
+        T min();
+        T max();
+        T rms();
+
+        // transform  ---------------------------------------------------------
+        void lookup     ( slice&, slice&, bool increment = false );
+        void drain      ();
+        void normalize  ();
+
+        // cast ---------------------------------------------------------------
+        operator T*();
+
+        // stream operators ---------------------------------------------------
         slice& operator<<(slice const&);
         slice& operator>>(slice &);
         slice& operator<<(T const);
@@ -187,28 +209,6 @@ class channel
         slice& operator*=(const T);
         slice& operator/=(const T);
 
-        // signal-related -------------------
-        T min();
-        T max();
-        T rms();
-
-        // transform  -------------------------------------------
-        void lookup     ( slice&, slice&, bool increment = false );
-        void drain      ();
-        void normalize  ();
-
-        // cast ---------------------
-        operator T*();
-
-        private:
-        slice(channel&, T* begin, T* end, T* pos );
-        channel& m_parent;
-
-        T* m_begin = nullptr;
-        T* m_end = nullptr;
-        T* m_pos = nullptr;
-        size_t m_size = 0;
-
         public:
         //----------------------------------------------------------------------------------
         class iterator :
@@ -227,8 +227,6 @@ class channel
         };
     };
 };
-
-
 
 // ========================================================================================
 template<typename T = signal_t, typename Allocator = mallocator<T>>
@@ -317,7 +315,7 @@ class stream
         typename schannel::slice operator[](size_t);
         operator bool();
 
-        // properties ---------------
+        // properties ---------------------------------------------------------
         size_t nsamples  () const;
         size_t nchannels () const;
         size_t nframes   () const;
@@ -327,13 +325,14 @@ class stream
         void drain      ();
         void normalize  ();
 
-        // cast ---------------------
+        // cast ---------------------------------------------------------------
         // note: these two are equivalent
         operator T*();
         T* interleaved();
+
         void interleaved(T*);
 
-        // arithm. -------------------------
+        // arithm. ------------------------------------------------------------
         slice& operator+=(T);
         slice& operator-=(T);
         slice& operator*=(T);
@@ -394,8 +393,8 @@ struct graph_properties
     size_t vsz = 512;
     size_t fvsz = 64;
 };
-
 //=================================================================================================
+
 class Dispatch : public QObject
 {
     Q_OBJECT
@@ -552,6 +551,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     QVariant    sgrd(pin& pin);
 
     public:
+    using pinvector = std::vector<pin*>;
     //=============================================================================================
     struct pstream
     //=============================================================================================
@@ -564,7 +564,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     //=============================================================================================
     {
         friend class node;
-        pool(std::vector<pin*>& vector, size_t pos, size_t sz);
+        pool(pinvector& vector, size_t pos, size_t sz);
         std::vector<pstream> streams;
 
         public:
@@ -665,11 +665,9 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     node* m_parent = nullptr;
     std::vector<node*> m_subnodes;
 
-    // node has ownership over its i/o pins
-    // these should be unique_ptr maybe?
-    std::vector<std::unique_ptr<pin>> m_uppins;
-    std::vector<std::unique_ptr<pin>> m_dnpins;
-    std::vector<std::unique_ptr<pin>>& pvector(polarity);
+    pinvector m_uppins;
+    pinvector m_dnpins;
+    pinvector& pvector(polarity);
 
     Dispatch::Values m_dispatch
         = Dispatch::Values::Upwards;

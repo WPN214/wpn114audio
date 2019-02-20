@@ -1001,10 +1001,10 @@ node::pvector(polarity p)
 }
 
 inline void
-node::add_pin(pin &pin)
+node::add_pin(pin& p)
 {
-    auto& pvec = pvector(pin.get_polarity());
-    pvec.push_back(&pin);
+    auto& pvec = pvector(p.get_polarity());
+    pvec.push_back(&p);
 }
 
 inline QVariant
@@ -1049,7 +1049,7 @@ qreal node::db(qreal v)
     return dbtoa(v);
 }
 
-node::pool::pool(std::vector<pin*>& vector, size_t pos, size_t sz)
+node::pool::pool(pinvector& vector, size_t pos, size_t sz)
 {
     for ( auto& pin : vector )
     {
@@ -1264,11 +1264,11 @@ int node::nsubnodes(QQmlListProperty<node>* l)
 // ------------------------------------------------------------------------------------------------
 
 WPN_REVISE
-stream<signal_t, mallocator<signal_t>>::slice
+typename sstream::slice
 node::collect(polarity p)
 {
-    std::vector<pin*>* target;
-    stream s;
+    pinvector* target;
+    sstream s;
 
     switch(p)
     {
@@ -1532,7 +1532,7 @@ void graph::initialize()
           connection.allocate(s_properties.vsz);
 }
 
-stream::slice graph::run(node& target)
+sstream::slice graph::run(node& target)
 {
     target.process();
     return target.collect(polarity::input);
