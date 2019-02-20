@@ -3,76 +3,175 @@
 #include <QtDebug>
 
 //=================================================================================================
+// ALLOCATORS
+//=================================================================================================
+
+template<typename T, size_t Sz>
+stack_allocator<T, Sz>::stack_allocator() {}
+
+template<typename T, size_t Sz>
+T* stack_allocator<T, Sz>::begin()
+{
+    return &m_data;
+}
+
+template<typename T, size_t Sz>
+T* stack_allocator<T, Sz>::end()
+{
+    return m_data[Sz-1];
+}
+
+template<typename T, size_t Sz>
+T* stack_allocator<T, Sz>::operator[](size_t index)
+{
+    return &m_data[index];
+}
+
+template<typename T>
+mallocator<T>::mallocator() {}
+
+template<typename T>
+T* mallocator<T>::allocate(size_t sz)
+{
+    m_size = sz;
+    return m_data = static_cast<T*>(
+           malloc(sizeof(T)*sz)); // for now..
+}
+
+template<typename T>
+T* mallocator<T>::begin()
+{
+    return m_data;
+}
+
+template<typename T>
+T* mallocator<T>::end()
+{
+    return &m_data[m_size-1];
+}
+
+template<typename T>
+T* mallocator<T>::operator[](size_t index)
+{
+    return &m_data[index];
+}
+
+template<typename T>
+void mallocator<T>::release()
+{
+    free(m_data);
+}
+
+template<typename T>
+null_allocator<T>::null_allocator() {}
+
+template<typename T>
+T* null_allocator<T>::begin()
+{
+    return nullptr;
+}
+
+template<typename T>
+T* null_allocator<T>::end()
+{
+    return nullptr;
+}
+
+//=================================================================================================
 // CHANNEL
 //=================================================================================================
 
-channel::channel() { }
+template<typename T, typename Allocator>
+channel<T, Allocator>::channel() {}
 
-WPN_OPTIMIZE // template it + allocator option
-channel::channel(size_t sz, signal_t fill)
+template<typename T, typename Allocator>
+channel<T, Allocator>::channel(size_t sz, T fill)
 {
-    m_data = new signal_t[sz];
+    m_data = m_allocator.allocate(sizeof(T)*sz);
     m_size = sz;
-    operator()() <<= fill;
+    *static_cast<slice*>(this) <<= fill;
 }
 
-channel::operator slice()
+template<typename T, typename Allocator>
+channel<T, Allocator>::channel(T* begin, size_t sz, T fill)
+{
+    m_data = begin;
+    m_size = sz;
+    *static_cast<slice*>(this) <<= fill;
+}
+
+template<typename T, typename Allocator>
+channel<T, Allocator>::operator slice()
 {
     return operator()();
 }
 
-channel::slice channel::operator()(size_t begin, size_t sz, size_t pos)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice
+channel<T, Allocator>::operator()(size_t begin, size_t sz, size_t pos)
 {
-    return channel::slice(*this, &m_data[begin],
-                          &m_data[begin+sz],
-                          &m_data[begin+pos]);
+    return slice(*this, m_data+begin, m_data+begin+sz,
+                        m_data+begin+pos);
 }
 
 //-------------------------------------------------------------------------------------------------
 // channel-slice
 //-------------------------------------------------------------------------------------------------
-
-channel::slice::slice(channel& parent) : m_parent(parent)
+template<typename T, typename Allocator>
+channel<T, Allocator>::slice::slice(channel& parent) :
+    m_parent(parent)
 {
     m_begin  = m_pos = parent.m_data;
     m_size   = parent.m_size;
     m_end    = &parent.m_data[m_size];
 }
 
-channel::slice::slice(channel& parent, signal_t* begin, signal_t* end, signal_t* pos) :
-    m_parent(parent), m_begin(begin), m_end(end), m_pos(pos), m_size(parent.m_size)
+template<typename T, typename Allocator>
+channel<T, Allocator>::slice::slice(channel& parent, T* begin, T* end, T* pos) :
+    m_parent(parent), m_size(parent.m_size),
+    m_begin(begin), m_end(end), m_pos(pos)
 {
 
 }
 
-channel::slice::slice(slice const& cp) :
+// copy constructor
+template<typename T, typename Allocator>
+channel<T, Allocator>::slice::slice(slice const& cp) :
     m_parent(cp.m_parent),
     m_begin(cp.m_begin),
     m_end(cp.m_end),
     m_pos(cp.m_pos),
     m_size(cp.m_size) { }
 
-channel::slice::iterator channel::slice::begin()
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice::iterator
+channel<T, Allocator>::slice::begin()
 {
     return channel::slice::iterator(m_begin);
 }
 
-channel::slice::iterator channel::slice::end()
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice::iterator
+channel<T, Allocator>::slice::end()
 {
     return channel::slice::iterator(m_end);
 }
 
-channel::slice::operator signal_t*()
+template<typename T, typename Allocator>
+channel<T, Allocator>::slice::operator T*()
 {
+    // cast slice to T pointer
     return m_begin;
 }
 
-signal_t& channel::slice::operator[](size_t index)
+template<typename T, typename Allocator>
+T& channel<T, Allocator>::slice::operator[](size_t index)
 {
     return m_begin[index];
 }
 
-size_t channel::slice::size() const
+template<typename T, typename Allocator>
+size_t channel<T, Allocator>::slice::size() const
 {
     return m_size;
 }
@@ -80,40 +179,59 @@ size_t channel::slice::size() const
 //-------------------------------------------------------------------------------------------------
 // CHANNEl: stream operators
 //-------------------------------------------------------------------------------------------------
-channel::slice& channel::slice::operator<<(channel::slice const& other)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator<<(channel::slice const& other)
 {
     // copy-merge contents of other into this
     // equivalent to operator +=
     return operator+=(other);
 }
 
-channel::slice& channel::slice::operator>>(channel::slice& other)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator>>(channel::slice& other)
 {
     // same, but reverted
-    other << *this; return *this;
+    other << *this;
+    return *this;
 }
 
-channel::slice& channel::slice::operator<<=(channel::slice& other)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator<<=(channel::slice& other)
 {
-    // merge (copy and drain other afterwards)
-    *this << other; other.drain(); return *this;
+    // move-merge (copy and drain other afterwards)
+    *this << other;
+    other.drain();
+    return *this;
 }
 
-channel::slice& channel::slice::operator>>=(channel::slice& other)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator>>=(channel::slice& other)
 {
-    other <<= *this; return *this;
+    // same, but reverted
+    other <<= *this;
+    return *this;
 }
 
-channel::slice& channel::slice::operator<<(const signal_t v)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator<<(const T v)
 {
-    if ( m_pos == m_end ) return *this;
-    *m_pos++ = v; return *this;
+    if ( m_pos == m_end )
+         return *this;
+    else *m_pos++ = v;
+    return *this;
 }
 
-
-channel::slice& channel::slice::operator>>(signal_t& v)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator>>(T& v)
 {
-    v = *m_pos++; return *this;
+    v = *m_pos++;
+    return *this;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -126,58 +244,75 @@ channel::slice& channel::slice::operator>>(signal_t& v)
     return *this;
 //-------------------------------------------------------------------------------------------------
 
-channel::slice& channel::slice::operator*=(const signal_t v)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator*=(const T v)
 {
     for ( auto& sample : *this )
           sample *= v;
     return *this;
 }
 
-channel::slice& channel::slice::operator/=(const signal_t v)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator/=(const T v)
 {
     for ( auto& sample : *this )
           sample /= v;
     return *this;
 }
 
-channel::slice& channel::slice::operator+=(const signal_t v)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator+=(const T v)
 {
     for ( auto& sample : *this )
           sample += v;
     return *this;
 }
 
-channel::slice& channel::slice::operator-=(const signal_t v)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator-=(const T v)
 {
     for ( auto& sample : *this )
           sample -= v;
     return *this;
 }
 
-
-channel::slice& channel::slice::operator<<=(const signal_t v)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator<<=(const T v)
 {
     for ( auto& sample : *this )
           sample = v;
     return *this;
 }
 
-channel::slice& channel::slice::operator*=(channel::slice const& other)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator*=(channel::slice const& other)
 {
     FOREACH_SAMPLE_OPERATOR(*=);
 }
 
-channel::slice& channel::slice::operator/=(channel::slice const& other)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator/=(channel::slice const& other)
 {
     FOREACH_SAMPLE_OPERATOR(/=);
 }
 
-channel::slice& channel::slice::operator+=(channel::slice const& other)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator+=(channel::slice const& other)
 {
     FOREACH_SAMPLE_OPERATOR(+=);
 }
 
-channel::slice& channel::slice::operator-=(channel::slice const& other)
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice&
+channel<T, Allocator>::slice::operator-=(channel::slice const& other)
 {
     FOREACH_SAMPLE_OPERATOR(-=);
 }
@@ -186,49 +321,51 @@ channel::slice& channel::slice::operator-=(channel::slice const& other)
 // CHANNEL: analysis
 //-------------------------------------------------------------------------------------------------
 
-signal_t channel::slice::min()
+template<typename T, typename Allocator>
+T channel<T, Allocator>::slice::min()
 {
-    signal_t m = 0;
-    for   (  auto& sample : *this )
-             m = std::min(m, sample);
-    return   m;
+    T m = 0;
+    for  ( auto& sample : *this )
+           m = std::min(m, sample);
+    return m;
 }
 
-signal_t channel::slice::max()
+template<typename T, typename Allocator>
+T channel<T, Allocator>::slice::max()
 {
-    signal_t m = 0;
-    for   (  auto& sample : *this )
-             m = std::max(m, sample);
-    return   m;
+    T m = 0;
+    for  ( auto& sample : *this )
+           m = std::max(m, sample);
+    return m;
 }
 
-signal_t channel::slice::rms()
+template<typename T, typename Allocator>
+T channel<T, Allocator>::slice::rms()
 {
-    signal_t m = 0;
+    T m = 0;
     for ( auto s : *this )
           m += s;
-
     return std::sqrt( 1.0/m_size/m );
 }
 
 //-------------------------------------------------------------------------------------------------
 // CHANNEL: global operations
 //-------------------------------------------------------------------------------------------------
-
-void channel::slice::drain()
+template<typename T, typename Allocator>
+void channel<T, Allocator>::slice::drain()
 {
-    memset(m_begin, 0, sizeof(signal_t)*m_size);
+    memset(m_begin, 0, sizeof(T)*m_size);
 }
 
-WPN_TODO void
-channel::slice::normalize()
+WPN_TODO
+template<typename T, typename Allocator>
+void channel<T, Allocator>::slice::normalize()
 {
 
 }
 
-WPN_EXAMINE
-WPN_TODO // <-- make an option for the interpolation type
-void channel::slice::lookup(slice& source, slice& head, bool increment)
+template<typename T, typename Allocator> void
+channel<T, Allocator>::slice::lookup(slice& source, slice& head, bool increment)
 {
     assert(m_size == source.size() == head.size());
 
@@ -236,10 +373,10 @@ void channel::slice::lookup(slice& source, slice& head, bool increment)
     {
         for (size_t n = 0; n < m_size; ++n)
         {
-            signal_t idx = head[n];
-            size_t   y = floor(idx);
-            signal_t x = static_cast<signal_t>(idx-y);
-            signal_t e = lininterp(x, source[y], source[y+1]);
+            T idx = head[n];
+            size_t y = floor(idx);
+            T x = static_cast<T>(idx-y);
+            T e = lininterp(x, source[y], source[y+1]);
 
             m_begin[n] = e;
         }
@@ -249,24 +386,32 @@ void channel::slice::lookup(slice& source, slice& head, bool increment)
 //-------------------------------------------------------------------------------------------------
 // CHANNEL: slice iterators
 //-------------------------------------------------------------------------------------------------
-channel::slice::iterator::iterator(signal_t *data) : m_data(data) { }
+template<typename T, typename Allocator>
+channel<T, Allocator>::slice::iterator::iterator(T* data) :
+    m_data(data) { }
 
-channel::slice::iterator& channel::slice::iterator::operator++()
+template<typename T, typename Allocator>
+typename channel<T, Allocator>::slice::iterator&
+channel<T, Allocator>::slice::iterator::operator++()
 {
-    m_data++; return *this;
+    m_data++;
+    return *this;
 }
 
-signal_t& channel::slice::iterator::operator*()
+template<typename T, typename Allocator>
+T& channel<T, Allocator>::slice::iterator::operator*()
 {
     return *m_data;
 }
 
-bool channel::slice::iterator::operator==(slice::iterator const& other)
+template<typename T, typename Allocator>
+bool channel<T, Allocator>::slice::iterator::operator==(slice::iterator const& other)
 {
     return m_data == other.m_data;
 }
 
-bool channel::slice::iterator::operator!=(slice::iterator const& other)
+template<typename T, typename Allocator>
+bool channel<T, Allocator>::slice::iterator::operator!=(slice::iterator const& other)
 {
     return m_data != other.m_data;
 }
@@ -275,66 +420,95 @@ bool channel::slice::iterator::operator!=(slice::iterator const& other)
 // STREAM
 //=================================================================================================
 
-stream::stream() : m_size(0), m_nchannels(0)
+template<typename T, typename Allocator>
+stream<T, Allocator>::stream()
 {
-    m_channels.reserve(2);
+    // default constructor, without pre-allocation
 }
 
-WPN_REVISE
-stream::stream(size_t nchannels, size_t chsz, signal_t fill) :
-    m_size(chsz), m_nchannels(nchannels)
+template<typename T, typename Allocator>
+stream<T, Allocator>::stream(size_t nchannels, size_t nsamples, T fill) :
+    m_nsamples(nsamples), m_nchannels(nchannels), m_nframes(nsamples*nchannels)
 {
-    allocate(nchannels, chsz);
-    operator()() <<= fill;
+    // full constructor, direct allocation
+    m_data = m_allocator.allocate(sizeof(T)*nchannels*nsamples);
+    static_cast<slice*>(this) <<= fill;
+
+    // we build channels
+    for ( size_t nch = 0; nch < nchannels; ++nch)
+          m_channels.emplace_back(
+                     m_data[nch*nsamples],
+                     nsamples, 0);
 }
 
-WPN_REVISE
-void stream::append(stream& other)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::append(stream& other)
 {
-    for ( auto& ch : other.m_channels )
-          m_channels.push_back(ch);
+    // reallocate? append pointer?
+    WPN_TODO
 }
 
-WPN_REVISE
-void stream::append(channel& ch)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::append(channel<T, Allocator>& ch)
 {
-    m_channels.push_back(&ch);
+    WPN_TODO
 }
 
-WPN_REVISE
-void stream::allocate(size_t nchannels, size_t size)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::allocate(size_t nchannels, size_t nsamples)
 {
-    for ( size_t n = 0; n < nchannels; ++n )
-          m_channels.push_back(new channel(size));
+    // for post-allocation
+    m_data = m_allocator.allocate(sizeof(T)*nchannels*nsamples);
+    m_nchannels = nchannels;
+    m_nsamples  = nsamples;
+    m_nframes   = nchannels*nsamples;
+
+    for ( size_t nch = 0; nch < nchannels; ++nch)
+          m_channels.emplace_back(
+                     m_data[nch*nsamples],
+                     nsamples, 0);
 }
 
-stream::~stream()
+template<typename T, typename Allocator>
+stream<T, Allocator>::~stream()
 {
-    for ( auto& ch : m_channels )
-          delete ch;
+    m_allocator.release();
 }
 
-size_t stream::size() const
+template<typename T, typename Allocator>
+size_t stream<T, Allocator>::nsamples() const
 {
-    return m_size;
+    return m_nsamples;
 }
 
-size_t stream::nchannels() const
+template<typename T, typename Allocator>
+size_t stream<T, Allocator>::nchannels() const
 {
     return m_nchannels;
 }
 
-channel& stream::operator[](size_t index)
+template<typename T, typename Allocator>
+size_t stream<T, Allocator>::nframes() const
 {
-    return *m_channels[index];
+    return m_nframes;
 }
 
-stream::operator slice()
+WPN_EXAMINE
+template<typename T, typename Allocator>
+stream<T, Allocator>::operator[](size_t index)
 {
-    return stream::slice(*this, 0, m_size, 0);
+
 }
 
-stream::slice stream::operator()(size_t begin, size_t sz, size_t pos)
+template<typename T, typename Allocator>
+stream<T, Allocator>::operator slice()
+{
+    return stream::slice(*this, 0, m_nsamples, 0);
+}
+
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice
+stream<T, Allocator>::operator()(size_t begin, size_t sz, size_t pos)
 {
     return stream::slice(*this, begin, sz, pos);
 }
@@ -343,16 +517,17 @@ stream::slice stream::operator()(size_t begin, size_t sz, size_t pos)
 // STREAM SYNCS
 //-------------------------------------------------------------------------------------------------
 
-inline void
-stream::add_sync(sync& target, stream& s)
+template<typename T, typename Allocator>
+inline void stream<T, Allocator>::add_sync(sync& target, stream& s)
 {
     target._stream = &s;
     target.size = s.size();
     target.pos = 0;
 }
 
-inline stream::slice
-stream::synchronize(sync& target, size_t sz)
+template<typename T, typename Allocator>
+inline typename stream<T, Allocator>::slice
+stream<T, Allocator>::synchronize(sync& target, size_t sz)
 {
     auto acc    = operator()(target.pos, sz);
     auto& strm  = *target._stream;
@@ -362,46 +537,47 @@ stream::synchronize(sync& target, size_t sz)
 
     return acc;
 }
-
+template<typename T, typename Allocator>
 inline void
-stream::synchronize_skip(sync& target, size_t sz)
+stream<T, Allocator>::synchronize_skip(sync& target, size_t sz)
 {
     target.pos += sz;
     wrap(target.pos, target.size);
 }
 
-void
-stream::add_upsync(stream& target)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::add_upsync(stream& target)
 {
     add_sync(m_upsync, target);
 }
 
-void
-stream::add_dnsync(stream& target)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::add_dnsync(stream& target)
 {
     add_sync(m_dnsync, target);
 }
 
-stream::slice
-stream::sync_draw(size_t sz)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice
+stream<T, Allocator>::sync_draw(size_t sz)
 {
     return synchronize(m_upsync, sz);
 }
 
-void
-stream::sync_pour(size_t sz)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::sync_pour(size_t sz)
 {
     synchronize(m_dnsync, sz);
 }
 
-void
-stream::upsync_skip(size_t sz)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::upsync_skip(size_t sz)
 {
     synchronize_skip(m_upsync, sz);
 }
 
-void
-stream::dnsync_skip(size_t sz)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::dnsync_skip(size_t sz)
 {
     synchronize_skip(m_dnsync, sz);
 }
@@ -410,58 +586,70 @@ stream::dnsync_skip(size_t sz)
 // STREAM SLICE
 //-------------------------------------------------------------------------------------------------
 
-stream::slice::slice(stream& parent, size_t begin, size_t size, size_t pos) :
-    m_parent(parent),
-    m_begin(begin),
-    m_size(size),
+template<typename T, typename Allocator>
+stream<T, Allocator>::slice::slice(
+    stream& parent, size_t begin, size_t size, size_t pos) :
+    m_parent(parent), m_begin(begin), m_size(size),
     m_pos(pos)
 {
 
 }
 
-stream::slice::iterator stream::slice::begin()
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice::iterator
+stream<T, Allocator>::slice::begin()
 {
     return stream::slice::iterator(m_cslices.begin());
 }
 
-stream::slice::iterator stream::slice::end()
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice::iterator
+stream<T, Allocator>::slice::end()
 {
     return stream::slice::iterator(m_cslices.end());
 }
 
-channel::slice stream::slice::operator[](size_t index)
+template<typename T, typename Allocator>
+typename channel<T, null_allocator<T>>::slice
+stream<T, Allocator>::slice::operator[](size_t index)
 {
     return m_cslices[index];
 }
 
-stream::slice::operator bool()
+template<typename T, typename Allocator>
+stream<T, Allocator>::slice::operator bool()
 {
     // not quite sure what to do of this...
     return false;
 }
 
-size_t stream::slice::size() const
+template<typename T, typename Allocator>
+size_t stream<T, Allocator>::slice::size() const
 {
     return m_size;
 }
 
-size_t stream::slice::nchannels() const
+template<typename T, typename Allocator>
+size_t stream<T, Allocator>::slice::nchannels() const
 {
     return m_cslices.size();
 }
 
-stream::slice::operator signal_t*()
+template<typename T, typename Allocator>
+stream<T, Allocator>::slice::operator T*()
 {
     return interleaved();
 }
 
 WPN_TODO
-signal_t* stream::slice::interleaved()
+template<typename T, typename Allocator>
+T* stream<T, Allocator>::slice::interleaved()
 {
     return nullptr;
 }
 
-void stream::slice::interleaved(signal_t* dest)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::slice::interleaved(T* dest)
 {
     // this being a column major function
     // we will have to optimize the memory allocation
@@ -472,28 +660,36 @@ void stream::slice::interleaved(signal_t* dest)
 
 //-------------------------------------------------------------------------------------------------
 
-stream::slice& stream::slice::operator+=(signal_t v)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator+=(T v)
 {
     for ( auto& channel : m_cslices )
           channel += v;
     return *this;
 }
 
-stream::slice& stream::slice::operator-=(signal_t v)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator-=(T v)
 {
     for ( auto& channel : m_cslices )
           channel -= v;
     return *this;
 }
 
-stream::slice& stream::slice::operator*=(signal_t v)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator*=(T v)
 {
     for ( auto& channel : m_cslices )
           channel *= v;
     return *this;
 }
 
-stream::slice& stream::slice::operator/=(signal_t v)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator/=(T v)
 {
     for ( auto& channel : m_cslices )
           channel /= v;
@@ -508,50 +704,66 @@ stream::slice& stream::slice::operator/=(signal_t v)
     return *this;
 //-------------------------------------------------------------------------------------------------
 
-stream::slice& stream::slice::operator+=(stream::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator+=(stream::slice const& other)
 {
     FOREACH_CHANNEL_OPERATOR(+=);
 }
 
-stream::slice& stream::slice::operator-=(stream::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator-=(stream::slice const& other)
 {
     FOREACH_CHANNEL_OPERATOR(-=);
 }
 
-stream::slice& stream::slice::operator*=(stream::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator*=(stream::slice const& other)
 {
     FOREACH_CHANNEL_OPERATOR(*=);
 }
 
-stream::slice& stream::slice::operator/=(stream::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator/=(stream::slice const& other)
 {
     FOREACH_CHANNEL_OPERATOR(/=);
 }
 
 //-------------------------------------------------------------------------------------------------
 
-stream::slice& stream::slice::operator+=(channel::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator+=(typename schannel::slice const& other)
 {
     for ( auto& channel : m_cslices)
           channel += other;
     return *this;
 }
 
-stream::slice& stream::slice::operator-=(channel::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator-=(typename schannel::slice const& other)
 {
     for ( auto& channel : m_cslices)
           channel -= other;
     return *this;
 }
 
-stream::slice& stream::slice::operator*=(channel::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator*=(typename schannel::slice const& other)
 {
     for ( auto& channel : m_cslices)
           channel *= other;
     return *this;
 }
 
-stream::slice& stream::slice::operator/=(channel::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator/=(typename schannel::slice const& other)
 {
     for ( auto& channel : m_cslices)
           channel /= other;
@@ -559,7 +771,9 @@ stream::slice& stream::slice::operator/=(channel::slice const& other)
 
 }
 
-stream::slice& stream::slice::operator<<=(signal_t const v)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator<<=(T const v)
 {
     for ( auto& channel: m_cslices )
           channel <<= v;
@@ -568,41 +782,53 @@ stream::slice& stream::slice::operator<<=(signal_t const v)
 
 //-------------------------------------------------------------------------------------------------
 
-stream::slice& stream::slice::operator<<(stream::slice const& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator<<(stream::slice const& other)
 {
     FOREACH_CHANNEL_OPERATOR(<<)
 }
 
-stream::slice& stream::slice::operator>>(stream::slice& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator>>(stream::slice& other)
 {
     other << *this; return *this;
 }
 
-stream::slice& stream::slice::operator<<=(stream::slice& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator<<=(stream::slice& other)
 {
     FOREACH_CHANNEL_OPERATOR(<<=)
 }
 
-stream::slice& stream::slice::operator>>=(stream::slice& other)
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice&
+stream<T, Allocator>::slice::operator>>=(stream::slice& other)
 {
     other <<= *this; return *this;
 }
 
 //-------------------------------------------------------------------------------------------------
-void stream::slice::drain()
+template<typename T, typename Allocator>
+void stream<T, Allocator>::slice::drain()
 {
     for ( auto& cslice : m_cslices )
           cslice.drain();
 }
 
 WPN_TODO
-void stream::slice::normalize()
+template<typename T, typename Allocator>
+void stream<T, Allocator>::slice::normalize()
 {
 
 }
 
-void stream::slice::lookup(stream::slice& source,
-                           stream::slice& head, bool increment)
+template<typename T, typename Allocator>
+void stream<T, Allocator>::slice::lookup(stream::slice& source,
+                                         stream::slice& head,
+                                         bool increment)
 {
     assert(source.size() == head.size() == m_size);
     size_t n = 0;
@@ -618,27 +844,33 @@ void stream::slice::lookup(stream::slice& source,
 
 //-------------------------------------------------------------------------------------------------
 
-stream::slice::iterator::iterator(std::vector<channel::slice>::iterator data) :
+template<typename T, typename Allocator>
+stream<T, Allocator>::slice::iterator::iterator(std::vector<schannel::slice>::iterator data) :
     m_data(data) {}
 
-stream::slice::iterator&
-stream::slice::iterator::operator++()
+template<typename T, typename Allocator>
+typename stream<T, Allocator>::slice::iterator&
+stream<T, Allocator>::slice::iterator::operator++()
 {
-    m_data++; return *this;
+    m_data++;
+    return *this;
 }
 
-channel::slice
-stream::slice::iterator::operator*()
+template<typename T, typename Allocator>
+typename channel<T, null_allocator<T>>::slice
+stream<T, Allocator>::slice::iterator::operator*()
 {
     return *m_data;
 }
 
-bool stream::slice::iterator::operator==(stream::slice::iterator const& s)
+template<typename T, typename Allocator>
+bool stream<T, Allocator>::slice::iterator::operator==(stream::slice::iterator const& s)
 {
     return m_data == s.m_data;
 }
 
-bool stream::slice::iterator::operator!=(stream::slice::iterator const& s)
+template<typename T, typename Allocator>
+bool stream<T, Allocator>::slice::iterator::operator!=(stream::slice::iterator const& s)
 {
     return m_data != s.m_data;
 }
@@ -682,7 +914,8 @@ std::vector<std::shared_ptr<connection>> pin::connections()
     return m_connections;
 }
 
-stream& pin::get_stream()
+stream<signal_t, mallocator<signal_t>>&
+pin::get_stream()
 {
     return m_stream;
 }
@@ -813,7 +1046,7 @@ node::pool::pool(std::vector<pin*>& vector, size_t pos, size_t sz)
     }
 }
 
-stream::slice&
+stream<signal_t, mallocator<signal_t>>::slice&
 node::pool::operator[](std::string str)
 {
     for ( auto& stream : streams )
@@ -1015,7 +1248,8 @@ int node::nsubnodes(QQmlListProperty<node>* l)
 // ------------------------------------------------------------------------------------------------
 
 WPN_REVISE
-stream::slice node::collect(polarity p)
+stream<signal_t, mallocator<signal_t>>::slice
+node::collect(polarity p)
 {
     std::vector<pin*>* target;
     stream s;

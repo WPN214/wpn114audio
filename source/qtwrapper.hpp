@@ -62,6 +62,72 @@ Q_SIGNAL void _s##Changed();
 //=================================================================================================
 enum class polarity { output = 0, input  = 1 };
 //=================================================================================================
+template<typename T>
+class allocator
+//=================================================================================================
+{
+    public:
+    virtual T* begin() = 0;
+    virtual T* end() = 0;
+    virtual T* allocate(size_t) {}
+    virtual void release() {}
+
+    virtual T* operator[](size_t) {
+        return nullptr;
+    }
+
+    virtual ~allocator() {}
+};
+//=================================================================================================
+template<typename T, size_t Sz = 0>
+class stack_allocator : public allocator<T>
+//=================================================================================================
+{
+    public:
+    stack_allocator();
+    virtual T* begin() override;
+    virtual T* end() override;
+    virtual T* operator[](size_t) override;
+
+    private:
+    T m_data[Sz];
+};
+
+//=================================================================================================
+template<typename T>
+class mallocator : public allocator<T>
+//=================================================================================================
+{
+    public:
+    mallocator();
+    ~mallocator() override;
+
+    virtual T* begin() override;
+    virtual T* end() override;
+    virtual T* allocate(size_t sz) override;
+
+    virtual T* operator[](size_t) override;
+    virtual void release() override;
+
+    private:
+    T* m_data;
+    size_t m_size;
+};
+
+// "an allocator that does nothing.. but in style!"
+//=================================================================================================
+template<typename T>
+class null_allocator : public allocator<T>
+//=================================================================================================
+{
+    public:
+    null_allocator();
+    virtual T* begin() override;
+    virtual T* end() override;
+};
+
+//=================================================================================================
+template<typename T = signal_t, typename Allocator = mallocator<T>>
 class channel
 //=================================================================================================
 {
@@ -71,15 +137,17 @@ class channel
     class slice;
 
     channel();
-    channel(size_t size, signal_t fill = 0);
+    channel(size_t size, T fill = 0);
+    channel(T* begin, size_t size, T fill = 0);
 
     slice operator()(size_t begin = 0, size_t sz = 0, size_t pos = 0);    
     operator slice();
 
     private:
-    signal_t  m_rate = 0;
-    signal_t* m_data = nullptr;
+    T  m_rate = 0;
+    T* m_data = nullptr;
     size_t m_size = 0;
+    Allocator m_allocator;
 
     public:
     //=============================================================================================
@@ -96,17 +164,17 @@ class channel
         iterator begin();
         iterator end();
 
-        signal_t& operator[](size_t);
+        T& operator[](size_t);
         size_t size() const;
 
         // stream operators --------------------------------
         slice& operator<<(slice const&);
         slice& operator>>(slice &);
-        slice& operator<<(signal_t const);
-        slice& operator>>(signal_t&);
+        slice& operator<<(T const);
+        slice& operator>>(T&);
         slice& operator<<=(slice &);
         slice& operator>>=(slice &);
-        slice& operator<<=(signal_t const);
+        slice& operator<<=(T const);
 
         // arithm. -----------------------------------------
         slice& operator+=(slice const&);
@@ -114,15 +182,15 @@ class channel
         slice& operator*=(slice const&);
         slice& operator/=(slice const&);
 
-        slice& operator+=(const signal_t);
-        slice& operator-=(const signal_t);
-        slice& operator*=(const signal_t);
-        slice& operator/=(const signal_t);
+        slice& operator+=(const T);
+        slice& operator-=(const T);
+        slice& operator*=(const T);
+        slice& operator/=(const T);
 
         // signal-related -------------------
-        signal_t min();
-        signal_t max();
-        signal_t rms();
+        T min();
+        T max();
+        T rms();
 
         // transform  -------------------------------------------
         void lookup     ( slice&, slice&, bool increment = false );
@@ -130,62 +198,61 @@ class channel
         void normalize  ();
 
         // cast ---------------------
-        operator signal_t*();
+        operator T*();
 
         private:
-        slice(channel&, signal_t* begin, signal_t* end, signal_t* pos );
-
+        slice(channel&, T* begin, T* end, T* pos );
         channel& m_parent;
-        signal_t* m_begin = nullptr;
-        signal_t* m_end = nullptr;
-        signal_t* m_pos = nullptr;
+
+        T* m_begin = nullptr;
+        T* m_end = nullptr;
+        T* m_pos = nullptr;
         size_t m_size = 0;
 
         public:
         //----------------------------------------------------------------------------------
         class iterator :
-        public std::iterator<std::input_iterator_tag, signal_t>
+        public std::iterator<std::input_iterator_tag, T>
         //----------------------------------------------------------------------------------
         {
             public:
-            iterator(signal_t* data);
+            iterator(T* data);
             iterator& operator++();
-            signal_t& operator*();
-            bool operator==(const iterator& s);
-            bool operator!=(const iterator& s);
+            T& operator*();
+            bool operator==(iterator const& s);
+            bool operator!=(iterator const& s);
 
             private:
-            signal_t* m_data;
+            T* m_data;
         };
     };
 };
 
+
+
 // ========================================================================================
+template<typename T = signal_t, typename Allocator = mallocator<T>>
 class stream
-// a vector of channels
 // ========================================================================================
 {
     public:
     stream();
     stream(size_t nchannels);
-    stream(size_t nchannels, size_t channel_size, signal_t fill = 0);
+    stream(size_t nchannels, size_t nsamples, T fill = 0);
+
+    using schannel = channel<T, null_allocator<T>>;
 
     void append(stream&);
-    void append(channel&);
-
-    void allocate(size_t nchannels, size_t size);
+    void append(channel<T, Allocator>&);
+    void allocate(size_t nchannels, size_t nsamples);
 
     ~stream();
 
     class slice;
     operator slice();
     slice operator()(size_t begin = 0, size_t size = 0, size_t pos = 0);
-    channel& operator[](size_t);
+    channel<T, Allocator>& operator[](size_t);
 
-    // -----------------------------------------------
-    // syncs
-    //
-    // -----------------------------------------------
     struct sync
     {
         stream* _stream;
@@ -208,21 +275,25 @@ class stream
     void upsync_skip(size_t);
     void dnsync_skip(size_t);
 
-    size_t size() const;
+    size_t nsamples() const;
+    size_t nframes() const;
     size_t nchannels() const;
 
     protected:
-    std::vector<channel*> m_channels;
-    size_t m_size;
-    size_t m_nchannels;
+    Allocator m_allocator;
+    size_t m_nsamples = 0;
+    size_t m_nframes = 0;
+    size_t m_nchannels = 0;
     sync m_upsync;
     sync m_dnsync;
+    std::vector<schannel> m_channels;
+    T* m_data;
 
     public:
     // ======================================================================================
     class slice
     // a temporary reference to a stream, or to a fragment of a stream
-    // only accessors are allowed to read/write from a stream
+    // only slices are allowed to read/write from a stream
     // ======================================================================================
     {
         friend class stream;
@@ -230,75 +301,90 @@ class stream
         class iterator;
         iterator begin();
         iterator end();
-        channel::slice operator[](size_t);
+
+        typename channel<T, Allocator>::slice
+        operator[](size_t);
         operator bool();
+        void* operator new(size_t) = delete;
 
         // properties ---------------
         size_t size         () const;
         size_t nchannels    () const;
 
-        // others ------------------------------------------------
-        void lookup     (slice&, slice &, bool increment = false);
+        // others -------------------------------------------------------------
+        void lookup     ( slice& source, slice& head, bool increment = false );
         void drain      ();
         void normalize  ();
 
         // cast ---------------------
         // note: these two are equivalent
-        operator signal_t*();
-        signal_t* interleaved();
-        void interleaved(signal_t*);
+        operator T*();
+        T* interleaved();
+        void interleaved(T*);
 
         // arithm. -------------------------
-        slice& operator+=(signal_t);
-        slice& operator-=(signal_t);
-        slice& operator*=(signal_t);
-        slice& operator/=(signal_t);
+        slice& operator+=(T);
+        slice& operator-=(T);
+        slice& operator*=(T);
+        slice& operator/=(T);
 
         slice& operator+=(slice const&);
         slice& operator-=(slice const&);
         slice& operator*=(slice const&);
         slice& operator/=(slice const&);
 
-        slice& operator+=(channel::slice const&);
-        slice& operator-=(channel::slice const&);
-        slice& operator*=(channel::slice const&);
-        slice& operator/=(channel::slice const&);
+        slice& operator+=(typename channel<T, Allocator>::slice const&);
+        slice& operator-=(typename channel<T, Allocator>::slice const&);
+        slice& operator*=(typename channel<T, Allocator>::slice const&);
+        slice& operator/=(typename channel<T, Allocator>::slice const&);
 
         slice& operator<<(slice const&);
         slice& operator>>(slice&);
         slice& operator<<=(slice&);
         slice& operator>>=(slice&);
-        slice& operator<<=(signal_t const);
+        slice& operator<<=(T const);
 
         private:
         slice(stream& parent, size_t begin, size_t size, size_t pos);
         stream& m_parent;
-        size_t m_begin = 0;
-        size_t m_size = 0;
-        size_t m_pos = 0;
 
-        std::vector<channel::slice> m_cslices;
+        size_t m_begin  = 0;
+        size_t m_size   = 0;
+        size_t m_pos    = 0;
+
+        // todo: delete that
+        // stream should be a single, contiguous block
+        std::vector<typename schannel::slice>
+        m_cslices;
 
         public:
         //-----------------------------------------------------------------------------------
         class iterator :
-        public std::iterator<std::input_iterator_tag, signal_t>
+        public std::iterator<std::input_iterator_tag, T>
         //-----------------------------------------------------------------------------------
         {
             public:
-            iterator(std::vector<channel::slice>::iterator data);
+            iterator(typename std::vector<
+                     typename channel<T, Allocator>::slice>
+                     ::iterator data);
+
             iterator& operator++();
-            channel::slice operator*();
+            typename channel<T, Allocator>::slice operator*();
 
             bool operator==(const iterator& s);
             bool operator!=(const iterator& s);
 
             private:
-            std::vector<channel::slice>::iterator m_data;
+            typename std::vector<typename channel<T, Allocator>::slice>::iterator
+            m_data;
         };
         //-----------------------------------------------------------------------------------
     };
 };
+
+#define WPN_STACK_STREAM_MAX 512
+using mstream = stream<signal_t, mallocator<signal_t>>;
+using sstream = stream<signal_t, stack_allocator<signal_t, WPN_STACK_STREAM_MAX>>;
 
 //=================================================================================================
 struct graph_properties
@@ -355,7 +441,8 @@ class pin : public QObject
     polarity get_polarity   () const;
     bool is_default         () const;
     std::string get_label   () const;
-    stream& get_stream      ();
+
+    mstream& get_stream();
 
     std::vector<std::shared_ptr<connection>>
     connections();
@@ -369,7 +456,7 @@ class pin : public QObject
     m_connections;
 
     std::string m_label;
-    stream m_stream;
+    mstream m_stream;
     size_t m_nchannels = 0;
 };
 
@@ -390,7 +477,8 @@ class connection : public QObject
         Split   = 2
     };
 
-    Q_ENUM(pattern)
+    Q_ENUM(pattern)    
+    using shared = std::shared_ptr<connection>;
 
     connection(pin& source, pin& dest, pattern pattern);
     connection(connection const&);
@@ -430,7 +518,7 @@ class connection : public QObject
     pin& m_source;
     pin& m_dest;
     pattern m_pattern;
-    stream m_stream;
+    mstream m_stream;
 };
 
 //=================================================================================================
@@ -468,7 +556,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     //=============================================================================================
     {
         std::string const& label;
-        stream::slice slice;
+        mstream::slice slice;
     };
     //=============================================================================================
     class pool
@@ -478,14 +566,15 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
         pool(std::vector<pin*>& vector, size_t pos, size_t sz);
         std::vector<pstream> streams;
 
-        public: stream::slice& operator[](std::string);
+        public:
+        mstream::slice& operator[](std::string);
     };
 
     protected:
     //=============================================================================================
-    virtual void setTarget(QQmlProperty const&) override;
+    virtual void setTarget(QQmlProperty const&) final override;
+    virtual void classBegin() final override {}
     virtual void componentComplete() override;
-    virtual void classBegin() override {}
     //=============================================================================================
     virtual void rwrite     ( pool& inputs, pool& outputs, size_t sz) = 0;
     virtual void configure  ( graph_properties properties) = 0;
@@ -502,6 +591,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     public:
     // --------------------------------------------------------------------------------------------
+    pin* iopin();
     pin* inpin();
     pin* inpin(QString);
     pin* outpin();
@@ -564,19 +654,21 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     void initialize(graph_properties properties);
     void process();
 
-    stream::slice collect(polarity);
+    sstream::slice collect(polarity);
 
     bool m_intertwined  = false;
-    bool m_active = true;
-    bool m_muted = false;
-    qreal m_level = 1;
+    bool m_active  = true;
+    bool m_muted   = false;
+    qreal m_level  = 1;
 
     node* m_parent = nullptr;
-    std::vector<pin*> m_uppins;
-    std::vector<pin*> m_dnpins;
     std::vector<node*> m_subnodes;
 
-    std::vector<pin*>& pvector(polarity);
+    // node has ownership over its i/o pins
+    // these should be unique_ptr maybe?
+    std::vector<std::unique_ptr<pin>> m_uppins;
+    std::vector<std::unique_ptr<pin>> m_dnpins;
+    std::vector<std::unique_ptr<pin>>& pvector(polarity);
 
     Dispatch::Values m_dispatch
         = Dispatch::Values::Upwards;
@@ -625,7 +717,7 @@ class graph : public QObject
 
     static void initialize();
 
-    static stream::slice
+    static sstream::slice
     run(node& target);
 
     private:
@@ -753,7 +845,7 @@ class Sinetest : public node
     Sinetest();
 
     private:
-    stream m_wavetable;
+    mstream m_wavetable;
 };
 
 //=================================================================================================
