@@ -114,7 +114,7 @@ class mallocator : public allocator<T>
     size_t m_size;
 };
 
-// "an allocator that does nothing.. but in style!"
+// "an allocator that does nothing.. but with style!"
 //=================================================================================================
 template<typename T>
 class null_allocator : public allocator<T>
@@ -251,7 +251,7 @@ class stream
     class slice;
     operator slice();
     slice operator()(size_t begin = 0, size_t size = 0, size_t pos = 0);
-    channel<T, Allocator>& operator[](size_t);
+    schannel& operator[](size_t);
 
     struct sync
     {
@@ -297,19 +297,30 @@ class stream
     // ======================================================================================
     {
         friend class stream;
+        slice(stream& parent, size_t begin, size_t nsamples, size_t pos);
+
+        size_t m_begin      = 0;
+        size_t m_nsamples   = 0;
+        size_t m_nframes    = 0;
+        size_t m_pos        = 0;
+
+        stream& m_parent;
+        std::vector<typename schannel::slice>
+        m_cslices;
+
         public:
         class iterator;
         iterator begin();
         iterator end();
 
-        typename channel<T, Allocator>::slice
-        operator[](size_t);
-        operator bool();
         void* operator new(size_t) = delete;
+        typename schannel::slice operator[](size_t);
+        operator bool();
 
         // properties ---------------
-        size_t size         () const;
-        size_t nchannels    () const;
+        size_t nsamples  () const;
+        size_t nchannels () const;
+        size_t nframes   () const;
 
         // others -------------------------------------------------------------
         void lookup     ( slice& source, slice& head, bool increment = false );
@@ -328,34 +339,23 @@ class stream
         slice& operator*=(T);
         slice& operator/=(T);
 
+        // this has to be specialized (can be a 'stack_stream' as well)
         slice& operator+=(slice const&);
         slice& operator-=(slice const&);
         slice& operator*=(slice const&);
         slice& operator/=(slice const&);
 
-        slice& operator+=(typename channel<T, Allocator>::slice const&);
-        slice& operator-=(typename channel<T, Allocator>::slice const&);
-        slice& operator*=(typename channel<T, Allocator>::slice const&);
-        slice& operator/=(typename channel<T, Allocator>::slice const&);
+        // this has to be specialized too
+        slice& operator+=(typename schannel::slice const&);
+        slice& operator-=(typename schannel::slice const&);
+        slice& operator*=(typename schannel::slice const&);
+        slice& operator/=(typename schannel::slice const&);
 
         slice& operator<<(slice const&);
         slice& operator>>(slice&);
         slice& operator<<=(slice&);
         slice& operator>>=(slice&);
         slice& operator<<=(T const);
-
-        private:
-        slice(stream& parent, size_t begin, size_t size, size_t pos);
-        stream& m_parent;
-
-        size_t m_begin  = 0;
-        size_t m_size   = 0;
-        size_t m_pos    = 0;
-
-        // todo: delete that
-        // stream should be a single, contiguous block
-        std::vector<typename schannel::slice>
-        m_cslices;
 
         public:
         //-----------------------------------------------------------------------------------
@@ -365,17 +365,18 @@ class stream
         {
             public:
             iterator(typename std::vector<
-                     typename channel<T, Allocator>::slice>
+                     typename schannel::slice>
                      ::iterator data);
 
             iterator& operator++();
-            typename channel<T, Allocator>::slice operator*();
+            typename schannel::slice operator*();
 
             bool operator==(const iterator& s);
             bool operator!=(const iterator& s);
 
             private:
-            typename std::vector<typename channel<T, Allocator>::slice>::iterator
+            typename std::vector<
+            typename schannel::slice>::iterator
             m_data;
         };
         //-----------------------------------------------------------------------------------

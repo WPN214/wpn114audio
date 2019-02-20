@@ -493,11 +493,11 @@ size_t stream<T, Allocator>::nframes() const
     return m_nframes;
 }
 
-WPN_EXAMINE
 template<typename T, typename Allocator>
+channel<T, null_allocator<T>>&
 stream<T, Allocator>::operator[](size_t index)
 {
-
+    return m_channels[index];
 }
 
 template<typename T, typename Allocator>
@@ -588,11 +588,13 @@ void stream<T, Allocator>::dnsync_skip(size_t sz)
 
 template<typename T, typename Allocator>
 stream<T, Allocator>::slice::slice(
-    stream& parent, size_t begin, size_t size, size_t pos) :
-    m_parent(parent), m_begin(begin), m_size(size),
-    m_pos(pos)
+    stream& parent, size_t begin, size_t nsamples, size_t pos) :
+    m_parent(parent), m_begin(begin), m_nsamples(nsamples), m_pos(pos),
+    m_nframes(nsamples*parent.m_nchannels)
 {
-
+    // we build channel slices here
+    for ( auto& channel : parent.m_channels )
+          m_cslices.emplace_back(channel(begin, nsamples, pos));
 }
 
 template<typename T, typename Allocator>
@@ -619,20 +621,26 @@ stream<T, Allocator>::slice::operator[](size_t index)
 template<typename T, typename Allocator>
 stream<T, Allocator>::slice::operator bool()
 {
-    // not quite sure what to do of this...
+    // not quite sure what to do of this yet...
     return false;
 }
 
 template<typename T, typename Allocator>
-size_t stream<T, Allocator>::slice::size() const
+size_t stream<T, Allocator>::slice::nsamples() const
 {
-    return m_size;
+    return m_nsamples;
 }
 
 template<typename T, typename Allocator>
 size_t stream<T, Allocator>::slice::nchannels() const
 {
-    return m_cslices.size();
+    return m_parent.m_nchannels;
+}
+
+template<typename T, typename Allocator>
+size_t stream<T, Allocator>::slice::nframes() const
+{
+    return m_nframes;
 }
 
 template<typename T, typename Allocator>
@@ -653,17 +661,23 @@ void stream<T, Allocator>::slice::interleaved(T* dest)
 {
     // this being a column major function
     // we will have to optimize the memory allocation
-    for ( size_t n = 0; n < m_size; ++n )
+    for ( size_t n = 0; n < m_nsamples; ++n )
         for ( auto& channel : m_cslices )
               *dest++ = channel[n];
 }
 
 //-------------------------------------------------------------------------------------------------
+// arithmetics
+//-------------------------------------------------------------------------------------------------
+// note /!\ we could optimize the case where the slice is a full stream slice
+// or having an option to have interleaved & non-interleaved streams from the start
+// maybe as a(nother) template parameter
+//-------------------------------------------------------------------------------------------------
 
 template<typename T, typename Allocator>
 typename stream<T, Allocator>::slice&
 stream<T, Allocator>::slice::operator+=(T v)
-{
+{   
     for ( auto& channel : m_cslices )
           channel += v;
     return *this;
@@ -768,7 +782,6 @@ stream<T, Allocator>::slice::operator/=(typename schannel::slice const& other)
     for ( auto& channel : m_cslices)
           channel /= other;
     return *this;
-
 }
 
 template<typename T, typename Allocator>
@@ -793,7 +806,8 @@ template<typename T, typename Allocator>
 typename stream<T, Allocator>::slice&
 stream<T, Allocator>::slice::operator>>(stream::slice& other)
 {
-    other << *this; return *this;
+    other << *this;
+    return *this;
 }
 
 template<typename T, typename Allocator>
@@ -807,15 +821,16 @@ template<typename T, typename Allocator>
 typename stream<T, Allocator>::slice&
 stream<T, Allocator>::slice::operator>>=(stream::slice& other)
 {
-    other <<= *this; return *this;
+    other <<= *this;
+    return *this;
 }
 
 //-------------------------------------------------------------------------------------------------
 template<typename T, typename Allocator>
 void stream<T, Allocator>::slice::drain()
 {
-    for ( auto& cslice : m_cslices )
-          cslice.drain();
+    memset(m_parent.m_data, 0,
+           sizeof(T)*m_parent.nframes());
 }
 
 WPN_TODO
@@ -830,7 +845,7 @@ void stream<T, Allocator>::slice::lookup(stream::slice& source,
                                          stream::slice& head,
                                          bool increment)
 {
-    assert(source.size() == head.size() == m_size);
+    assert(source.nsamples() == head.nsamples() == m_nsamples);
     size_t n = 0;
 
     for ( auto& channel : m_cslices )
@@ -845,7 +860,8 @@ void stream<T, Allocator>::slice::lookup(stream::slice& source,
 //-------------------------------------------------------------------------------------------------
 
 template<typename T, typename Allocator>
-stream<T, Allocator>::slice::iterator::iterator(std::vector<schannel::slice>::iterator data) :
+stream<T, Allocator>::slice::iterator::iterator(
+        typename std::vector<typename schannel::slice>::iterator data) :
     m_data(data) {}
 
 template<typename T, typename Allocator>
