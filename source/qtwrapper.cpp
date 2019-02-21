@@ -907,7 +907,7 @@ bool stream<T, Allocator>::slice::iterator::operator!=(stream::slice::iterator c
 // pin
 //=================================================================================================
 
-pin::pin(node& parent, enum polarity p, std::string label, size_t nchannels, bool def) :
+pin::pin(node& parent, enum polarity_t p, std::string label, size_t nchannels, bool def) :
     m_parent(parent),
     m_polarity(p),
     m_label(label),
@@ -917,12 +917,12 @@ pin::pin(node& parent, enum polarity p, std::string label, size_t nchannels, boo
     parent.add_pin(*this);
 }
 
-node& pin::get_parent()
+node& pin::parent_node()
 {
     return m_parent;
 }
 
-std::string pin::get_label() const
+std::string pin::label() const
 {
     return m_label;
 }
@@ -932,7 +932,7 @@ bool pin::is_default() const
     return m_default;
 }
 
-polarity pin::get_polarity() const
+polarity_t pin::polarity() const
 {
     return m_polarity;
 }
@@ -978,14 +978,14 @@ bool pin::connected(T& target) const
 {                 
     switch( m_polarity )
     {
-    case polarity::input:
+    case polarity_t::input:
     {
         for ( const auto& connection : m_connections )
             if ( connection->is_dest(target))
                  return true;
         break;
     }
-    case polarity::output:
+    case polarity_t::output:
     {
         for ( const auto& connection : m_connections )
             if ( connection->is_source(target))
@@ -1001,13 +1001,13 @@ bool pin::connected(T& target) const
 //=================================================================================================
 
 inline std::vector<pin*>&
-node::pvector(polarity p)
+node::pvector(polarity_t p)
 {
     switch(p)
     {
-    case polarity::input:
+    case polarity_t::input:
          return m_uppins;
-    case polarity::output:
+    case polarity_t::output:
          return m_dnpins;
     }
 }
@@ -1015,7 +1015,7 @@ node::pvector(polarity p)
 inline void
 node::add_pin(pin& p)
 {
-    auto& pvec = pvector(p.get_polarity());
+    auto& pvec = pvector(p.polarity());
     pvec.push_back(&p);
 }
 
@@ -1066,7 +1066,7 @@ node::pool::pool(pinvector& vector, size_t pos, size_t sz)
     for ( auto& pin : vector )
     {
         node::pstream ps = {
-            pin->get_label(),
+            pin->label(),
             pin->get_stream()(pos, sz, 0)
         };
 
@@ -1101,7 +1101,7 @@ node::connected(node& other)
 template<> bool
 node::connected(pin& other)
 {
-    for ( auto& pin : pvector(other.get_polarity()))
+    for ( auto& pin : pvector(other.polarity()))
         if ( pin->connected(other))
              return true;
     return false;
@@ -1126,7 +1126,7 @@ pin* node::inpin()
 pin* node::inpin(QString ref)
 {
     for ( auto& pin : m_uppins )
-          if (pin->get_label() == ref.toStdString())
+          if (pin->label() == ref.toStdString())
               return pin;
     return nullptr;
 }
@@ -1142,7 +1142,7 @@ pin* node::outpin()
 pin* node::outpin(QString ref)
 {
     for ( auto& pin : m_dnpins )
-          if ( pin->get_label() == ref.toStdString())
+          if ( pin->label() == ref.toStdString())
                return pin;
     return nullptr;
 }
@@ -1191,14 +1191,14 @@ void node::setTarget(QQmlProperty const& property)
     auto _pin = _node->iopin(property.name());
     assert(_pin);
 
-    switch(_pin->get_polarity())
+    switch(_pin->polarity())
     {
-    case polarity::input:
+    case polarity_t::input:
     {
         graph::connect(*this, *_pin);
         break;
     }
-    case polarity::output:
+    case polarity_t::output:
     {
         if (_pin->is_default())
         {
@@ -1302,18 +1302,18 @@ int node::nsubnodes(QQmlListProperty<node>* l)
 
 WPN_TODO
 typename sstream::slice
-node::collect(polarity p)
+node::collect(polarity_t p)
 {
     pinvector* target;
     sstream s;
 
     switch(p)
     {
-    case polarity::input:
+    case polarity_t::input:
     {
         target = &m_uppins; break;
     }
-    case polarity::output:
+    case polarity_t::output:
     {
         target = &m_dnpins;
     }
@@ -1365,8 +1365,8 @@ void node::process()
 void connection::pull(size_t sz)
 {
     qDebug() << "PULLING CONNECTION BETWEEN"
-             << QString::fromStdString(m_source.get_parent().nreference())
-             << QString::fromStdString(m_dest.get_parent().nreference());
+             << QString::fromStdString(m_source.parent_node().nreference())
+             << QString::fromStdString(m_dest.parent_node().nreference());
 
     if ( !m_active )
          return;
@@ -1483,7 +1483,7 @@ connection& connection::operator/=(signal_t v)
 template<> bool
 connection::is_source(node& target) const
 {
-    return &m_source.get_parent() == &target;
+    return &m_source.parent_node() == &target;
 }
 
 template<> bool
@@ -1495,7 +1495,7 @@ connection::is_source(pin& target) const
 template<> bool
 connection::is_dest(node& target) const
 {
-    return &m_dest.get_parent() == &target;
+    return &m_dest.parent_node() == &target;
 }
 
 template<> bool
@@ -1524,9 +1524,9 @@ connection& graph::connect(pin& source, pin& dest, connection::pattern pattern)
     graph::register_node(dest.m_parent);
 
     qDebug() << "CONNECTING SOURCE:"
-             << QString::fromStdString(source.get_parent().nreference())
+             << QString::fromStdString(source.parent_node().nreference())
              << "AND DEST:"
-             << QString::fromStdString(dest.get_parent().nreference());
+             << QString::fromStdString(dest.parent_node().nreference());
 
     // TODO, check for duplicates
 
@@ -1597,7 +1597,7 @@ void graph::initialize()
 sstream::slice graph::run(node& target)
 {
     target.process();
-    return target.collect(polarity::input);
+    return target.collect(polarity_t::input);
 }
 
 //=================================================================================================
@@ -1617,6 +1617,7 @@ void Output::setRate(signal_t rate)
 void Output::setNchannels(quint16 nchannels)
 {
     m_nchannels = nchannels;
+    m_outputs.set_nchannels(nchannels);
 }
 
 void Output::setVector(quint16 vector)

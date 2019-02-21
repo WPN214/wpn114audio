@@ -33,8 +33,8 @@ using signal_t = qreal;
 //=================================================================================================
 #define DEFAULT true
 #define NONDEFAULT false
-#define INPUT  polarity::input
-#define OUTPUT polarity::output
+#define INPUT  polarity_t::input
+#define OUTPUT polarity_t::output
 //=================================================================================================
 #define WPN_OBJECT(_n)                                                                             \
 Q_OBJECT                                                                                           \
@@ -63,7 +63,7 @@ Q_SIGNAL void _s##Changed();
 #define dbtoa(_s) pow(10, _s*.05)
 #define wrap(_a, _b) if( _a >=_b ) _a -= _b;
 //=================================================================================================
-enum class polarity { output = 0, input  = 1 };
+enum class polarity_t { output = 0, input  = 1 };
 //=================================================================================================
 template<typename T>
 class allocator
@@ -438,7 +438,7 @@ class pin : public QObject
 
     public:
     pin ( node& parent,
-          polarity p,
+          polarity_t p,
           std::string label,
           size_t nchannels = 1,
           bool def = false );
@@ -451,10 +451,15 @@ class pin : public QObject
     void add_connection(connection& con);
     void remove_connection(connection& con);
 
-    node& get_parent        ();
-    polarity get_polarity   () const;
-    bool is_default         () const;
-    std::string get_label   () const;
+    node& parent_node();
+    polarity_t polarity() const;
+    bool is_input() const;
+    bool is_output() const;
+    bool is_default() const;
+    std::string label() const;
+    size_t nchannels() const;
+
+    void set_nchannels(size_t);
 
     mstream& get_stream();
 
@@ -464,7 +469,7 @@ class pin : public QObject
     private:
     node& m_parent;
     bool m_default;
-    const polarity m_polarity;
+    const polarity_t m_polarity;
 
     std::vector<std::shared_ptr<connection>>
     m_connections;
@@ -671,7 +676,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     void initialize(graph_properties properties);
     void process();
 
-    sstream::slice collect(polarity);
+    sstream::slice collect(polarity_t);
 
     bool m_intertwined  = false;
     bool m_active  = true;
@@ -683,7 +688,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     pinvector m_uppins;
     pinvector m_dnpins;
-    pinvector& pvector(polarity);
+    pinvector& pvector(polarity_t);
 
     Dispatch::Values m_dispatch
         = Dispatch::Values::Upwards;
@@ -855,8 +860,8 @@ class Sinetest : public node
 //=================================================================================================
 {
     WPN_OBJECT        ( Sinetest )
-    WPN_REGISTER_PIN  ( frequency, DEFAULT, INPUT, 0 )
-    WPN_REGISTER_PIN  ( output, DEFAULT, OUTPUT, 0 )
+    WPN_REGISTER_PIN  ( frequency, DEFAULT, INPUT, 1 )
+    WPN_REGISTER_PIN  ( output, DEFAULT, OUTPUT, 1 )
 
     public:
     Sinetest();
