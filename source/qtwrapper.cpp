@@ -12,13 +12,13 @@ stack_allocator<T, Sz>::stack_allocator() {}
 template<typename T, size_t Sz>
 T* stack_allocator<T, Sz>::begin()
 {
-    return &m_data;
+    return &m_data[0];
 }
 
 template<typename T, size_t Sz>
 T* stack_allocator<T, Sz>::end()
 {
-    return m_data[Sz-1];
+    return &m_data[Sz-1];
 }
 
 template<typename T, size_t Sz>
@@ -89,7 +89,7 @@ channel<T, Allocator>::channel(size_t sz, T fill)
 {
     m_data = m_allocator.allocate(sizeof(T)*sz);
     m_size = sz;
-    *static_cast<slice*>(this) <<= fill;
+    static_cast<slice>(*this) <<= fill;
 }
 
 template<typename T, typename Allocator>
@@ -97,7 +97,7 @@ channel<T, Allocator>::channel(T* begin, size_t sz, T fill)
 {
     m_data = begin;
     m_size = sz;
-    *static_cast<slice*>(this) <<= fill;
+    static_cast<slice>(*this) <<= fill;
 }
 
 template<typename T, typename Allocator>
@@ -420,7 +420,7 @@ bool channel<T, Allocator>::slice::iterator::operator!=(slice::iterator const& o
 // STREAM
 //=================================================================================================
 
-template<typename T, typename Allocator>
+template<typename T, typename Allocator     >
 stream<T, Allocator>::stream()
 {
     // default constructor, without pre-allocation
@@ -437,7 +437,7 @@ stream<T, Allocator>::stream(size_t nchannels, size_t nsamples, T fill) :
     // we build channels
     for ( size_t nch = 0; nch < nchannels; ++nch)
           m_channels.emplace_back(
-                     m_data[nch*nsamples],
+                     &m_data[nch*nsamples],
                      nsamples, 0);
 }
 
@@ -465,7 +465,7 @@ void stream<T, Allocator>::allocate(size_t nchannels, size_t nsamples)
 
     for ( size_t nch = 0; nch < nchannels; ++nch)
           m_channels.emplace_back(
-                     m_data[nch*nsamples],
+                     &m_data[nch*nsamples],
                      nsamples, 0);
 }
 
@@ -593,8 +593,8 @@ stream<T, Allocator>::slice::slice(
     m_nframes(nsamples*parent.m_nchannels)
 {
     // we build channel slices here
-    for ( auto& channel : parent.m_channels )
-          m_cslices.emplace_back(channel(begin, nsamples, pos));
+    for ( auto& ch : parent.m_channels )
+          m_cslices.emplace_back(ch(begin, nsamples, pos));
 }
 
 template<typename T, typename Allocator>
@@ -1283,7 +1283,7 @@ node::collect(polarity p)
     }
 
     for ( auto& pin : *target )
-          s.append(pin->get_stream());
+//          s.append(pin->get_stream());
 
     return s();
 }

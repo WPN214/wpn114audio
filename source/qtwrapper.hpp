@@ -69,15 +69,19 @@ class allocator
     public:
     virtual T* begin() = 0;
     virtual T* end() = 0;
-    virtual T* allocate(size_t) {}
+
+    virtual T* allocate(size_t) {
+        return nullptr;
+    }
     virtual void release() {}
+
+    virtual ~allocator() {}
 
     virtual T* operator[](size_t) {
         return nullptr;
     }
-
-    virtual ~allocator() {}
 };
+
 //=================================================================================================
 template<typename T, size_t Sz = 0>
 class stack_allocator : public allocator<T>
@@ -226,6 +230,12 @@ class channel
             T* m_data;
         };
     };
+};
+
+enum class order
+{
+    non_interleaved = 0,
+    interleaved = 1
 };
 
 // ========================================================================================
