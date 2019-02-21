@@ -36,11 +36,14 @@ using signal_t = qreal;
 #define INPUT  polarity::input
 #define OUTPUT polarity::output
 //=================================================================================================
-#define WPN_OBJECT                                                                                 \
+#define WPN_OBJECT(_n)                                                                             \
 Q_OBJECT                                                                                           \
 protected:                                                                                         \
 virtual void rwrite(node::pool& inputs, node::pool& outputs, size_t sz) override;                  \
-virtual void configure(graph_properties properties) override;
+virtual void configure(graph_properties properties) override;                                      \
+virtual std::string nreference() const override {                                                  \
+        return #_n;                                                                                \
+}
 //=================================================================================================
 #define WPN_REGISTER_PIN(_s, _d, _p, _n)                                                           \
 private: Q_PROPERTY(QVariant _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                     \
@@ -747,7 +750,7 @@ class Audiostream;
 class Output : public node
 //=================================================================================================
 {
-    WPN_OBJECT
+    WPN_OBJECT  ( Output )
 
     Q_PROPERTY  ( qreal rate READ rate WRITE setRate NOTIFY rateChanged )
     Q_PROPERTY  ( int nchannels READ nchannels WRITE setNchannels NOTIFY nchannelsChanged )
@@ -765,10 +768,6 @@ class Output : public node
     ~Output() override;
 
     virtual void componentComplete() override;
-
-    std::string nreference() const override {
-        return "Output";
-    }
 
     signal_t rate       () const { return m_rate; }
     quint16 nchannels   () const { return m_nchannels; }
@@ -855,16 +854,12 @@ int rwrite(void* out, void* in, unsigned int nframes,
 class Sinetest : public node
 //=================================================================================================
 {
-    WPN_OBJECT
+    WPN_OBJECT        ( Sinetest )
     WPN_REGISTER_PIN  ( frequency, DEFAULT, INPUT, 0 )
     WPN_REGISTER_PIN  ( output, DEFAULT, OUTPUT, 0 )
 
     public:
     Sinetest();
-
-    std::string nreference() const override {
-        return "Sinetest";
-    }
 
     private:
     mstream m_wavetable;
@@ -874,30 +869,22 @@ class Sinetest : public node
 class VCA : public node
 //=================================================================================================
 {
-    WPN_OBJECT
-    WPN_REGISTER_PIN ( gain, NONDEFAULT, INPUT, 1)
-    WPN_REGISTER_PIN ( input, DEFAULT, INPUT, 1 )
-    WPN_REGISTER_PIN ( output, DEFAULT, OUTPUT, 1)
+    WPN_OBJECT        ( VCA )
+    WPN_REGISTER_PIN  ( gain, NONDEFAULT, INPUT, 1)
+    WPN_REGISTER_PIN  ( input, DEFAULT, INPUT, 1 )
+    WPN_REGISTER_PIN  ( output, DEFAULT, OUTPUT, 1)
 
     public:
     VCA();
-
-    std::string nreference() const override {
-        return "VCA";
-    }
 };
 
 //=================================================================================================
 class Pinktest : public node
 //=================================================================================================
 {
-    WPN_OBJECT
+    WPN_OBJECT ( Pinktest )
     WPN_REGISTER_PIN ( output, DEFAULT, OUTPUT, 0 )
 
     public:
     Pinktest();
-
-    std::string nreference() const override {
-        return "Pinktest";
-    }
 };
