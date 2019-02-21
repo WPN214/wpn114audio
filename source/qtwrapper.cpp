@@ -63,6 +63,12 @@ void mallocator<T>::release()
 }
 
 template<typename T>
+mallocator<T>::~mallocator()
+{
+    release();
+}
+
+template<typename T>
 null_allocator<T>::null_allocator() {}
 
 template<typename T>
@@ -98,6 +104,12 @@ channel<T, Allocator>::channel(T* begin, size_t sz, T fill)
     m_data = begin;
     m_size = sz;
     static_cast<slice>(*this) <<= fill;
+}
+
+template<typename T, typename Allocator>
+channel<T, Allocator>::~channel()
+{
+    m_allocator.release();
 }
 
 template<typename T, typename Allocator>
@@ -1096,6 +1108,12 @@ node::connected(pin& other)
 }
 
 //-------------------------------------------------------------------------------------------------
+pin* node::iopin(QString ref)
+{
+    if ( pin* p = inpin(ref))
+         return p;
+    else return outpin(ref);
+}
 
 pin* node::inpin()
 {
@@ -1142,6 +1160,11 @@ void node::setParent(node* n)
     m_parent = n;
 }
 
+void node::setDispatch(Dispatch::Values d)
+{
+    m_dispatch = d;
+}
+
 node& node::chainout()
 {
     switch( m_dispatch )
@@ -1159,18 +1182,32 @@ node& node::chainout()
     }
 }
 
-void node::setTarget(QQmlProperty const& p)
+void node::setTarget(QQmlProperty const& property)
 {
     // when a node is bound to another node's signal property
-    auto _node = qobject_cast<node*>(p.object());
+    auto _node = qobject_cast<node*>(property.object());
     assert(_node);
 
-    auto _pin = _node->inpin(p.name());
-    if ( !_pin ) _pin = _node->outpin(p.name());
-
+    auto _pin = _node->iopin(property.name());
     assert(_pin);
-    graph::disconnect(*_pin);
-    graph::connect(*this, *_pin);
+
+    switch(_pin->get_polarity())
+    {
+    case polarity::input:
+    {
+        graph::connect(*this, *_pin);
+        break;
+    }
+    case polarity::output:
+    {
+        if (_pin->is_default())
+        {
+            _node->setDispatch(Dispatch::Downwards);
+            _node->append_subnode(this);
+        }
+        else graph::connect(*_pin, *this);
+    }
+    }
 }
 
 void node::componentComplete()
@@ -1263,7 +1300,7 @@ int node::nsubnodes(QQmlListProperty<node>* l)
 
 // ------------------------------------------------------------------------------------------------
 
-WPN_REVISE
+WPN_TODO
 typename sstream::slice
 node::collect(polarity p)
 {
@@ -1301,6 +1338,9 @@ void node::initialize(graph_properties properties)
 
 void node::process()
 {
+    qDebug() << QString::fromStdString(nreference())
+             << "NODE::PROCESS";
+
     size_t sz = m_intertwined     ?
                 m_properties.vsz  :
                 m_properties.fvsz ;
@@ -1324,10 +1364,14 @@ void node::process()
 
 void connection::pull(size_t sz)
 {
+    qDebug() << "PULLING CONNECTION BETWEEN"
+             << QString::fromStdString(m_source.get_parent().nreference())
+             << QString::fromStdString(m_dest.get_parent().nreference());
+
     if ( !m_active )
          return;
 
-    if ( m_feedback )
+    if ( !m_feedback )
          while ( m_source.m_parent.m_stream_pos < sz )
                  m_source.m_parent.process();
 
@@ -1375,7 +1419,6 @@ connection& connection::operator=(connection&& mv)
 
 }
 
-WPN_REVISE
 bool connection::operator==(connection const& other)
 {
     return ( &m_source == &other.m_source ) &&
@@ -1468,30 +1511,46 @@ std::vector<connection> graph::s_connections;
 std::vector<node*> graph::s_nodes;
 graph_properties graph::s_properties;
 
+void graph::register_node(node& n)
+{
+    // check if node is already registered
+    if ( std::find(s_nodes.begin(), s_nodes.end(), &n) == s_nodes.end())
+         s_nodes.push_back(&n);
+}
+
 connection& graph::connect(pin& source, pin& dest, connection::pattern pattern)
 {
-    // TODO: store and move node references into this
-    // nodes are owned by the graph
+    graph::register_node(source.m_parent);
+    graph::register_node(dest.m_parent);
+
+    qDebug() << "CONNECTING SOURCE:"
+             << QString::fromStdString(source.get_parent().nreference())
+             << "AND DEST:"
+             << QString::fromStdString(dest.get_parent().nreference());
+
+    // TODO, check for duplicates
+
     s_connections.emplace_back(source, dest, pattern);
-    return s_connections.back();
+    auto& con = s_connections.back();
+    source.add_connection(con);
+    dest.add_connection(con);
+
+    return con;
 }
 
 connection& graph::connect(node& source, node& dest, connection::pattern pattern)
 {
-    s_connections.emplace_back(*source.outpin(), *dest.inpin(), pattern);
-    return s_connections.back();
+    return graph::connect(*source.outpin(), *dest.inpin(), pattern);
 }
 
 connection& graph::connect(node& source, pin& dest, connection::pattern pattern)
 {
-    s_connections.emplace_back(*source.outpin(), dest, pattern);
-    return s_connections.back();
+    return graph::connect(*source.outpin(), dest, pattern);
 }
 
 connection& graph::connect(pin& source, node& dest, connection::pattern pattern)
 {
-    s_connections.emplace_back(source, *dest.inpin(), pattern);
-    return s_connections.back();
+    return graph::connect(source, *dest.inpin(), pattern);
 }
 
 void graph::disconnect(pin& target)
@@ -1525,6 +1584,9 @@ void graph::configure(signal_t rate, size_t vector_size, size_t feedback_size)
 
 void graph::initialize()
 {
+    qDebug() << "GRAPH_ALLOCATION"
+             << QString::number(s_nodes.size());
+
     for ( auto& node : s_nodes )
           node->initialize(s_properties);
 
@@ -1586,6 +1648,8 @@ void Output::start()
 void Output::componentComplete()
 {
     WPN_REFACTOR
+    node::componentComplete();
+
     RtAudio::Api api = RtAudio::UNSPECIFIED;
     if ( m_api == "JACK" )
          api = RtAudio::UNIX_JACK;
@@ -1599,7 +1663,7 @@ void Output::componentComplete()
     RtAudio audio(api);
     RtAudio::StreamParameters parameters;
     RtAudio::DeviceInfo info;
-    RtAudio::StreamOptions options;
+    RtAudio::StreamOptions options;    
 
     auto ndevices = audio.getDeviceCount();
 
@@ -1619,8 +1683,10 @@ void Output::componentComplete()
     }
     else parameters.deviceId = audio.getDefaultOutputDevice();
 
-    auto selected_info = audio.getDeviceInfo(parameters.deviceId);
+    auto selected_info = audio.getDeviceInfo(parameters.deviceId);      
 
+    qDebug() << "SELECTED API"
+             << QString::fromStdString(audio.getApiName(audio.getCurrentApi()));
     qDebug() << "SELECTED_AUDIO_DEVICE"
              << QString::fromStdString(selected_info.name);
 
@@ -1647,6 +1713,19 @@ void Output::componentComplete()
 
 void Output::configure(graph_properties properties) {}
 void Output::rwrite(node::pool& inputs, node::pool& outputs, size_t sz) {}
+
+Output::~Output()
+{
+    emit exitStream();
+    m_audiothread.quit();
+
+    if ( !m_audiothread.wait(3000))
+    {
+        m_audiothread.terminate();
+        m_audiothread.wait();
+        m_audiothread.deleteLater();
+    }
+}
 
 //=================================================================================================
 // AUDIOSTREAM

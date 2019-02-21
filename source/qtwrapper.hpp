@@ -118,7 +118,6 @@ class mallocator : public allocator<T>
     size_t m_size;
 };
 
-// "an allocator that does nothing.. but with style!"
 //=================================================================================================
 template<typename T>
 class null_allocator : public allocator<T>
@@ -143,6 +142,8 @@ class channel
     channel();
     channel(size_t size, T fill = 0);
     channel(T* begin, size_t size, T fill = 0);
+
+    ~channel();
 
     slice operator()(size_t begin = 0, size_t sz = 0, size_t pos = 0);    
     operator slice();
@@ -589,6 +590,8 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     //=============================================================================================
     virtual void rwrite     ( pool& inputs, pool& outputs, size_t sz) = 0;
     virtual void configure  ( graph_properties properties) = 0;
+
+    virtual std::string nreference() const = 0;
     //=============================================================================================
 
     graph_properties m_properties;
@@ -602,7 +605,7 @@ class node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     public:
     // --------------------------------------------------------------------------------------------
-    pin* iopin();
+    pin* iopin(QString);
     pin* inpin();
     pin* inpin(QString);
     pin* outpin();
@@ -729,11 +732,12 @@ class graph : public QObject
     static sstream::slice
     run(node& target);
 
-    private:
+    private:    
+    static void register_node(node&);
     static std::vector<connection> s_connections;
 
-    // TODO, emplace_back nodes
-    // graph has ownership over them
+    // should we emplace_back nodes?
+    // Qt has ownership over them, so...
     static std::vector<node*> s_nodes;
     static graph_properties s_properties;
 };
@@ -758,8 +762,13 @@ class Output : public node
 
     public:
     Output();
+    ~Output() override;
 
     virtual void componentComplete() override;
+
+    std::string nreference() const override {
+        return "Output";
+    }
 
     signal_t rate       () const { return m_rate; }
     quint16 nchannels   () const { return m_nchannels; }
@@ -853,6 +862,10 @@ class Sinetest : public node
     public:
     Sinetest();
 
+    std::string nreference() const override {
+        return "Sinetest";
+    }
+
     private:
     mstream m_wavetable;
 };
@@ -868,6 +881,10 @@ class VCA : public node
 
     public:
     VCA();
+
+    std::string nreference() const override {
+        return "VCA";
+    }
 };
 
 //=================================================================================================
@@ -879,4 +896,8 @@ class Pinktest : public node
 
     public:
     Pinktest();
+
+    std::string nreference() const override {
+        return "Pinktest";
+    }
 };
