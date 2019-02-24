@@ -32,9 +32,13 @@ linux {
 }
 
 HEADERS += $$PWD/external/rtaudio/RtAudio.h
+HEADERS += $$PWD/source/audio.hpp
+HEADERS += $$PWD/source/graph.hpp
 HEADERS += $$PWD/source/qtwrapper.hpp
 
 SOURCES += $$PWD/external/rtaudio/RtAudio.cpp
+SOURCES += $$PWD/source/audio.cpp
+SOURCES += $$PWD/source/graph.cpp
 SOURCES += $$PWD/tests/test1.cpp
 SOURCES += $$PWD/source/qtwrapper.cpp
 
@@ -43,5 +47,4 @@ HEADERS += $$PWD/qml_plugin.hpp
 
 DEFINES += WPN_DOUBLE_PRECISION
 
-DISTFILES += \
-    examples/Audio.qml
+DISTFILES += examples/Audio.qml
