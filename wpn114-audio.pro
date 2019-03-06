@@ -32,14 +32,15 @@ linux {
 }
 
 HEADERS += $$PWD/external/rtaudio/RtAudio.h
-HEADERS += $$PWD/source/audio.hpp
-HEADERS += $$PWD/source/graph.hpp
+HEADERS += $$PWD/source/stream.h
+HEADERS += $$PWD/source/graph.h
+HEADERS += $$PWD/source/utilities.h
 HEADERS += $$PWD/source/qtwrapper.hpp
 
 SOURCES += $$PWD/external/rtaudio/RtAudio.cpp
-SOURCES += $$PWD/source/audio.cpp
-SOURCES += $$PWD/source/graph.cpp
-SOURCES += $$PWD/tests/test1.cpp
+SOURCES += $$PWD/source/stream.c
+SOURCES += $$PWD/source/graph.c
+SOURCES += $$PWD/source/utilities.c
 SOURCES += $$PWD/source/qtwrapper.cpp
 
 SOURCES += $$PWD/qml_plugin.cpp
