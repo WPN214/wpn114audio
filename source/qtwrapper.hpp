@@ -34,11 +34,11 @@ Q_SIGNAL void _s##Changed();
 
 //-------------------------------------------------------------------------------------------------
 #ifdef WPN_EXTERN_DEF_DOUBLE_PRECISION
-    #define WPN_RT_PRECISION RTAUDIO_FLOAT64
+    #define WPN114_RT_PRECISION RTAUDIO_FLOAT64
 #elif defined(WPN_EXTERN_DEF_SINGLE_PRECISION)
-    #define WPN_RT_PRECISION RTAUDIO_FLOAT32
+    #define WPN114_RT_PRECISION RTAUDIO_FLOAT32
 #else
-    #define WPN_RT_PRECISION RTAUDIO_FLOAT32
+    #define WPN114_RT_PRECISION RTAUDIO_FLOAT32
 #endif
 
 //-------------------------------------------------------------------------------------------------
@@ -74,11 +74,14 @@ class Graph : public QObject
 
     public:
 
-    static wpn_graph& instance();
+    static wpn_graph&
+    instance();
 
-    static wpn_node* lookup(Node&);
+    static wpn_node*
+    lookup(Node&);
 
-    static wpn_node *registerNode(Node&);
+    static wpn_node*
+    registerNode(Node&);
 
     static wpn_connection&
     connect(Socket& source, Socket& dest);
@@ -95,11 +98,14 @@ class Graph : public QObject
     static void
     disconnect(Socket&);
 
-    static void initialize();
-    static void configure(sample_t rate, vector_t vec, vector_t fb);
+    static void
+    initialize();
+
+    static void
+    configure(sample_t rate, vector_t vec, vector_t fb);
 
     private:
-    static graph114 m_graph;
+    static wpn_graph m_graph;
 };
 
 //-------------------------------------------------------------------------------------------------

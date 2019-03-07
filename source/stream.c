@@ -214,7 +214,7 @@ channel_lookup(channel_accessor* receiver,
 wpn_error
 sstream_configure(void* channel, byte_t nchannels, frame_order order)
 {
-
+    WPN114_CALL_UNIMPLEMENTED;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -302,7 +302,7 @@ rframe
 stream_frame_at(stream_accessor* stream, size_t index)
 {
     assert(stream->order == INTERLEAVED);
-    // TODO
+    WPN114_CALL_UNIMPLEMENTED;
 }
 
 void
@@ -521,7 +521,7 @@ void
 stream_mvrp(stream_accessor* source, stream_accessor* dest)
 {
     wpn_generic_stream_binary_op
-            (source, dest, stream_mvrp);
+    (source, dest, stream_mvrp);
 }
 
 void
@@ -550,7 +550,7 @@ void
 stream_addeq(stream_accessor* lhs, stream_accessor* rhs)
 {
     wpn_generic_stream_binary_op
-        (lhs, rhs, stream_addeq);
+       (lhs, rhs, stream_addeq);
 }
 
 void
@@ -608,7 +608,7 @@ void
 stream_muleq(stream_accessor* lhs, stream_accessor* rhs)
 {
     wpn_generic_stream_binary_op
-            (lhs, rhs, stream_muleq);
+        (lhs, rhs, stream_muleq);
 }
 
 void
@@ -637,7 +637,7 @@ void
 stream_diveq(stream_accessor* lhs, stream_accessor* rhs)
 {
     wpn_generic_stream_binary_op
-            (lhs, rhs, stream_diveq);
+       (lhs, rhs, stream_diveq);
 }
 
 void
@@ -774,7 +774,7 @@ sample_t
 stream_min(stream_accessor* s)
 {
     wpn_generic_stream_unary_op
-            (s, stream_min);
+               (s, stream_min);
 }
 
 sample_t
@@ -803,7 +803,7 @@ sample_t
 stream_max(stream_accessor* s)
 {
     wpn_generic_stream_unary_op
-            (s, stream_max);
+               (s, stream_max);
 }
 
 sample_t
@@ -833,7 +833,7 @@ sample_t
 stream_rms(stream_accessor* s)
 {
     wpn_generic_stream_unary_op
-            (s, stream_rms);
+               (s, stream_rms);
 }
 
 sample_t

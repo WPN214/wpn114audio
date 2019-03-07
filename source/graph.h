@@ -10,53 +10,17 @@ extern "C" {
 #endif
 //-----------------------------------------------
 
-#define stmextr(_p, _cc) wpn_pool_extr(_p, _cc)
-
+// examples of stack-initialized custom data structures
 sframe(stereo_frame, 2u, frame_t);
-sframe(quadriphonic_frame, 4u, frame_t) ;
-sframe(hexaphonic_frame, 6u, frame_t);
-sframe(octophonic_frame, 8u, frame_t);
+schannel(schannel32, 32u, sample_t);
+sstream(sstream32, 32, sample_t);
 
 typedef struct stereo_frame stereo_frame;
-typedef struct quadriphonic_frame quadriphonic_frame;
-typedef struct hexaphonic_frame hexaphonic_frame;
-typedef struct octophonic_frame octophonic_frame;
-
-#ifdef WPN_EXTERN_DEF_DOUBLE_PRECISION
-int unittest_1()
-{
-    assert(sizeof(stereo_frame) == 16);
-    assert(sizeof(quadriphonic_frame) == 32);
-    assert(sizeof(hexaphonic_frame) == 48);
-    assert(sizeof(octophonic_frame) == 64);
-}
-#endif
-
-schannel(schannel32, 32u, smp_t);
-schannel(schannel64, 64u, smp_t);
-schannel(schannel128, 128u, smp_t);
-schannel(schannel256, 256u, smp_t);
-schannel(schannel512, 512u, smp_t);
-
 typedef struct schannel32 schannel32;
-typedef struct schannel64 schannel64;
-typedef struct schannel128 schannel128;
-typedef struct schannel256 schannel256;
-typedef struct schannel512 schannel512;
-
-sstream(sstream32, 32, smp_t);
-sstream(sstream64, 64, smp_t);
-sstream(sstream128, 128, smp_t);
-sstream(sstream256, 256, smp_t);
-sstream(sstream512, 512, smp_t);
-
 typedef struct sstream32 sstream32;
-typedef struct sstream64 sstream64;
-typedef struct sstream128 sstream128;
-typedef struct sstream256 sstream256;
-typedef struct sstream512 sstream512;
 
 //-------------------------------------------------------------------------------------------------
+
 typedef struct wpn_node wpn_node;
 typedef struct wpn_socket wpn_socket;
 typedef struct wpn_connection wpn_connection;
@@ -64,13 +28,7 @@ typedef struct wpn_graph wpn_graph;
 typedef struct wpn_graph_properties wpn_graph_properties;
 typedef struct wpn_stream wpn_stream;
 typedef struct wpn_pool wpn_pool;
-
-typedef wpn_node node114;
-typedef wpn_socket socket114;
-typedef wpn_connection connection114;
-typedef wpn_graph graph114;
-typedef wpn_stream stream114;
-typedef wpn_pool pool114;
+typedef struct wpn_routing wpn_routing;
 
 typedef uint16_t vector_t;
 
@@ -82,7 +40,6 @@ typedef void (*ucfg_fn) (wpn_graph_properties, void*);
 
 // signal processing function pointer
 typedef void (*uprc_fn) (wpn_pool*, wpn_pool*, void*, vector_t);
-
 
 // vectors ---------------------------------------
 vector_decl(nd_vec, wpn_node, vector_t)
@@ -202,13 +159,15 @@ struct wpn_stream
     stream_accessor stream;
 };
 
-stream_accessor* wpn_pool_extr(wpn_pool*, const char* stream);
-
 // POOL
 vector_decl(wpn_pool, wpn_stream, vector_t)
 
+#define strmextr(_p, _cc) wpn_pool_extr(_p, _cc)
+stream_accessor* wpn_pool_extr(wpn_pool*, const char* stream);
+
 //-------------------------------------------------------------------------------------------------
 struct wpn_node
+// created, initialized and owned by the graph struct
 //-------------------------------------------------------------------------------------------------
 {
     // user-defined data structure
@@ -228,12 +187,17 @@ struct wpn_node
 
 void wpn_node_process(wpn_node*);
 
+bool wpn_node_connected(wpn_node*);
+bool wpn_node_nconnected(wpn_node*, wpn_node*);
+bool wpn_node_sconnected(wpn_node*, wpn_socket*);
+
 wpn_socket* wpn_socket_lookup_default(wpn_node*, polarity_t);
 wpn_socket* wpn_socket_lookup(wpn_node*, const char*);
 wpn_socket* wpn_socket_lookup_p(wpn_node*, polarity_t, const char*);
 
 //-------------------------------------------------------------------------------------------------
 struct wpn_connection
+// created, initialized and owned by the graph struct
 //-------------------------------------------------------------------------------------------------
 {
     wpn_socket* source;
@@ -242,7 +206,8 @@ struct wpn_connection
     bool active;
     bool feedback;
     sample_t level;
-    hstream* stream;
+    hstream* stream;    
+    wpn_routing* routing;
 };
 
 void wpn_connection_pull(wpn_connection*, vector_t sz);

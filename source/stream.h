@@ -10,7 +10,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 //-------------------------------------------------------------------------------------------------
 
 // now, as we cannot go too generic in C
@@ -73,7 +72,7 @@ struct rframe
 {
     sample_t* begin;
     sample_t* end;
-    byte_t nchannels; // << nchannels
+    byte_t nchannels;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -84,9 +83,6 @@ typedef struct channel_accessor channel_accessor;
 // e.g. schannel(schannel512, 512u, smp_t);
 // will declare a struct named "schannel512" with a stack-array of 512 samples
 // note: this is the same macro used for sframe, hence just a matter of identification
-
-channel_accessor
-schannel_access(void* channel, size_t begin, size_t size, size_t pos);
 
 //-------------------------------------------------------------------------------------------------
 typedef struct hchannel hchannel;
@@ -104,9 +100,6 @@ hchannel_alloc(size_t nsamples);
 void
 hchannel_free(hchannel*);
 
-channel_accessor
-hchannel_access(hchannel* channel, size_t begin, size_t size) __nonnull();
-
 //-------------------------------------------------------------------------------------------------
 struct channel_accessor
 // accessors are used to delimit, iterate over and modify
@@ -116,6 +109,12 @@ struct channel_accessor
     sample_t* data;
     size_t nsamples;
 };
+
+channel_accessor
+schannel_access(void* channel, size_t begin, size_t size, size_t pos);
+
+channel_accessor
+hchannel_access(hchannel* channel, size_t begin, size_t size) __nonnull();
 
 // the following is valid for both schannel and hchannel:
 // modifiers

@@ -150,7 +150,7 @@ void Node::componentComplete()
         auto& front = *m_subnodes.front();
         Graph::connect(*this, front.chainout());
 
-        for ( size_t n = 0; n < m_subnodes.count()-1; ++n)
+        for ( int n = 0; n < m_subnodes.count()-1; ++n)
         {
             auto& source = m_subnodes[n]->chainout();
             auto& dest = m_subnodes[n+1]->chainout();
@@ -167,7 +167,7 @@ QVariant Node::sgrd(Socket& s)
     // it may be a reference to a specific Socket,
     // a constant value
     // or an array of either of them
-
+    return QVariant(0);
 }
 
 void Node::sgwr(Socket& s, QVariant v)
@@ -393,7 +393,7 @@ void Output::componentComplete()
 }
 
 void Output::configure(wpn_graph_properties) {}
-void Output::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz) {}
+void Output::rwrite(wpn_pool&, wpn_pool&, vector_t) {}
 
 Output::~Output()
 {
@@ -427,7 +427,7 @@ Audiostream::Audiostream(Output& out,
 
 void Audiostream::preconfigure()
 {
-    m_format = WPN_RT_PRECISION;
+    m_format = WPN114_RT_PRECISION;
     m_vector = m_outmodule.vector();
 
     try
