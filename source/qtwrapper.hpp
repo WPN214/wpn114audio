@@ -1,7 +1,6 @@
 #ifndef QTWRAPPER_HPP
 #define QTWRAPPER_HPP
 
-#include "graph.h"
 #include <QObject>
 #include <QQmlParserStatus>
 #include <QQmlPropertyValueSource>
@@ -10,13 +9,15 @@
 #include <QVariant>
 #include <QThread>
 #include <QVector>
+
 #include <external/rtaudio/RtAudio.h>
+#include <external/wpn-c/source/graph.h>
 
 //-------------------------------------------------------------------------------------------------
 #define WPN114_OBJECT(_n)                                                                          \
 Q_OBJECT                                                                                           \
 public:                                                                                            \
-virtual void rwrite(pool114& inputs, pool114& outputs, vector_t sz) override;                      \
+virtual void rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz) override;                    \
 virtual void configure(wpn_graph_properties properties) override;                                  \
 virtual QString nreference() const override { return #_n; }
 
@@ -135,7 +136,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     virtual void componentComplete() override;
 
     virtual void configure(wpn_graph_properties properties) = 0;
-    virtual void rwrite(pool114& inputs, pool114& outputs, vector_t sz) = 0;
+    virtual void rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz) = 0;
     virtual QString nreference() const = 0;
 
     void addSocket(polarity_t p, QString l, nchn_t n, bool df);    
@@ -176,7 +177,6 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     QVariant sgrd(Socket& s);
     void sgwr(Socket& s, QVariant v);
 
-    private:
     bool m_active   = true;
     bool m_muted    = false;
     Node* m_parent  = nullptr;
@@ -184,7 +184,6 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     Dispatch::Values m_dispatch;
     QVector<Node*> m_subnodes;
-
     wpn_node* cnode = nullptr;
 };
 
@@ -195,7 +194,7 @@ inline void node_cfg(wpn_graph_properties p, void* udata)
     static_cast<Node*>(udata)->configure(p);
 }
 
-inline void node_prc(pool114* i, pool114* o, void* u, vector_t sz)
+inline void node_prc(wpn_pool* i, wpn_pool* o, void* u, vector_t sz)
 {
     static_cast<Node*>(u)->rwrite(*i, *o, sz);
 }

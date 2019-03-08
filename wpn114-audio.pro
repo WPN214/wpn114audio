@@ -3,6 +3,8 @@ TEMPLATE = lib
 CONFIG += c++14 dll
 QT += quick
 
+QMAKE_CFLAGS += -std=c11
+
 localmod: DESTDIR = $$QML_MODULE_DESTDIR/WPN114/Audio
 else {
     DESTDIR = $$[QT_INSTALL_QML]/WPN114/Audio
@@ -32,20 +34,21 @@ linux {
 }
 
 HEADERS += $$PWD/external/rtaudio/RtAudio.h
-HEADERS += $$PWD/source/stream.h
-HEADERS += $$PWD/source/graph.h
-HEADERS += $$PWD/source/utilities.h
+HEADERS += $$PWD/external/wpn-c/source/stream.h
+HEADERS += $$PWD/external/wpn-c/source/graph.h
+HEADERS += $$PWD/external/wpn-c/source/utilities.h
 HEADERS += $$PWD/source/qtwrapper.hpp
 
 SOURCES += $$PWD/external/rtaudio/RtAudio.cpp
-SOURCES += $$PWD/source/stream.c
-SOURCES += $$PWD/source/graph.c
-SOURCES += $$PWD/source/utilities.c
+SOURCES += $$PWD/external/wpn-c/source/stream.c
+SOURCES += $$PWD/external/wpn-c/source/graph.c
+SOURCES += $$PWD/external/wpn-c/source/utilities.c
 SOURCES += $$PWD/source/qtwrapper.cpp
 
 SOURCES += $$PWD/qml_plugin.cpp
 HEADERS += $$PWD/qml_plugin.hpp
 
-DEFINES += WPN_DOUBLE_PRECISION
+DEFINES += WPN114_EXTERN_DEF_DOUBLE_PRECISION
+#DEFINES += WPN114_EXTERN_DEF_SINGLE_PRECISION
 
 DISTFILES += examples/Audio.qml

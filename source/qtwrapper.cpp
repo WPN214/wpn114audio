@@ -36,7 +36,7 @@ void Node::addSocket(polarity_t p, QString l, nchn_t c, bool d)
 
 wpn_node* Graph::lookup(Node& n)
 {
-    return wpn_graph_lookup(&m_graph, &n);
+    return wpn_node_lookup(&m_graph, &n);
 }
 
 wpn_node* Graph::registerNode(Node& n)
@@ -506,6 +506,20 @@ int rwrite(void* out, void* in, unsigned int nframes,
     strm.interleaved(static_cast<sample_t*>(out));
 
     return 0;
+}
+
+#define SAMPLE_RATE cnode->properties.rate
+
+void Sinetest::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
+{
+    auto frequency = strmextr(inputs, "frequency");
+    auto out = strmextr(outputs, "outputs");
+    auto wt = sstream_access(&m_wtable, 0, 0);
+
+    stream_divv     ( frequency, SAMPLE_RATE );
+    stream_mulv     ( frequency, s_nframes(wt) );
+
+    stream_lookup   ( out, &wt, frequency, true );
 }
 
 
