@@ -46,12 +46,12 @@ wpn_node* Graph::registerNode(Node& n)
 
 inline wpn_connection& Graph::connect(Node& source, Node& dest)
 {
-    return *wpn_graph_nconnect(&m_graph, source.cnode, dest.cnode);
+    return *wpn_nconnect(&m_graph, source.cnode, dest.cnode, 0);
 }
 
 inline wpn_connection& Graph::connect(Socket &source, Socket &dest)
 {
-    return *wpn_graph_sconnect(&m_graph, source.csocket, dest.csocket);
+    return *wpn_sconnect(&m_graph, source.csocket, dest.csocket);
 }
 
 inline wpn_connection& Graph::connect(Node &source, Socket &dest)
@@ -68,6 +68,58 @@ inline void Graph::disconnect(Socket& s)
 {
     wpn_graph_sdisconnect(&m_graph, s.csocket);
 }
+
+//-------------------------------------------------------------------------------------------------
+// QML-BRIDGE
+// CONNECTION
+//-------------------------------------------------------------------------------------------------
+
+Connection::Connection()
+{
+
+}
+
+void Connection::setTarget(const QQmlProperty& property)
+{
+
+}
+
+void Connection::componentComplete()
+{
+
+}
+
+void Connection::setRouting(QVariant routing)
+{
+    m_routing = routing;
+}
+
+void Connection::setSource(Socket *source)
+{
+    m_source = source;
+}
+
+void Connection::setDest(Socket *dest)
+{
+    m_dest = dest;
+}
+
+void Connection::setLevel(qreal level)
+{
+    m_cconnection->level = level;
+}
+
+void Connection::setMuted(bool muted)
+{
+    m_cconnection->muted = muted;
+}
+
+void Connection::setActive(bool active)
+{
+    m_cconnection->active = active;
+}
+
+
 
 //-------------------------------------------------------------------------------------------------
 // QML-BRIDGE

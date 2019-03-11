@@ -42,6 +42,7 @@ Q_SIGNAL void _s##Changed();
     #define WPN114_RT_PRECISION RTAUDIO_FLOAT32
 #endif
 
+
 //-------------------------------------------------------------------------------------------------
 class Node;
 //-------------------------------------------------------------------------------------------------
@@ -68,6 +69,58 @@ class Dispatch : public QObject
 };
 
 //-------------------------------------------------------------------------------------------------
+class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
+// convenience class handling qml materialization of an audio connection between two sockets
+//-------------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+    Q_PROPERTY  ( Socket* source READ source WRITE setSource NOTIFY sourceChanged )
+    Q_PROPERTY  ( Socket* dest READ dest WRITE setDest NOTIFY destChanged )
+    Q_PROPERTY  ( qreal level READ level WRITE setLevel )
+    Q_PROPERTY  ( bool active READ active WRITE setActive NOTIFY activeChanged )
+    Q_PROPERTY  ( bool muted READ muted WRITE setMuted NOTIFY mutedChanged )
+    Q_PROPERTY  ( QVariant routing READ routing WRITE setRouting NOTIFY routingChanged )
+
+    Q_INTERFACES  ( QQmlParserStatus QQmlPropertyValueSource )
+
+    public:
+    Connection();
+
+    virtual void setTarget(QQmlProperty const&) final override;
+    virtual void classBegin() final override {}
+    virtual void componentComplete() override;
+
+    QVariant routing() const { return m_routing; }
+    Socket* source() const { return m_source; }
+    Socket* dest() const { return m_dest; }
+    qreal level() const { return m_cconnection->level; }
+    bool active() const { return m_cconnection->active; }
+    bool muted() const { return m_cconnection->muted; }
+
+    void setRouting(QVariant routing);
+    void setSource(Socket* source);
+    void setDest(Socket* dest);
+    void setLevel(qreal level);
+    void setActive(bool active);
+    void setMuted(bool muted);
+
+    signals:
+    void routingChanged();
+    void sourceChanged();
+    void destChanged();
+    void activeChanged();
+    void mutedChanged();
+
+    private:
+    Socket* m_source    = nullptr;
+    Socket* m_dest      = nullptr;
+    QVariant m_routing;
+    wpn_connection* m_cconnection;
+
+};
+
+//-------------------------------------------------------------------------------------------------
 class Graph : public QObject
 //-------------------------------------------------------------------------------------------------
 {
@@ -84,17 +137,20 @@ class Graph : public QObject
     static wpn_node*
     registerNode(Node&);
 
-    static wpn_connection&
-    connect(Socket& source, Socket& dest);
+    // note: routing would be specified using the Node 'connection' method
+    // or by creating an explicit Connection object
 
     static wpn_connection&
-    connect(Node& source, Node& dest);
+    connect(Socket& source, Socket& dest, wpn_routing routing);
 
     static wpn_connection&
-    connect(Node& source, Socket& dest);
+    connect(Node& source, Node& dest, wpn_routing routing);
 
     static wpn_connection&
-    connect(Socket& source, Node& dest);
+    connect(Node& source, Socket& dest, wpn_routing routing);
+
+    static wpn_connection&
+    connect(Socket& source, Node& dest, wpn_routing routing);
 
     static void
     disconnect(Socket&);
