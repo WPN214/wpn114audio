@@ -81,16 +81,28 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     Q_PROPERTY  ( bool active READ active WRITE setActive NOTIFY activeChanged )
     Q_PROPERTY  ( bool muted READ muted WRITE setMuted NOTIFY mutedChanged )
     Q_PROPERTY  ( QVariant routing READ routing WRITE setRouting NOTIFY routingChanged )
+    Q_PROPERTY  ( Pattern pattern READ pattern WRITE setPattern NOTIFY patternChanged )
 
     Q_INTERFACES  ( QQmlParserStatus QQmlPropertyValueSource )
 
     public:
     Connection();
 
+    enum Pattern
+    {
+        Normal   = 0,
+        Crossed  = 1
+    };
+
+    Q_ENUM(Pattern)
+
+    Q_INVOKABLE qreal db(qreal v);
+
     virtual void setTarget(QQmlProperty const&) final override;
     virtual void classBegin() final override {}
     virtual void componentComplete() override;
 
+    Pattern pattern() const { return m_pattern; }
     QVariant routing() const { return m_routing; }
     Socket* source() const { return m_source; }
     Socket* dest() const { return m_dest; }
@@ -98,6 +110,7 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     bool active() const { return m_cconnection->active; }
     bool muted() const { return m_cconnection->muted; }
 
+    void setPattern(Pattern pattern);
     void setRouting(QVariant routing);
     void setSource(Socket* source);
     void setDest(Socket* dest);
@@ -106,6 +119,7 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     void setMuted(bool muted);
 
     signals:
+    void patternChanged();
     void routingChanged();
     void sourceChanged();
     void destChanged();
@@ -116,6 +130,7 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     Socket* m_source    = nullptr;
     Socket* m_dest      = nullptr;
     QVariant m_routing;
+    Pattern m_pattern;
     wpn_connection* m_cconnection;
 
 };
@@ -127,7 +142,6 @@ class Graph : public QObject
     Q_OBJECT
 
     public:
-
     static wpn_graph&
     instance();
 
@@ -141,19 +155,19 @@ class Graph : public QObject
     // or by creating an explicit Connection object
 
     static wpn_connection&
-    connect(Socket& source, Socket& dest, wpn_routing routing);
+    connect(Socket& source, Socket& dest, wpn_routing routing = {});
 
     static wpn_connection&
-    connect(Node& source, Node& dest, wpn_routing routing);
+    connect(Node& source, Node& dest, wpn_routing routing = {});
 
     static wpn_connection&
-    connect(Node& source, Socket& dest, wpn_routing routing);
+    connect(Node& source, Socket& dest, wpn_routing routing = {});
 
     static wpn_connection&
-    connect(Socket& source, Node& dest, wpn_routing routing);
+    connect(Socket& source, Node& dest, wpn_routing routing = {});
 
     static void
-    disconnect(Socket&);
+    disconnect(Socket&, wpn_routing routing = {});
 
     static void
     initialize();
@@ -222,7 +236,6 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     static Node* subnode        ( QQmlListProperty<Node>*, int);
     static void clear_subnodes  ( QQmlListProperty<Node>*);
 
-    Q_INVOKABLE QVariant connection(QVariant var, qreal lvl, QVariant map);
     Q_INVOKABLE qreal db(qreal v);
     Node& chainout();
 

@@ -44,29 +44,33 @@ wpn_node* Graph::registerNode(Node& n)
     return wpn_graph_register(&m_graph, &n, nullptr, node_cfg, node_prc);
 }
 
-inline wpn_connection& Graph::connect(Node& source, Node& dest)
+inline wpn_connection&
+Graph::connect(Node& source, Node& dest, wpn_routing routing)
 {
-    return *wpn_nconnect(&m_graph, source.cnode, dest.cnode, 0);
+    return *wpn_graph_nconnect(&m_graph, source.cnode, dest.cnode, routing);
 }
 
-inline wpn_connection& Graph::connect(Socket &source, Socket &dest)
+inline wpn_connection&
+Graph::connect(Socket& source, Socket& dest, wpn_routing routing)
 {
-    return *wpn_sconnect(&m_graph, source.csocket, dest.csocket);
+    return *wpn_graph_sconnect(&m_graph, source.csocket, dest.csocket, routing);
 }
 
-inline wpn_connection& Graph::connect(Node &source, Socket &dest)
+inline wpn_connection&
+Graph::connect(Node& source, Socket& dest, wpn_routing routing)
 {
-    return *wpn_graph_nsconnect(&m_graph, source.cnode, dest.csocket);
+    return *wpn_graph_nsconnect(&m_graph, source.cnode, dest.csocket, routing);
 }
 
-inline wpn_connection& Graph::connect(Socket &source, Node &dest)
+inline wpn_connection&
+Graph::connect(Socket &source, Node &dest, wpn_routing routing)
 {
-    return *wpn_graph_snconnect(&m_graph, source.csocket, dest.cnode);
+    return *wpn_graph_snconnect(&m_graph, source.csocket, dest.cnode, routing);
 }
 
-inline void Graph::disconnect(Socket& s)
+inline void Graph::disconnect(Socket& s, wpn_routing routing)
 {
-    wpn_graph_sdisconnect(&m_graph, s.csocket);
+    wpn_graph_sdisconnect(&m_graph, s.csocket, routing);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -79,6 +83,11 @@ Connection::Connection()
 
 }
 
+qreal Connection::db(qreal v)
+{
+    return dbtoa(v);
+}
+
 void Connection::setTarget(const QQmlProperty& property)
 {
 
@@ -87,6 +96,11 @@ void Connection::setTarget(const QQmlProperty& property)
 void Connection::componentComplete()
 {
 
+}
+
+void Connection::setPattern(Pattern pattern)
+{
+    m_pattern = pattern;
 }
 
 void Connection::setRouting(QVariant routing)
@@ -118,8 +132,6 @@ void Connection::setActive(bool active)
 {
     m_cconnection->active = active;
 }
-
-
 
 //-------------------------------------------------------------------------------------------------
 // QML-BRIDGE
@@ -153,7 +165,8 @@ void Node::setTarget(QQmlProperty const& target)
     assert(node);
 
     auto socket = wpn_socket_lookup(
-                    node->cnode, CSTR(target.name()));
+                  node->cnode, CSTR(target.name()));
+
     assert(socket);
 
     auto& graph = Graph::instance();
@@ -162,7 +175,7 @@ void Node::setTarget(QQmlProperty const& target)
     {
     case INPUT:
     {
-        wpn_graph_nsconnect(&graph, cnode, socket);
+        wpn_graph_nsconnect(&graph, cnode, socket, {});
         break;
     }
     case OUTPUT:
@@ -172,7 +185,7 @@ void Node::setTarget(QQmlProperty const& target)
             node->setDispatch(Dispatch::Downwards);
             node->append_subnode(this);
         }
-        else wpn_graph_snconnect(&graph, socket, cnode);
+        else wpn_graph_snconnect(&graph, socket, cnode, {});
     }
     }
 }
@@ -193,14 +206,14 @@ void Node::componentComplete()
     {
         // all subnodes connect to this Node
         for ( auto& subnode : m_subnodes )
-              Graph::connect(subnode->chainout(), *this);
+            Graph::connect(subnode->chainout(), *this);
         break;
     }
     case Dispatch::Values::Downwards:
     {
         // chain the signal down the line
         auto& front = *m_subnodes.front();
-        Graph::connect(*this, front.chainout());
+        Graph::connect(*this, front.chainout(), {});
 
         for ( int n = 0; n < m_subnodes.count()-1; ++n)
         {
@@ -263,13 +276,6 @@ void Node::setParent(Node* parent)
 void Node::setDispatch(Dispatch::Values v)
 {
     m_dispatch = v;
-}
-
-QVariant Node::connection(QVariant svar, qreal lvl, QVariant map)
-{
-    // establish an explicit connection
-    // with level and map parameters
-    return QVariant(0);
 }
 
 qreal Node::db(qreal v)
