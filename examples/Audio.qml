@@ -25,7 +25,7 @@ Item
             frequency: 440.0
             WPN114.VCA on output { id: vca; gain: db(-6) }
 
-            WPN114.Connection on output {
+            WPN114.Connection on vca.output {
                 dest: some_effect
                 level: db(-6)
                 routing: [[0, 1], [1, 0]]

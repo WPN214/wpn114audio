@@ -568,18 +568,77 @@ int rwrite(void* out, void* in, unsigned int nframes,
 
 #define SAMPLE_RATE cnode->properties.rate
 
-void Sinetest::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
+void Sinetest::configure(wpn_graph_properties properties) {}
+void VCA::configure(wpn_graph_properties properties) {}
+
+Sinetest::Sinetest()
 {
-    auto frequency = strmextr(inputs, "frequency");
-    auto out = strmextr(outputs, "outputs");
-    auto wt = sstream_access(&m_wtable, 0, 0);
 
-    stream_divv     ( frequency, SAMPLE_RATE );
-    stream_mulv     ( frequency, s_nframes(wt) );
-
-    stream_lookup   ( out, &wt, frequency, true );
 }
 
+#define foreach_channel(_ch, _lim) for ( nchn_t _ch = 0; _ch < _lim; ++_ch)
+#define foreach_sample(_s, _lim) for ( size_t _s = 0; _s < _lim; ++_s)
+#define sample(_cacc, _s) _cacc.data [_s]
+
+typedef channel_accessor c_acc;
+
+void Sinetest::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
+{
+    auto frequency  = strmextr(inputs, "frequency");
+    auto out        = strmextr(outputs, "outputs");
+    auto wt         = sstream_access(&m_wtable, 0, 0);
+    size_t pos      = m_pos;
+
+    foreach_sample(s, sz)
+    {
+        pos += frequency->data[s]/SAMPLE_RATE*16384;
+        out->data[s] = wt.data[pos];
+        wpnwrap(pos, 16384);
+    }
+
+    m_pos = pos;
+}
+
+VCA::VCA() {}
+
+void VCA::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
+{
+    auto input  = strmextr(inputs, "inputs");
+    auto gain   = strmextr(inputs, "gain");
+    auto out    = strmextr(outputs, "outputs");
+
+    foreach_sample(s, sz)
+        out->data[s] = input->data[s] * gain->data[s];
+}
+
+Delay::Delay()
+{
+
+}
+
+void Delay::configure(wpn_graph_properties properties)
+{
+    m_dline = hstream_alloc(1, NON_INTERLEAVED, properties.rate * 5);
+}
+
+void Delay::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t nframes)
+{
+    auto input  = strmextr(inputs, "inputs");
+    auto delay  = strmextr(inputs, "delay");
+    auto mix    = strmextr(inputs, "mix");
+    auto out    = strmextr(outputs, "outputs");
+
+    auto dline_r = hstream_access(m_dline, m_rpos, nframes);
+    auto dline_w = hstream_access(m_dline, m_wpos, nframes);
+
+
+
+
+
+
+
+
+}
 
 
 

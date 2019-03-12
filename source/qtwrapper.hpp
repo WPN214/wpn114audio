@@ -9,6 +9,7 @@
 #include <QVariant>
 #include <QThread>
 #include <QVector>
+#include <QVector3D>
 
 #include <external/rtaudio/RtAudio.h>
 #include <external/wpn-c/source/graph.h>
@@ -254,6 +255,9 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Dispatch::Values m_dispatch;
     QVector<Node*> m_subnodes;
     wpn_node* cnode = nullptr;
+    QVector3D m_position;
+    qreal m_height;
+    qreal m_width;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -382,14 +386,52 @@ class Sinetest : public Node
 {
     WPN114_OBJECT  ( Sinetest )
 
-    WPN114_REGISTER_PIN ( inputs, DEFAULT, INPUT, 0)
-    WPN114_REGISTER_PIN ( outputs, DEFAULT, OUTPUT, 0)
+    WPN114_REGISTER_PIN ( inputs, DEFAULT, INPUT, 1)
+    WPN114_REGISTER_PIN ( frequency, NONDEFAULT, INPUT, 1)
+    WPN114_REGISTER_PIN ( outputs, DEFAULT, OUTPUT, 1)
 
     public:
     Sinetest();
 
     private:
     sstream16384 m_wtable;
+    size_t m_pos;
+
+};
+
+//-------------------------------------------------------------------------------------------------
+class VCA : public Node
+//-------------------------------------------------------------------------------------------------
+{
+    WPN114_OBJECT ( VCA )
+
+    WPN114_REGISTER_PIN ( inputs, DEFAULT, INPUT, 1)
+    WPN114_REGISTER_PIN ( gain, NONDEFAULT, INPUT, 1 )
+    WPN114_REGISTER_PIN ( outputs, DEFAULT, OUTPUT, 1)
+
+    public:
+    VCA();
+};
+
+//-------------------------------------------------------------------------------------------------
+class Delay : public Node
+//-------------------------------------------------------------------------------------------------
+{
+    WPN114_OBJECT ( Delay )
+
+    WPN114_REGISTER_PIN ( inputs, DEFAULT, INPUT, 1 )
+    WPN114_REGISTER_PIN ( delay, NONDEFAULT, INPUT, 1 )
+    WPN114_REGISTER_PIN ( mix, NONDEFAULT, INPUT, 1 )
+    WPN114_REGISTER_PIN ( outputs, DEFAULT, OUTPUT, 1)
+
+    public:
+    Delay();
+
+    private:
+    hstream* m_dline;
+    size_t m_rpos = 0;
+    size_t m_wpos = 0;
+
 
 };
 
