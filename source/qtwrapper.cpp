@@ -34,6 +34,25 @@ void Node::addSocket(polarity_t p, QString l, nchn_t c, bool d)
 // GRAPH
 //-------------------------------------------------------------------------------------------------
 
+wpn_graph Graph::m_graph;
+
+Graph::Graph() {}
+
+void Graph::setRate(sample_t rate)
+{
+    m_graph.properties.rate = rate;
+}
+
+void Graph::setVector(quint16 vector)
+{
+    m_graph.properties.vecsz = vector;
+}
+
+void Graph::setFeedback(quint16 feedback)
+{
+    m_graph.properties.vecsz_fb = feedback;
+}
+
 wpn_node* Graph::lookup(Node& n)
 {
     return wpn_node_lookup(&m_graph, &n);
@@ -71,6 +90,12 @@ Graph::connect(Socket &source, Node &dest, wpn_routing routing)
 inline void Graph::disconnect(Socket& s, wpn_routing routing)
 {
     wpn_graph_sdisconnect(&m_graph, s.csocket, routing);
+}
+
+inline wpn_pool*
+Graph::run(Node& node)
+{
+    return wpn_graph_run(&m_graph, node.cnode);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -348,25 +373,10 @@ Output::Output()
 
 }
 
-void Output::setRate(sample_t rate)
-{
-    m_rate = rate;
-}
-
 void Output::setNchannels(quint16 nchannels)
 {
     m_nchannels = nchannels;
     // TODO
-}
-
-void Output::setVector(quint16 vector)
-{
-    m_vector = vector;
-}
-
-void Output::setFeedback(quint16 feedback)
-{
-    m_feedback = feedback;
 }
 
 void Output::setApi(QString api)
@@ -381,7 +391,6 @@ void Output::setDevice(QString device)
 
 void Output::start()
 {
-    Graph::initialize();
     emit startStream();
 }
 
@@ -431,7 +440,7 @@ void Output::componentComplete()
 
     parameters.nChannels    = m_nchannels;
     options.streamName      = "WPN114";
-    options.flags           = RTAUDIO_SCHEDULE_REALTIME;
+    options.flags           = RTAUDIO_SCHEDULE_REALTIME | RTAUDIO_NONINTERLEAVED;
     options.priority        = 40;
 
     m_stream = std::make_unique<Audiostream>
@@ -446,7 +455,6 @@ void Output::componentComplete()
     QObject::connect(this, &Output::exitStream, &*m_stream, &Audiostream::exit);
 
     emit configureStream();
-    Graph::configure(m_rate, m_vector, m_feedback);
     m_audiothread.start(QThread::TimeCriticalPriority);
 }
 
@@ -486,7 +494,7 @@ Audiostream::Audiostream(Output& out,
 void Audiostream::preconfigure()
 {
     m_format = WPN114_RT_PRECISION;
-    m_vector = m_outmodule.vector();
+    m_vector = Graph::vector();
 
     try
     {
@@ -494,7 +502,7 @@ void Audiostream::preconfigure()
             &m_parameters,                      // parameters
             nullptr,                            // dunno
             m_format,                           // format
-            m_outmodule.rate(),                 // sample-rate
+            Graph::rate(),                      // sample-rate
             &m_vector,                          // vector-size
             &rwrite,                            // audio callback
             static_cast<void*>(&m_outmodule),   // user-data
@@ -558,10 +566,22 @@ int rwrite(void* out, void* in, unsigned int nframes,
            void* udata)
 {
     Output& outmod = *static_cast<Output*>(udata);
+    sample_t* output = static_cast<sample_t*>(out);
+
     //outmod.audiostream().buffer_processed(time);
 
-    auto strm = Graph::run(outmod);
-    strm.interleaved(static_cast<sample_t*>(out));
+    auto pool = Graph::run(outmod);
+
+    for ( size_t ch = 0; ch < pool->nelem; ++ch)
+    {
+        wpn_stream* stream = static_cast<wpn_stream*>(vector_at(pool, ch));
+        auto acc = stream->stream;
+
+        assert(acc.nsamples <= nframes);
+
+        for ( size_t n = 0; n < acc.nsamples; ++n )
+              output[n] += acc.data[n];
+    }
 
     return 0;
 }
@@ -584,8 +604,8 @@ typedef channel_accessor c_acc;
 
 void Sinetest::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
 {
-    auto frequency  = strmextr(inputs, "frequency");
-    auto out        = strmextr(outputs, "outputs");
+    auto frequency  = strmextr(&inputs, "frequency");
+    auto out        = strmextr(&outputs, "outputs");
     auto wt         = sstream_access(&m_wtable, 0, 0);
     size_t pos      = m_pos;
 
@@ -603,35 +623,10 @@ VCA::VCA() {}
 
 void VCA::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
 {
-    auto input  = strmextr(inputs, "inputs");
-    auto gain   = strmextr(inputs, "gain");
-    auto out    = strmextr(outputs, "outputs");
+    auto input  = strmextr(&inputs, "inputs");
+    auto gain   = strmextr(&inputs, "gain");
+    auto out    = strmextr(&outputs, "outputs");
 
     foreach_sample(s, sz)
         out->data[s] = input->data[s] * gain->data[s];
 }
-
-Delay::Delay()
-{
-
-}
-
-void Delay::configure(wpn_graph_properties properties)
-{
-    m_dline = hstream_alloc(1, NON_INTERLEAVED, properties.rate * 5);
-}
-
-void Delay::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t nframes)
-{
-    auto input  = strmextr(inputs, "inputs");
-    auto delay  = strmextr(inputs, "delay");
-    auto mix    = strmextr(inputs, "mix");
-    auto out    = strmextr(outputs, "outputs");
-
-    auto dline_r = hstream_access(m_dline, m_rpos, nframes);
-    auto dline_w = hstream_access(m_dline, m_wpos, nframes);
-
-}
-
-
-

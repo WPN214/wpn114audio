@@ -5,21 +5,16 @@ QT += quick
 
 QMAKE_CFLAGS += -std=c11
 
-localmod: DESTDIR = $$QML_MODULE_DESTDIR/WPN114/Audio
-else {
-    DESTDIR = $$[QT_INSTALL_QML]/WPN114/Audio
-    QML_MODULE_DESTDIR = $$[QT_INSTALL_QML]
-}
-
-QMLDIR_FILES += $$PWD/qml/qmldir
-QMLDIR_FILES += $$PWD/qml/audio.qmltypes
-OTHER_FILES = $$QMLDIR_FILES
+OTHER_FILES += $$PWD/qml/qmldir
+OTHER_FILES += $$PWD/qml/audio.qmltypes
 
 macx: QMAKE_LFLAGS_SONAME = -Wl,-install_name,@rpath/
 
-for(FILE,QMLDIR_FILES) {
-    QMAKE_POST_LINK += $$quote(cp $${FILE} $${DESTDIR}$$escape_expand(\n\t))
-}
+target.path = $$[QT_INSTALL_QML]/WPN114/Audio
+dist.path = $$[QT_INSTALL_QML]/WPN114/Audio
+dist.files = $$PWD/qml/*
+
+INSTALLS += target dist
 
 macx {
     LIBS += -framework CoreFoundation
