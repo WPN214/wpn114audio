@@ -631,13 +631,6 @@ void Delay::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t nframes)
     auto dline_r = hstream_access(m_dline, m_rpos, nframes);
     auto dline_w = hstream_access(m_dline, m_wpos, nframes);
 
-
-
-
-
-
-
-
 }
 
 
