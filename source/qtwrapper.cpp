@@ -1,15 +1,18 @@
 #include "qtwrapper.hpp"
 #include <QtDebug>
 
+#define CSTR(_t) _t.toLocal8Bit().data()
 //-------------------------------------------------------------------------------------------------
 // C-BRIDGE
 // SOCKET
 //-------------------------------------------------------------------------------------------------
 
-Socket::Socket(Node& n, polarity_t p, QString l, nchn_t c, bool d) :
-    parent(n), label(l.toStdString().c_str())
+Socket::Socket(Node& n, polarity_t p, std::string l, nchn_t c, bool d) :
+    parent(n), label(l), polarity(p), nchannels(c), default_(d)
 {
-    n.addSocket(p,l,c,d);
+    // TODO, optimize, do not store these chunks of data here,
+    // they become obsolete after parent node is registered to the graph
+    n.addSocket(*this);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -19,14 +22,15 @@ Socket::Socket(Node& n, polarity_t p, QString l, nchn_t c, bool d) :
 
 Node::Node()
 {
-    // register to the graph
-    cnode = Graph::registerNode(*this);
 }
 
-void Node::addSocket(polarity_t p, QString l, nchn_t c, bool d)
+void Node::classBegin()
 {
-    auto node = Graph::lookup(*this);
-    wpn_socket_declare(node, p, l.toStdString().c_str(), c, d);
+}
+
+void Node::addSocket(Socket& s)
+{
+    m_sockets.push_back(&s);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -36,7 +40,16 @@ void Node::addSocket(polarity_t p, QString l, nchn_t c, bool d)
 
 wpn_graph Graph::m_graph;
 
-Graph::Graph() {}
+
+wpn_graph& Graph::instance()
+{
+    return m_graph;
+}
+
+Graph::Graph()
+{
+    m_graph = wpn_graph_create(44100, 512, 64);
+}
 
 void Graph::setRate(sample_t rate)
 {
@@ -92,11 +105,61 @@ inline void Graph::disconnect(Socket& s, wpn_routing routing)
     wpn_graph_sdisconnect(&m_graph, s.csocket, routing);
 }
 
-inline wpn_pool*
-Graph::run(Node& node)
+inline wpn_pool* Graph::run(Node& node)
 {
     return wpn_graph_run(&m_graph, node.cnode);
 }
+
+QQmlListProperty<Node> Graph::subnodes()
+{
+    return QQmlListProperty<Node>(
+        this, this,
+        &Graph::append_subnode,
+        &Graph::nsubnodes,
+        &Graph::subnode,
+        &Graph::clear_subnodes);
+}
+
+Node* Graph::subnode(int index) const
+{
+    return m_subnodes[index];
+}
+
+void Graph::append_subnode(Node* n)
+{
+    m_subnodes.push_back(n);
+}
+
+int Graph::nsubnodes() const
+{
+    return m_subnodes.count();
+}
+
+void Graph::clear_subnodes()
+{
+    m_subnodes.clear();
+}
+
+void Graph::append_subnode(QQmlListProperty<Node>* l, Node* n)
+{
+    reinterpret_cast<Graph*>(l->data)->append_subnode(n);
+}
+
+void Graph::clear_subnodes(QQmlListProperty<Node>* l)
+{
+    reinterpret_cast<Graph*>(l->data)->clear_subnodes();
+}
+
+Node* Graph::subnode(QQmlListProperty<Node>* l, int index)
+{
+    return reinterpret_cast<Graph*>(l->data)->subnode(index);
+}
+
+int Graph::nsubnodes(QQmlListProperty<Node>* l)
+{
+    return reinterpret_cast<Graph*>(l->data)->nsubnodes();
+}
+
 
 //-------------------------------------------------------------------------------------------------
 // QML-BRIDGE
@@ -181,8 +244,6 @@ Node& Node::chainout()
     }
 }
 
-#define CSTR(_t) _t.toStdString().c_str()
-
 void Node::setTarget(QQmlProperty const& target)
 {
     // assigning
@@ -191,7 +252,6 @@ void Node::setTarget(QQmlProperty const& target)
 
     auto socket = wpn_socket_lookup(
                   node->cnode, CSTR(target.name()));
-
     assert(socket);
 
     auto& graph = Graph::instance();
@@ -217,6 +277,16 @@ void Node::setTarget(QQmlProperty const& target)
 
 void Node::componentComplete()
 {
+    // register node, then sockets
+    cnode = Graph::registerNode(*this);
+    cnode->label = nreference().c_str();
+
+    for ( const auto& socket : m_sockets )
+    {
+        wpn_socket_declare(cnode, socket->polarity, socket->label.c_str(), socket->nchannels, socket->default_);
+        socket->csocket = wpn_socket_lookup_p(cnode, socket->polarity, socket->label.c_str());
+    }
+
     if ( m_subnodes.empty())
          return;
 
@@ -370,7 +440,7 @@ int Node::nsubnodes(QQmlListProperty<Node>* l)
 
 Output::Output()
 {
-
+    m_nreference = "Output";
 }
 
 void Output::setNchannels(quint16 nchannels)
@@ -593,7 +663,7 @@ void VCA::configure(wpn_graph_properties properties) {}
 
 Sinetest::Sinetest()
 {
-
+    m_nreference = "Sinetest";
 }
 
 #define foreach_channel(_ch, _lim) for ( nchn_t _ch = 0; _ch < _lim; ++_ch)
@@ -619,7 +689,10 @@ void Sinetest::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
     m_pos = pos;
 }
 
-VCA::VCA() {}
+VCA::VCA()
+{
+    m_nreference = "VCA";
+}
 
 void VCA::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
 {

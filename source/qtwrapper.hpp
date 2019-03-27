@@ -14,15 +14,12 @@
 #include <external/rtaudio/RtAudio.h>
 #include <external/wpn-c/source/graph.h>
 
-//-------------------------------------------------------------------------------------------------
-#define WPN114_OBJECT(_n)                                                                          \
-Q_OBJECT                                                                                           \
-public:                                                                                            \
-virtual void rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz) override;                    \
-virtual void configure(wpn_graph_properties properties) override;                                  \
-virtual QString nreference() const override { return #_n; }
+#define WPN114_OBJECT(_n)                                                                           \
+Q_OBJECT                                                                                            \
+public:                                                                                             \
+virtual void rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz) override;                     \
+virtual void configure(wpn_graph_properties properties) override;                                   \
 
-//-------------------------------------------------------------------------------------------------
 #define WPN114_REGISTER_PIN(_s, _d, _p, _n)                                                        \
 private: Q_PROPERTY(QVariant _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                     \
 protected: Socket m_##_s { *this, _p, #_s, _n, _d };                                               \
@@ -34,7 +31,6 @@ Q_SIGNAL void _s##Changed();
 #define DEFAULT true
 #define NONDEFAULT false
 
-//-------------------------------------------------------------------------------------------------
 #ifdef WPN_EXTERN_DEF_DOUBLE_PRECISION
     #define WPN114_RT_PRECISION RTAUDIO_FLOAT64
 #elif defined(WPN_EXTERN_DEF_SINGLE_PRECISION)
@@ -43,9 +39,8 @@ Q_SIGNAL void _s##Changed();
     #define WPN114_RT_PRECISION RTAUDIO_FLOAT32
 #endif
 
-
-//-------------------------------------------------------------------------------------------------
 class Node;
+
 //-------------------------------------------------------------------------------------------------
 class Socket : public QObject
 //-------------------------------------------------------------------------------------------------
@@ -53,11 +48,14 @@ class Socket : public QObject
     Q_OBJECT
 
     public:
-    Socket(Node& parent, polarity_t p, QString l, nchn_t n, bool df);        
+    Socket(Node& parent, polarity_t p, std::string l, nchn_t n, bool df);
 
     Node& parent;
-    const char* label;
+    std::string label;
     wpn_socket* csocket = nullptr;
+    polarity_t polarity;
+    nchannels_t nchannels;
+    bool default_;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -135,7 +133,6 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     QVariant m_routing;
     Pattern m_pattern;
     wpn_connection* m_cconnection;
-
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -150,9 +147,9 @@ class Graph : public QObject
     Q_PROPERTY   ( QQmlListProperty<Node> subnodes READ subnodes )
     Q_CLASSINFO  ( "DefaultProperty", "subnodes" )
 
-
     private:
     static wpn_graph m_graph;
+    QVector<Node*> m_subnodes;
 
     public:
     Graph();
@@ -221,14 +218,14 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Node();
 
     virtual void setTarget(QQmlProperty const&) final override;
-    virtual void classBegin() final override {}
+    virtual void classBegin() final override;
     virtual void componentComplete() override;
 
     virtual void configure(wpn_graph_properties properties) = 0;
     virtual void rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz) = 0;
-    virtual QString nreference() const = 0;
+    virtual std::string const& nreference() const { return m_nreference; }
 
-    void addSocket(polarity_t p, QString l, nchn_t n, bool df);    
+    void addSocket(Socket&);
 
     bool muted      () const { return m_muted; }
     bool active     () const { return m_active; }
@@ -270,15 +267,15 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Node* m_parent  = nullptr;
     qreal m_level   = 1;
 
-    Dispatch::Values m_dispatch;
+    Dispatch::Values m_dispatch = Dispatch::Values::Upwards;
     QVector<Node*> m_subnodes;
+    QVector<Socket*> m_sockets;
     wpn_node* cnode = nullptr;
     QVector3D m_position;
-    qreal m_height;
-    qreal m_width;
+    qreal m_height = 0;
+    qreal m_width = 0;
+    std::string m_nreference;
 };
-
-//-------------------------------------------------------------------------------------------------
 
 inline void node_cfg(wpn_graph_properties p, void* udata)
 {
