@@ -48,15 +48,21 @@ class Socket : public QObject
     Q_OBJECT
 
     public:
+    Socket();
     Socket(Node& parent, polarity_t p, std::string l, nchn_t n, bool df);
+    Socket(Socket const&);
+    ~Socket();
 
-    Node& parent;
+    Node* parent = nullptr;
     std::string label;
     wpn_socket* csocket = nullptr;
     polarity_t polarity;
-    nchannels_t nchannels;
-    bool default_;
+    nchannels_t nchannels = 0;
+    qreal pending_value = 0; // TODO: optimize
+    bool default_ = false;
 };
+
+Q_DECLARE_METATYPE(Socket)
 
 //-------------------------------------------------------------------------------------------------
 class Dispatch : public QObject
@@ -88,6 +94,7 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
 
     public:
     Connection();
+    Connection(Connection const&);
 
     enum Pattern
     {
@@ -134,6 +141,8 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     Pattern m_pattern;
     wpn_connection* m_cconnection;
 };
+
+Q_DECLARE_METATYPE(Connection)
 
 //-------------------------------------------------------------------------------------------------
 class Graph : public QObject

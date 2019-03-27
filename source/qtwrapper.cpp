@@ -6,14 +6,28 @@
 // C-BRIDGE
 // SOCKET
 //-------------------------------------------------------------------------------------------------
+Socket::Socket() :
+    parent(nullptr), nchannels(0), default_(false)
+{
+
+}
 
 Socket::Socket(Node& n, polarity_t p, std::string l, nchn_t c, bool d) :
-    parent(n), label(l), polarity(p), nchannels(c), default_(d)
+    parent(&n), label(l), polarity(p), nchannels(c), default_(d)
 {
     // TODO, optimize, do not store these chunks of data here,
     // they become obsolete after parent node is registered to the graph
     n.addSocket(*this);
 }
+
+Socket::Socket(Socket const& copy) :
+    parent(copy.parent), label(copy.label), polarity(copy.polarity),
+    nchannels(copy.nchannels), default_(copy.default_)
+{
+
+}
+
+Socket::~Socket() {}
 
 //-------------------------------------------------------------------------------------------------
 // C-BRIDGE
@@ -171,6 +185,11 @@ Connection::Connection()
 
 }
 
+Connection::Connection(Connection const& copy)
+{
+
+}
+
 qreal Connection::db(qreal v)
 {
     return dbtoa(v);
@@ -246,12 +265,9 @@ Node& Node::chainout()
 
 void Node::setTarget(QQmlProperty const& target)
 {
-    // assigning
-    auto node = qobject_cast<Node*>(target.object());
-    assert(node);
+    auto node   = qobject_cast<Node*>(target.object());
+    auto socket = wpn_socket_lookup(node->cnode, CSTR(target.name()));
 
-    auto socket = wpn_socket_lookup(
-                  node->cnode, CSTR(target.name()));
     assert(socket);
 
     auto& graph = Graph::instance();
@@ -283,8 +299,23 @@ void Node::componentComplete()
 
     for ( const auto& socket : m_sockets )
     {
-        wpn_socket_declare(cnode, socket->polarity, socket->label.c_str(), socket->nchannels, socket->default_);
-        socket->csocket = wpn_socket_lookup_p(cnode, socket->polarity, socket->label.c_str());
+        wpn_socket_declare(cnode,
+            socket->polarity,
+            socket->label.c_str(),
+            socket->nchannels,
+            socket->default_);
+
+        socket->csocket = wpn_socket_lookup_p(cnode,
+                          socket->polarity,
+                          socket->label.c_str());
+
+        if ( socket->pending_value > 0 ||
+             socket->pending_value < 0 )
+        {
+            auto acc = hstream_access(socket->csocket->stream, 0, 0);
+            stream_fillv(&acc, socket->pending_value);
+        }
+
     }
 
     if ( m_subnodes.empty())
@@ -323,11 +354,7 @@ void Node::componentComplete()
 
 QVariant Node::sgrd(Socket& s)
 {
-    // this is what is being returned as a qml value
-    // it may be a reference to a specific Socket,
-    // a constant value
-    // or an array of either of them
-    return QVariant(0);
+    return QVariant::fromValue(s);
 }
 
 void Node::sgwr(Socket& s, QVariant v)
@@ -335,16 +362,26 @@ void Node::sgwr(Socket& s, QVariant v)
     // parse the socket property assignment
     if ( v.canConvert<Socket*>())
     {
+        // single-assignment case
+        // replacing any other connection
+        // for multiple connections, we'd use the Connection class instead
         Graph::disconnect(s);
         Graph::connect(s, *v.value<Socket*>());
     }
     else if ( v.canConvert<QVariantList>())
     {
-
+        // TODO!
     }
     else if ( v.canConvert<qreal>())
     {
+        auto value = v.toReal();
+        // this call might occur before component is complete
+        // in which case socket hasn't been declared to the graph yet
+        if ( !s.csocket )
+              s.pending_value = value;
 
+        auto acc = hstream_access(s.csocket->stream, 0, 0);
+        stream_fillv(&acc, value);
     }
 }
 
