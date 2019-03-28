@@ -47,11 +47,16 @@ class Socket : public QObject
 {
     Q_OBJECT
 
+    Q_PROPERTY  ( QVariant routing READ routing WRITE setRouting )
+
     public:
     Socket();
     Socket(Node& parent, polarity_t p, std::string l, nchn_t n, bool df);
     Socket(Socket const&);
     ~Socket();
+
+    QVariant routing() const;
+    void setRouting(QVariant);
 
     Node* parent = nullptr;
     std::string label;
@@ -227,7 +232,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Node();
 
     virtual void setTarget(QQmlProperty const&) final override;
-    virtual void classBegin() final override;
+    virtual void classBegin() final override {}
     virtual void componentComplete() override;
 
     virtual void configure(wpn_graph_properties properties) = 0;
@@ -235,6 +240,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     virtual std::string const& nreference() const { return m_nreference; }
 
     void addSocket(Socket&);
+    QVector<Socket*> const& sockets() { return m_sockets; }
 
     bool muted      () const { return m_muted; }
     bool active     () const { return m_active; }
@@ -285,16 +291,6 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     qreal m_width = 0;
     std::string m_nreference;
 };
-
-inline void node_cfg(wpn_graph_properties p, void* udata)
-{
-    static_cast<Node*>(udata)->configure(p);
-}
-
-inline void node_prc(wpn_pool* i, wpn_pool* o, void* u, vector_t sz)
-{
-    static_cast<Node*>(u)->rwrite(*i, *o, sz);
-}
 
 //-------------------------------------------------------------------------------------------------
 class Audiostream;
@@ -393,7 +389,7 @@ int rwrite(void* out, void* in, unsigned int nframes,
            void* udata);
 
 //-------------------------------------------------------------------------------------------------
-sstream(sstream16384, 16384, sample_t);
+schannel(schannel16384, 16384, sample_t);
 class Sinetest : public Node
 //-------------------------------------------------------------------------------------------------
 {
@@ -407,7 +403,7 @@ class Sinetest : public Node
     Sinetest();
 
     private:
-    sstream16384 m_wtable;
+    schannel16384 m_wtable;
     size_t m_pos;
 
 };

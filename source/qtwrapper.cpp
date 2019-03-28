@@ -27,6 +27,15 @@ Socket::Socket(Socket const& copy) :
 
 }
 
+QVariant Socket::routing() const {
+    return QVariant(0);
+}
+
+void Socket::setRouting(QVariant v)
+{
+
+}
+
 Socket::~Socket() {}
 
 //-------------------------------------------------------------------------------------------------
@@ -38,13 +47,45 @@ Node::Node()
 {
 }
 
-void Node::classBegin()
-{
-}
-
 void Node::addSocket(Socket& s)
 {
     m_sockets.push_back(&s);
+}
+
+void node_dcl(wpn_node* node)
+{
+    Node* cppnode = static_cast<Node*>(node->udata);
+    node->label = cppnode->nreference().c_str();
+
+    for ( const auto& socket : cppnode->sockets() )
+    {
+        wpn_socket_declare(node,
+            socket->polarity,
+            socket->label.c_str(),
+            socket->nchannels,
+            socket->default_);
+
+        socket->csocket = wpn_socket_lookup_p(node,
+                          socket->polarity,
+                          socket->label.c_str());
+
+        if ( socket->pending_value > 0 ||
+             socket->pending_value < 0 )
+        {
+            auto acc = hstream_access(socket->csocket->stream, 0, 0);
+            stream_fillv(&acc, socket->pending_value);
+        }
+    }
+}
+
+inline void node_cfg(wpn_graph_properties p, void* udata)
+{
+    static_cast<Node*>(udata)->configure(p);
+}
+
+inline void node_prc(wpn_pool* i, wpn_pool* o, void* u, vector_t sz)
+{
+    static_cast<Node*>(u)->rwrite(*i, *o, sz);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -87,7 +128,7 @@ wpn_node* Graph::lookup(Node& n)
 
 wpn_node* Graph::registerNode(Node& n)
 {
-    return wpn_graph_register(&m_graph, &n, nullptr, node_cfg, node_prc);
+    return wpn_graph_register(&m_graph, &n, node_dcl, node_cfg, node_prc);
 }
 
 inline wpn_connection&
@@ -121,7 +162,7 @@ inline void Graph::disconnect(Socket& s, wpn_routing routing)
 
 inline wpn_pool* Graph::run(Node& node)
 {
-    return wpn_graph_run(&m_graph, node.cnode);
+    return wpn_graph_run(&m_graph, &node);
 }
 
 QQmlListProperty<Node> Graph::subnodes()
@@ -173,7 +214,6 @@ int Graph::nsubnodes(QQmlListProperty<Node>* l)
 {
     return reinterpret_cast<Graph*>(l->data)->nsubnodes();
 }
-
 
 //-------------------------------------------------------------------------------------------------
 // QML-BRIDGE
@@ -293,36 +333,16 @@ void Node::setTarget(QQmlProperty const& target)
 
 void Node::componentComplete()
 {
-    // register node, then sockets
+    // register node
+    // graph will then call the socket-register
+    // and configure callbacks
     cnode = Graph::registerNode(*this);
-    cnode->label = nreference().c_str();
-
-    for ( const auto& socket : m_sockets )
-    {
-        wpn_socket_declare(cnode,
-            socket->polarity,
-            socket->label.c_str(),
-            socket->nchannels,
-            socket->default_);
-
-        socket->csocket = wpn_socket_lookup_p(cnode,
-                          socket->polarity,
-                          socket->label.c_str());
-
-        if ( socket->pending_value > 0 ||
-             socket->pending_value < 0 )
-        {
-            auto acc = hstream_access(socket->csocket->stream, 0, 0);
-            stream_fillv(&acc, socket->pending_value);
-        }
-
-    }
-
-    if ( m_subnodes.empty())
-         return;
 
     // set up hierarchy
     // depending on dispatch property
+    if ( m_subnodes.empty())
+         return;
+
     for ( auto& subnode : m_subnodes )
           subnode->setParent(this);
 
@@ -368,6 +388,21 @@ void Node::sgwr(Socket& s, QVariant v)
         Graph::disconnect(s);
         Graph::connect(s, *v.value<Socket*>());
     }
+    else if ( v.canConvert<Connection*>())
+    {
+        auto connection = v.value<Connection*>();
+        if (s.polarity == INPUT) {
+            auto source = connection->source();
+
+            // routing TODO
+            auto routing = connection->routing();
+            Graph::connect(*source, s);
+        } else {
+            auto dest = connection->dest();
+            auto routing = connection->routing();
+            Graph::connect(s, *dest);
+        }
+    }
     else if ( v.canConvert<QVariantList>())
     {
         // TODO!
@@ -377,8 +412,10 @@ void Node::sgwr(Socket& s, QVariant v)
         auto value = v.toReal();
         // this call might occur before component is complete
         // in which case socket hasn't been declared to the graph yet
-        if ( !s.csocket )
+        if ( !s.csocket ) {
               s.pending_value = value;
+              return;
+        }
 
         auto acc = hstream_access(s.csocket->stream, 0, 0);
         stream_fillv(&acc, value);
@@ -506,14 +543,16 @@ void Output::componentComplete()
     Node::componentComplete();
 
     RtAudio::Api api = RtAudio::UNSPECIFIED;
+
     if ( m_api == "JACK" )
          api = RtAudio::UNIX_JACK;
     else if ( m_api == "CORE" )
          api = RtAudio::MACOSX_CORE;
     else if ( m_api == "ALSA" )
          api = RtAudio::LINUX_ALSA;
-    else if ( m_api == "PULSE" )
+    else if ( m_api == "PULSE" ) {
          api = RtAudio::LINUX_PULSE;
+    }
 
     RtAudio audio(api);
     RtAudio::StreamParameters parameters;
@@ -522,12 +561,14 @@ void Output::componentComplete()
 
     auto ndevices = audio.getDeviceCount();
 
-    if ( !m_device.isEmpty())
+    if (!m_device.isEmpty())
     {
-        for ( quint32 d = 0; d < ndevices; ++d )
+        for (quint32 d = 0; d < ndevices; ++d)
         {
             auto name = QString::fromStdString(
                         audio.getDeviceInfo(d).name);
+
+            qDebug() << name;
 
             if (name.contains(m_device))
             {
@@ -536,7 +577,11 @@ void Output::componentComplete()
             }
         }
     }
-    else parameters.deviceId = audio.getDefaultOutputDevice();
+
+    else
+    {
+        parameters.deviceId = audio.getDefaultOutputDevice();
+    }
 
     auto selected_info = audio.getDeviceInfo(parameters.deviceId);
 
@@ -573,7 +618,7 @@ Output::~Output()
     emit exitStream();
     m_audiothread.quit();
 
-    if ( !m_audiothread.wait(3000))
+    if (!m_audiothread.wait(3000))
     {
         m_audiothread.terminate();
         m_audiothread.wait();
@@ -713,10 +758,10 @@ void Sinetest::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
 {
     auto frequency  = strmextr(&inputs, "frequency");
     auto out        = strmextr(&outputs, "outputs");
-    auto wt         = sstream_access(&m_wtable, 0, 0);
+    auto wt         = schannel_access(&m_wtable, 0, 0, 0);
     size_t pos      = m_pos;
 
-    foreach_sample(s, sz)
+    for (size_t s = 0; s < sz; ++s)
     {
         pos += frequency->data[s]/SAMPLE_RATE*16384;
         out->data[s] = wt.data[pos];

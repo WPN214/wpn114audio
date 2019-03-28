@@ -20,8 +20,8 @@ void qml_plugin::registerTypes(const char *uri)
     qmlRegisterUncreatableType<Socket, 1>
     ("WPN114.Audio", 1, 1, "Socket", "Uncreatable");
 
-    qmlRegisterUncreatableType<Connection, 1>
-    ("WPN114.Audio", 1, 1, "Connection", "Uncreatable");
+    qmlRegisterType<Connection, 1>
+    ("WPN114.Audio", 1, 1, "Connection");
 
     //=============================================================================================
     // MODULES

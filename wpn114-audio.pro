@@ -24,8 +24,9 @@ macx {
 
 linux {
     DEFINES += __LINUX_ALSA__
+    DEFINES += __LINUX_PULSE__
     DEFINES += __UNIX_JACK__
-    LIBS += -lpthread -ljack -lasound
+    LIBS += -lpthread -ljack -lasound -lpulse-simple
 }
 
 HEADERS += $$PWD/external/rtaudio/RtAudio.h
