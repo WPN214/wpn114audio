@@ -332,7 +332,7 @@ void Node::parseTarget()
     {
     case INPUT:
     {
-        wpn_graph_nsconnect(&graph, cnode, socket, {});
+        wpn_graph_nsconnect(&graph, cnode, socket, parseRouting());
         break;
     }
     case OUTPUT:
@@ -343,7 +343,7 @@ void Node::parseTarget()
             m_target->parent->append_subnode(this);
         }
 
-        else wpn_graph_snconnect(&graph, socket, cnode, {});
+        else wpn_graph_snconnect(&graph, socket, cnode, parseRouting());
     }
     }
 }
@@ -359,6 +359,7 @@ wpn_routing Node::parseRouting()
     {
         routing.cables[n][0] = m_routing[n].toInt();
         routing.cables[n][1] = m_routing[n+1].toInt();
+        routing.ncables++;
     }
 
     return routing;
@@ -395,7 +396,7 @@ void Node::componentComplete()
     {
         // chain the signal down the line
         auto& front = *m_subnodes.front();
-        Graph::connect(*this, front.chainout(), {});
+        Graph::connect(*this, front.chainout());
 
         for ( int n = 0; n < m_subnodes.count()-1; ++n)
         {
