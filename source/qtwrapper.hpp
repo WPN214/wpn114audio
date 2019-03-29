@@ -31,9 +31,9 @@ Q_SIGNAL void _s##Changed();
 #define DEFAULT true
 #define NONDEFAULT false
 
-#ifdef WPN_EXTERN_DEF_DOUBLE_PRECISION
+#ifdef WPN114_EXTERN_DEF_DOUBLE_PRECISION
     #define WPN114_RT_PRECISION RTAUDIO_FLOAT64
-#elif defined(WPN_EXTERN_DEF_SINGLE_PRECISION)
+#elif defined(WPN114_EXTERN_DEF_SINGLE_PRECISION)
     #define WPN114_RT_PRECISION RTAUDIO_FLOAT32
 #else
     #define WPN114_RT_PRECISION RTAUDIO_FLOAT32
@@ -103,6 +103,7 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
 
     enum Pattern
     {
+        // TODO
         Normal   = 0,
         Crossed  = 1
     };

@@ -671,15 +671,15 @@ void Audiostream::preconfigure()
     try
     {
         m_stream->openStream(
-            &m_parameters,                      // parameters
-            nullptr,                            // dunno
+            &m_parameters,                      // output parameters
+            nullptr,                            // input parameters
             m_format,                           // format
             Graph::rate(),                      // sample-rate
             &m_vector,                          // vector-size
             &rwrite,                            // audio callback
             static_cast<void*>(&m_outmodule),   // user-data
             &m_options,                         // options
-            nullptr                             // dunno
+            nullptr                             // error callback
         );
     }
 
