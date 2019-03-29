@@ -167,6 +167,7 @@ class Graph : public QObject
 
     public:
     Graph();
+    ~Graph();
 
     static sample_t rate       () { return m_graph.properties.rate; }
     static quint16 vector      () { return m_graph.properties.vecsz; }
@@ -292,6 +293,8 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     std::string m_nreference;
 };
 
+#define SAMPLE_RATE cnode->properties.rate
+
 //-------------------------------------------------------------------------------------------------
 class Audiostream;
 //-------------------------------------------------------------------------------------------------
@@ -307,7 +310,7 @@ class Output : public Node
     Q_PROPERTY  ( QString device READ device WRITE setDevice NOTIFY deviceChanged )
 
     WPN114_REGISTER_PIN  ( inputs, DEFAULT, INPUT, 0 )
-    WPN114_REGISTER_PIN  ( outputs, DEFAULT, OUTPUT, 0 )
+    WPN114_REGISTER_PIN  ( outputs, DEFAULT, OUTPUT, 0)
 
     public:
     Output();
@@ -404,7 +407,7 @@ class Sinetest : public Node
 
     private:
     schannel16384 m_wtable;
-    size_t m_pos;
+    size_t m_pos = 0;
 
 };
 

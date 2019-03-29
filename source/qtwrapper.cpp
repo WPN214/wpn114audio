@@ -106,6 +106,11 @@ Graph::Graph()
     m_graph = wpn_graph_create(44100, 512, 64);
 }
 
+Graph::~Graph()
+{
+    wpn_graph_free(&m_graph);
+}
+
 void Graph::setRate(sample_t rate)
 {
     m_graph.properties.rate = rate;
@@ -542,6 +547,13 @@ void Output::componentComplete()
 {
     Node::componentComplete();
 
+    // allocate inputs
+    auto inputs  = wpn_socket_lookup(cnode, "inputs");
+    auto outputs = wpn_socket_lookup(cnode, "outputs");
+
+    inputs->stream  = hstream_alloc(m_nchannels, NON_INTERLEAVED, cnode->properties.vecsz);
+    outputs->stream = hstream_alloc(m_nchannels, NON_INTERLEAVED, cnode->properties.vecsz);
+
     RtAudio::Api api = RtAudio::UNSPECIFIED;
 
     if ( m_api == "JACK" )
@@ -611,7 +623,15 @@ void Output::componentComplete()
 }
 
 void Output::configure(wpn_graph_properties) {}
-void Output::rwrite(wpn_pool&, wpn_pool&, vector_t) {}
+
+void Output::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t)
+{
+    auto in  = strmextr(&inputs, "inputs");
+    auto out = strmextr(&outputs, "outputs");
+
+    stream_cprp(in, out);
+    // add master level
+}
 
 Output::~Output()
 {
@@ -723,24 +743,17 @@ int rwrite(void* out, void* in, unsigned int nframes,
     //outmod.audiostream().buffer_processed(time);
 
     auto pool = Graph::run(outmod);
+    wpn_stream* stream = static_cast<wpn_stream*>(vector_at(pool, 0));
+    auto acc = stream->stream;
 
-    for ( size_t ch = 0; ch < pool->nelem; ++ch)
-    {
-        wpn_stream* stream = static_cast<wpn_stream*>(vector_at(pool, ch));
-        auto acc = stream->stream;
-
-        assert(acc.nsamples <= nframes);
-
-        for ( size_t n = 0; n < acc.nsamples; ++n )
-              output[n] += acc.data[n];
+    for (size_t n = 0; n < acc.nsamples; ++n ) {
+        output[n] = acc.data[n];
+        //printf("output %ld: %f \n", n, output[n]);
     }
 
     return 0;
 }
 
-#define SAMPLE_RATE cnode->properties.rate
-
-void Sinetest::configure(wpn_graph_properties properties) {}
 void VCA::configure(wpn_graph_properties properties) {}
 
 Sinetest::Sinetest()
@@ -754,18 +767,23 @@ Sinetest::Sinetest()
 
 typedef channel_accessor c_acc;
 
+void Sinetest::configure(wpn_graph_properties properties)
+{
+    for (size_t s = 0; s < 16384; ++s)
+         m_wtable.data[s] = sin(s/16384.0*M_PI*2.0);
+}
+
 void Sinetest::rwrite(wpn_pool& inputs, wpn_pool& outputs, vector_t sz)
 {
     auto frequency  = strmextr(&inputs, "frequency");
     auto out        = strmextr(&outputs, "outputs");
-    auto wt         = schannel_access(&m_wtable, 0, 0, 0);
     size_t pos      = m_pos;
 
     for (size_t s = 0; s < sz; ++s)
     {
         pos += frequency->data[s]/SAMPLE_RATE*16384;
-        out->data[s] = wt.data[pos];
-        wpnwrap(pos, 16384);
+        out->data[s] = m_wtable.data[pos];
+        wpnwrap(pos, 16384);        
     }
 
     m_pos = pos;
