@@ -76,6 +76,9 @@ void node_dcl(wpn_node* node)
             stream_fillv(&acc, socket->pending_value);
         }
     }
+
+    if (cppnode->m_target_callback)
+        cppnode->m_target_callback->parseTarget();
 }
 
 inline void node_cfg(wpn_graph_properties p, void* udata)
@@ -310,9 +313,17 @@ Node& Node::chainout()
 
 void Node::setTarget(QQmlProperty const& target)
 {
-    auto node   = qobject_cast<Node*>(target.object());
-    auto socket = wpn_socket_lookup(node->cnode, CSTR(target.name()));
+    auto node = qobject_cast<Node*>(target.object());
+    node->m_target_callback = this;
 
+    for ( const auto& socket : node->sockets())
+        if ( QString::fromStdString(socket->label) == target.name())
+             m_target = socket;
+}
+
+void Node::parseTarget()
+{
+    auto socket = m_target->csocket;
     assert(socket);
 
     auto& graph = Graph::instance();
@@ -328,12 +339,29 @@ void Node::setTarget(QQmlProperty const& target)
     {
         if ( socket->default_ )
         {
-            node->setDispatch(Dispatch::Downwards);
-            node->append_subnode(this);
+            m_target->parent->setDispatch(Dispatch::Downwards);
+            m_target->parent->append_subnode(this);
         }
+
         else wpn_graph_snconnect(&graph, socket, cnode, {});
     }
     }
+}
+
+wpn_routing Node::parseRouting()
+{
+    wpn_routing routing {};
+
+    if (m_routing.isEmpty())
+        return routing;
+
+    for ( int n = 0; n < m_routing.size(); n += 2)
+    {
+        routing.cables[n][0] = m_routing[n].toInt();
+        routing.cables[n][1] = m_routing[n+1].toInt();
+    }
+
+    return routing;
 }
 
 void Node::componentComplete()
@@ -357,7 +385,10 @@ void Node::componentComplete()
     {
         // all subnodes connect to this Node
         for ( auto& subnode : m_subnodes )
-            Graph::connect(subnode->chainout(), *this);
+        {
+            auto& source = subnode->chainout();
+            Graph::connect(source, *this, source.parseRouting());
+        }
         break;
     }
     case Dispatch::Values::Downwards:
@@ -450,6 +481,11 @@ void Node::setParent(Node* parent)
 void Node::setDispatch(Dispatch::Values v)
 {
     m_dispatch = v;
+}
+
+void Node::setRouting(QVariantList routing)
+{
+    m_routing = routing;
 }
 
 qreal Node::db(qreal v)

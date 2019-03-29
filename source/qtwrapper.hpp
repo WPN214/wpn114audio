@@ -224,6 +224,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Q_PROPERTY    ( bool active READ active WRITE setActive )
     Q_PROPERTY    ( bool muted READ muted WRITE setMuted )
     Q_PROPERTY    ( qreal level READ level WRITE setLevel )
+    Q_PROPERTY    ( QVariantList routing READ routing WRITE setRouting )
 
     Q_CLASSINFO   ( "DefaultProperty", "subnodes" )
     Q_INTERFACES  ( QQmlParserStatus QQmlPropertyValueSource )
@@ -232,6 +233,9 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     public:
     Node();
+
+    Node* m_target_callback = nullptr;
+    void parseTarget();
 
     virtual void setTarget(QQmlProperty const&) final override;
     virtual void classBegin() final override {}
@@ -248,6 +252,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     bool active     () const { return m_active; }
     qreal level     () const { return m_level; }
     Node* parent    () const { return m_parent; }
+    QVariantList routing() const { return m_routing; }
 
     Dispatch::Values dispatch() const { return m_dispatch; }
 
@@ -255,6 +260,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     void setActive  (bool);
     void setLevel   (qreal);
     void setParent  (Node*);
+    void setRouting (QVariantList);
 
     void setDispatch(Dispatch::Values);
 
@@ -284,6 +290,8 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Node* m_parent  = nullptr;
     qreal m_level   = 1;
 
+    wpn_routing parseRouting();
+
     Dispatch::Values m_dispatch = Dispatch::Values::Upwards;
     QVector<Node*> m_subnodes;
     QVector<Socket*> m_sockets;
@@ -292,6 +300,8 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     qreal m_height = 0;
     qreal m_width = 0;
     std::string m_nreference;
+    QVariantList m_routing;
+    Socket* m_target = nullptr;
 };
 
 #define SAMPLE_RATE cnode->properties.rate
