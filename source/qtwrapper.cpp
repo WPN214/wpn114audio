@@ -617,8 +617,6 @@ void Output::componentComplete()
             auto name = QString::fromStdString(
                         audio.getDeviceInfo(d).name);
 
-            qDebug() << name;
-
             if (name.contains(m_device))
             {
                 parameters.deviceId = d;
@@ -783,10 +781,8 @@ int rwrite(void* out, void* in, unsigned int nframes,
     wpn_stream* stream = static_cast<wpn_stream*>(vector_at(pool, 0));
     auto acc = stream->stream;
 
-    for (size_t n = 0; n < acc.nsamples; ++n ) {
-        output[n] = acc.data[n];
-        //printf("output %ld: %f \n", n, output[n]);
-    }
+    for (size_t n = 0; n < acc.nsamples; ++n )
+         output[n] = acc.data[n];
 
     return 0;
 }
