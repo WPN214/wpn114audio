@@ -10,7 +10,8 @@ find_package(Qt5Quick)
 
 set(WPN114AUDIO_QML_SOURCES
     qml_plugin.cpp
-    source/qtwrapper2.cpp)
+    source/qtwrapper2.cpp
+    )
 
 add_library(${PROJECT_NAME} ${WPN114AUDIO_QML_SOURCES})
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick -lwpn114audio)
@@ -23,4 +24,4 @@ elseif(LINUX)
 endif()
 
 install(TARGETS ${PROJECT_NAME} DESTINATION /usr/lib/qt/qml/wpn114audio-qml)
-install(DIRECTORY qml/* DESTINATION /usr/lib/qt/qml/wpn114audio-qml)
+install(FILES qml/audio.qmltypes qml/qmldir DESTINATION /usr/lib/qt/qml/wpn114audio-qml)

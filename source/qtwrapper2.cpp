@@ -211,7 +211,7 @@ wpn_routing Node::parseRouting()
 
 qreal Node::db(qreal v)
 {
-    return dbtoa(v);
+    return pow(10, v*.05);
 }
 
 void Node::componentComplete()
