@@ -3,9 +3,9 @@ import WPN114.Audio 1.1 as WPN114
 
 Item
 {
-    WPN114.Audiostream
+    WPN114.Audiograph
     {
-        id: audiostream
+        id: graph
 
         // we instantiate an Output module
         // when component is complete
@@ -18,33 +18,18 @@ Item
         // or choose the default one if unspecified
         // the audio thread is created, initialized and started
 
-        WPN114.Sinetest
+        WPN114.Output
         {
-            id: sinetest
+            id: output
 
-            frequency: 440.0
-            WPN114.VCA on output { id: vca; gain: db(-6) }
+            WPN114.Sinetest
+            {
+                id: sinetest
 
-            WPN114.Connection on vca.output {
-                dest: some_effect
-                level: db(-6)
-                routing: [[0, 1], [1, 0]]
-                // would be equivalent to
-                pattern: WPN114.Connection.Crossed
+                frequency: 440.0
+                WPN114.VCA on outputs { id: vca; gain: db(-12) }
             }
         }
-
-//        WPN114.VCA
-//        {
-//            id: vca
-//            gain: -6
-
-//            WPN114.Sinetest
-//            {
-//                id: sinetest
-//                frequency: 440.0
-//            }
-//        }
     }
 
     // on audio start

@@ -55,7 +55,7 @@ void Node::addSocket(Socket& s)
 void node_dcl(wpn_node* node)
 {
     Node* cppnode = static_cast<Node*>(node->udata);
-    node->label = cppnode->nreference().c_str();
+    strcpy(node->label, cppnode->nreference().c_str());
 
     for ( const auto& socket : cppnode->sockets() )
     {
@@ -136,7 +136,7 @@ wpn_node* Graph::lookup(Node& n)
 
 wpn_node* Graph::registerNode(Node& n)
 {
-    return wpn_graph_register(&m_graph, &n, node_dcl, node_cfg, node_prc);
+    return wpn_graph_register(&m_graph, &n, node_dcl, node_cfg, node_prc, nullptr);
 }
 
 inline wpn_connection&

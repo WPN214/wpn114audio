@@ -12,7 +12,7 @@
 #include <QVector3D>
 
 #include <external/rtaudio/RtAudio.h>
-#include <external/wpn-c/source/graph.h>
+#include <wpn114audio/core/graph.h>
 
 #define WPN114_OBJECT(_n)                                                                           \
 Q_OBJECT                                                                                            \
@@ -261,7 +261,6 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     void setLevel   (qreal);
     void setParent  (Node*);
     void setRouting (QVariantList);
-
     void setDispatch(Dispatch::Values);
 
     QQmlListProperty<Node> subnodes();
@@ -304,136 +303,6 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Socket* m_target = nullptr;
 };
 
-#define SAMPLE_RATE cnode->properties.rate
 
-//-------------------------------------------------------------------------------------------------
-class Audiostream;
-//-------------------------------------------------------------------------------------------------
-class Output : public Node
-//-------------------------------------------------------------------------------------------------
-{
-    WPN114_OBJECT (Output)
-
-    Q_PROPERTY  ( int nchannels READ nchannels WRITE setNchannels NOTIFY nchannelsChanged )
-    Q_PROPERTY  ( int offset READ offset WRITE setOffset NOTIFY offsetChanged )
-
-    Q_PROPERTY  ( QString api READ api WRITE setApi NOTIFY apiChanged )
-    Q_PROPERTY  ( QString device READ device WRITE setDevice NOTIFY deviceChanged )
-
-    WPN114_REGISTER_PIN  ( inputs, DEFAULT, INPUT, 0 )
-    WPN114_REGISTER_PIN  ( outputs, DEFAULT, OUTPUT, 0)
-
-    public:
-    Output();
-    ~Output() override;
-
-    virtual void componentComplete() override;
-
-    quint16 nchannels   () const { return m_nchannels; }
-    quint16 offset      () const { return m_offset; }    
-    QString api         () const { return m_api; }
-    QString device      () const { return m_device; }
-
-    void setNchannels   ( quint16 nchannels );
-    void setOffset      ( quint16 offset );    
-    void setApi         ( QString api );
-    void setDevice      ( QString device );
-
-    Q_INVOKABLE void start    ();
-    Q_INVOKABLE void stop     ();
-    Q_INVOKABLE void restart  ();
-
-    signals:
-    void nchannelsChanged   ();
-    void offsetChanged      ();
-    void apiChanged         ();
-    void deviceChanged      ();
-
-    void configureStream    ();
-    void startStream        ();
-    void stopStream         ();
-    void restartStream      ();
-    void exitStream         ();
-
-    private:
-    sample_t m_rate        = 44100;
-    quint16 m_nchannels    = 2;
-    quint16 m_offset       = 0;
-    quint16 m_vector       = 512;
-    quint16 m_feedback     = 64;
-    QString m_api;
-    QString m_device;
-
-    QThread m_audiothread;
-    std::unique_ptr<Audiostream> m_stream;
-};
-
-//------------------------------------------------------------------------------------------------
-class Audiostream : public QObject
-//------------------------------------------------------------------------------------------------=
-{
-    Q_OBJECT
-
-    public:
-    Audiostream ( Output& out,
-                  RtAudio::StreamParameters parameters,
-                  RtAudio::DeviceInfo info,
-                  RtAudio::StreamOptions options);
-
-    public slots:
-    void preconfigure   ();
-    void start          ();
-    void stop           ();
-    void restart        ();
-    void exit           ();
-
-    private:
-    Output& m_outmodule;
-    std::unique_ptr<RtAudio> m_stream;
-    RtAudioFormat m_format;
-    RtAudio::DeviceInfo m_device_info;
-    RtAudio::StreamParameters m_parameters;
-    RtAudio::StreamOptions m_options;
-    quint32 m_vector;
-};
-
-// the main audio callback
-int rwrite(void* out, void* in, unsigned int nframes,
-           double time, RtAudioStreamStatus status,
-           void* udata);
-
-//-------------------------------------------------------------------------------------------------
-schannel(schannel16384, 16384, sample_t);
-class Sinetest : public Node
-//-------------------------------------------------------------------------------------------------
-{
-    WPN114_OBJECT  ( Sinetest )
-
-    WPN114_REGISTER_PIN ( inputs, DEFAULT, INPUT, 1)
-    WPN114_REGISTER_PIN ( frequency, NONDEFAULT, INPUT, 1)
-    WPN114_REGISTER_PIN ( outputs, DEFAULT, OUTPUT, 1)
-
-    public:
-    Sinetest();
-
-    private:
-    schannel16384 m_wtable;
-    size_t m_pos = 0;
-
-};
-
-//-------------------------------------------------------------------------------------------------
-class VCA : public Node
-//-------------------------------------------------------------------------------------------------
-{
-    WPN114_OBJECT ( VCA )
-
-    WPN114_REGISTER_PIN ( inputs, DEFAULT, INPUT, 1)
-    WPN114_REGISTER_PIN ( gain, NONDEFAULT, INPUT, 1 )
-    WPN114_REGISTER_PIN ( outputs, DEFAULT, OUTPUT, 1)
-
-    public:
-    VCA();
-};
 
 #endif // QTWRAPPER_HPP
