@@ -204,7 +204,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     signals:
     void parentChanged();
 
-    private:
+    protected:
     bool m_active   = true;
     bool m_muted    = false;
     Node* m_parent  = nullptr;

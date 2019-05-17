@@ -199,7 +199,7 @@ inline Node& Node::chainout()
 
 wpn_routing Node::parseRouting()
 {
-    wpn_routing routing;
+    wpn_routing routing {};
 
     if (m_routing.isEmpty())
         return routing;
@@ -359,7 +359,10 @@ JackIO::~JackIO() {}
 
 void JackIO::componentComplete()
 {
-    wpn_io_jack_register(&c_jack, &Graph::instance(), static_cast<nchannels_t>(m_n_outputs));
+    c_node = wpn_io_jack_register(&c_jack, &Graph::instance(), static_cast<nchannels_t>(m_n_outputs));
+    assert(c_node);
+
+    Node::componentComplete();
 }
 
 void JackIO::run(QString s)
@@ -375,5 +378,5 @@ void JackIO::run(QString s)
 
 Sinetest::Sinetest()
 {
-    wpn_sinetest_register(&c_sinetest, &Graph::instance());
+    c_node = wpn_sinetest_register(&c_sinetest, &Graph::instance());
 }
