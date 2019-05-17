@@ -1,4 +1,4 @@
 module WPN114.Audio
 typeinfo audio.qmltypes
-plugin WPN114-audio
+plugin wpn114audio-qml
 classname qml_plugin

@@ -48,7 +48,6 @@ class Graph : public QObject, public QQmlParserStatus
     Q_PROPERTY   (qreal rate READ rate WRITE setRate)
     Q_PROPERTY   (int mxv READ mxv WRITE setMxv)
     Q_PROPERTY   (int mnv READ mnv WRITE setMnv)
-    Q_PROPERTY   (Node* target READ target WRITE setTarget)
     Q_INTERFACES (QQmlParserStatus)
 
     Q_PROPERTY   (QQmlListProperty<Node> subnodes READ subnodes )
@@ -202,6 +201,9 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 
     Q_INVOKABLE qreal db(qreal v);
 
+    signals:
+    void parentChanged();
+
     private:
     bool m_active   = true;
     bool m_muted    = false;
@@ -214,16 +216,49 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     wpn_node* c_node = nullptr;
 };
 
+#include <wpn114audio/nodes/io/io_jack.h>
+
+//-------------------------------------------------------------------------------------------------
+class JackIO : public Node
+//-------------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+    Q_PROPERTY  (int numInputs MEMBER m_n_inputs)
+    Q_PROPERTY  (int numOutputs MEMBER m_n_outputs)
+
+    WPN_SOCKET  (inputs)
+    WPN_SOCKET  (outputs)
+
+    public:
+    JackIO();
+    ~JackIO();
+
+    virtual void componentComplete() override;
+
+    Q_INVOKABLE void run(QString = {});
+
+    protected:
+    wpn_io_jack c_jack;
+    int m_n_inputs  = 0;
+    int m_n_outputs = 2;
+};
+
+//-------------------------------------------------------------------------------------------------
+
 //-------------------------------------------------------------------------------------------------
 class Sinetest : public Node
 //-------------------------------------------------------------------------------------------------
 {
     Q_OBJECT
+    Q_PROPERTY  (qreal frequency READ frequency WRITE setFrequency)
     WPN_SOCKET  (output)
 
     public:
     Sinetest();
-    ~Sinetest();
+
+    qreal frequency() const { return c_sinetest.frequency; }
+    void setFrequency(qreal f) { c_sinetest.frequency = f; }
 
     private:
     wpn_sinetest c_sinetest;

@@ -3,13 +3,9 @@
 #include <QQmlEngine>
 #include <qqml.h>
 
-void qml_plugin::registerTypes(const char *uri)
+void qml_plugin::registerTypes(const char* uri)
 {
     Q_UNUSED(uri)
-
-    //=============================================================================================
-    // UNCREATABLE
-    //=============================================================================================
 
     qmlRegisterUncreatableType<Dispatch, 1>
     ("WPN114.Audio", 1, 1, "Dispatch", "Uncreatable");
@@ -28,7 +24,7 @@ void qml_plugin::registerTypes(const char *uri)
     //=============================================================================================
 
     qmlRegisterType<Graph, 1>     ("WPN114.Audio", 1, 1, "Audiograph");
+    qmlRegisterType<JackIO, 1>    ("WPN114.Audio", 1, 1, "JackIO");
     qmlRegisterType<Sinetest, 1>  ("WPN114.Audio", 1, 1, "Sinetest");
     qmlRegisterType<VCA, 1>       ("WPN114.Audio", 1, 1, "VCA");
-
 }

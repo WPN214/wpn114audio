@@ -118,6 +118,7 @@ int Graph::nsubnodes(QQmlListProperty<Node>* l)
 }
 
 //-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
 
 Socket::Socket() {}
 Socket::Socket(Socket const& cp) : c_socket(cp.c_socket) {}
@@ -137,6 +138,8 @@ void Connection::setTarget(const QQmlProperty& property)
     // 'connection' on 'something'
 }
 
+//-------------------------------------------------------------------------------------------------
+// NODE
 //-------------------------------------------------------------------------------------------------
 
 Node::Node()   {}
@@ -158,7 +161,6 @@ void Node::setLevel(qreal level)
 {
     // set
     m_level = level;
-
 }
 
 void Node::setParent(Node* parent)
@@ -191,6 +193,8 @@ inline Node& Node::chainout()
         else return *m_subnodes.back();
     }
     }
+
+    assert(false);
 }
 
 wpn_routing Node::parseRouting()
@@ -211,6 +215,11 @@ wpn_routing Node::parseRouting()
 
 qreal Node::db(qreal v)
 {
+    // this is not an a->db function
+    // it is a useful, readable and declarative way to signal that the value
+    // used within qml is of the db unit.
+    // consequently, it returns the value as a normal linear amplitude value.
+    // in general, to ease-up calculations, the db should be calculated once and upfront
     return pow(10, v*.05);
 }
 
@@ -248,7 +257,6 @@ void Node::componentComplete()
         }
     }
     }
-
 }
 
 void Node::setTarget(const QQmlProperty& property)
@@ -294,6 +302,73 @@ void Node::socket_set(Socket& s, QVariant v)
     {
 
     }
+}
+
+QQmlListProperty<Node> Node::subnodes()
+{
+    return QQmlListProperty<Node>(
+        this, this,
+        &Node::append_subnode,
+        &Node::nsubnodes,
+        &Node::subnode,
+        &Node::clear_subnodes);
+}
+
+Node* Node::subnode(int index) const
+{
+    return m_subnodes[index];
+}
+
+void Node::append_subnode(Node* n)
+{
+    m_subnodes.push_back(n);
+}
+
+int Node::nsubnodes() const
+{
+    return m_subnodes.count();
+}
+
+void Node::clear_subnodes()
+{
+    m_subnodes.clear();
+}
+
+void Node::append_subnode(QQmlListProperty<Node>* l, Node* n)
+{
+    reinterpret_cast<Node*>(l->data)->append_subnode(n);
+}
+
+void Node::clear_subnodes(QQmlListProperty<Node>* l)
+{
+    reinterpret_cast<Node*>(l->data)->clear_subnodes();
+}
+
+Node* Node::subnode(QQmlListProperty<Node>* l, int index)
+{
+    return reinterpret_cast<Node*>(l->data)->subnode(index);
+}
+
+int Node::nsubnodes(QQmlListProperty<Node>* l)
+{
+    return reinterpret_cast<Node*>(l->data)->nsubnodes();
+}
+
+JackIO::JackIO() {}
+JackIO::~JackIO() {}
+
+void JackIO::componentComplete()
+{
+    wpn_io_jack_register(&c_jack, &Graph::instance(), static_cast<nchannels_t>(m_n_outputs));
+}
+
+void JackIO::run(QString s)
+{
+    std::string str = s.toStdString();
+
+    if  (s.isEmpty())
+         wpn_io_jack_run(&c_jack);
+    else wpn_io_jack_connect_run(&c_jack, nullptr, str.c_str());
 }
 
 //-------------------------------------------------------------------------------------------------
