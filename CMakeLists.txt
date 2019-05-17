@@ -11,7 +11,7 @@ find_package(Qt5 REQUIRED COMPONENTS Quick Core Qml)
 
 set(WPN114AUDIO_QML_SOURCES
     qml_plugin.cpp
-    source/qtwrapper2.cpp
+    source/qtwrapper.cpp
     )
 
 add_library(${PROJECT_NAME} SHARED ${WPN114AUDIO_QML_SOURCES})

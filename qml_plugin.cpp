@@ -1,5 +1,5 @@
 #include "qml_plugin.hpp"
-#include <source/qtwrapper2.hpp>
+#include <source/qtwrapper.hpp>
 #include <QQmlEngine>
 #include <qqml.h>
 
