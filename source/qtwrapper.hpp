@@ -33,6 +33,8 @@ class Socket : public QObject
     Socket(Socket const&);
     Socket(wpn_socket* csock);
 
+    void operator=(Socket const&);
+
     polarity_t polarity() { return c_socket->polarity; }
     wpn_socket* c_socket = nullptr;
 };
@@ -106,6 +108,13 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
 //-------------------------------------------------------------------------------------------------
 {
     Q_OBJECT    
+    Q_PROPERTY   (Socket source READ source WRITE setSource)
+    Q_PROPERTY   (Socket dest READ dest WRITE setDest)
+    Q_PROPERTY   (QVariantList routing READ routing WRITE setRouting)
+    Q_PROPERTY   (qreal level READ level WRITE setLevel)
+    Q_PROPERTY   (bool muted READ muted WRITE setMuted)
+    Q_PROPERTY   (bool active READ active WRITE setActive)
+
     Q_INTERFACES (QQmlParserStatus QQmlPropertyValueSource)
 
     public:
@@ -117,12 +126,33 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     virtual void componentComplete() override;
     virtual void setTarget(const QQmlProperty &) override;
 
-    wpn_socket* source()    { return c_connection->source; }
-    wpn_socket* dest()      { return c_connection->dest; }
-    wpn_routing routing()   { return c_connection->routing; }
+    Socket source   () const { return Socket(c_connection->source); }
+    Socket dest     () const { return Socket(c_connection->dest); }
+    qreal level     () const { return c_connection->level; }
+    bool muted      () const { return c_connection->muted; }
+    bool active     () const { return c_connection->active; }
+
+    QVariantList routing() const;
+
+    wpn_socket* csource() { return c_connection->source; }
+    wpn_socket* cdest() { return c_connection->dest; }
+    wpn_routing crouting() const { return c_connection->routing; }
+
+    void setSource    (Socket source);
+    void setDest      (Socket dest);
+    void setLevel     (qreal level);
+    void setMuted     (bool muted);
+    void setActive    (bool active);
+    void setRouting   (QVariantList routing);
 
     private:
     wpn_connection* c_connection = nullptr;
+    Socket m_source;
+    Socket m_dest;
+    bool m_muted = false;
+    bool m_active = true;
+    qreal m_level = 1;
+    QVariantList m_routing;
 };
 
 Q_DECLARE_METATYPE(Connection)
@@ -177,7 +207,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Node* parent  () const { return m_parent; }
 
     QVariantList routing() const { return m_routing; }
-    wpn_routing parseRouting();
+    static wpn_routing parseRouting(QVariantList);
 
     void setMuted      (bool);
     void setActive     (bool);
