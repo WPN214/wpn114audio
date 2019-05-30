@@ -1,509 +1,203 @@
 #include "qtwrapper.hpp"
 #include <QtDebug>
+#include <vector>
+#include <cmath>
 
-wpn_graph Graph::m_graph;
-
-Graph::Graph()
+Socket::Socket(Node* parent, polarity_t polarity, uint8_t index, uint8_t nchannels) :
+    m_parent      (parent),
+    m_polarity    (polarity),
+    m_index       (index),
+    m_nchannels   (nchannels)
 {
-    m_graph = wpn_graph_create(44100, 512, 64);
+    parent->register_socket(*this);
 }
 
-wpn_graph& Graph::instance()
+void
+Socket::set_muted(bool muted)
 {
-    return m_graph;
+    for (const auto& con : m_connections)
+         con->m_muted = muted;
 }
 
-Graph::~Graph()
+void
+Socket::set_active(bool active)
 {
-    // this also takes care of cleaning up nodes and connections
-    wpn_graph_free(&m_graph);
+    for (const auto& con : m_connections)
+         con->m_active = active;
 }
 
-void Graph::setRate(qreal rate)
+void
+Socket::set_level(qreal level)
 {
-    m_graph.properties.rate = rate;
+    for (const auto& con : m_connections)
+         con->m_level = level;
 }
 
-void Graph::setMxv(int mxv)
+bool
+Socket::connected(const Socket& s) const
 {
-    m_graph.properties.mxvsz = mxv;
+    for (const auto& con : m_connections)
+        ;
 }
 
-void Graph::setMnv(int mnv)
+bool
+Socket::connected(const Node& n) const
 {
-    m_graph.properties.mnvsz = mnv;
-}
-
-void Graph::componentComplete()
-{
-    // ?
-}
-
-inline wpn_connection&
-Graph::connect(Node& source, Node& dest, wpn_routing routing)
-{
-    return *wpn_graph_nconnect(&m_graph, source.c_node, dest.c_node, routing);
-}
-
-inline wpn_connection&
-Graph::connect(Socket& source, Socket& dest, wpn_routing routing)
-{
-    return *wpn_graph_sconnect(&m_graph, source.c_socket, dest.c_socket, routing);
-}
-
-inline wpn_connection&
-Graph::connect(Node& source, Socket& dest, wpn_routing routing)
-{
-    return *wpn_graph_nsconnect(&m_graph, source.c_node, dest.c_socket, routing);
-}
-
-inline wpn_connection&
-Graph::connect(Socket &source, Node &dest, wpn_routing routing)
-{
-    return *wpn_graph_snconnect(&m_graph, source.c_socket, dest.c_node, routing);
-}
-
-inline void Graph::disconnect(Socket& s, wpn_routing routing)
-{
-    wpn_graph_sdisconnect(&m_graph, s.c_socket, routing);
-}
-
-QQmlListProperty<Node> Graph::subnodes()
-{
-    return QQmlListProperty<Node>(
-        this, this,
-        &Graph::append_subnode,
-        &Graph::nsubnodes,
-        &Graph::subnode,
-        &Graph::clear_subnodes);
-}
-
-Node* Graph::subnode(int index) const
-{
-    return m_subnodes[index];
-}
-
-void Graph::append_subnode(Node* n)
-{
-    m_subnodes.push_back(n);
-}
-
-int Graph::nsubnodes() const
-{
-    return m_subnodes.count();
-}
-
-void Graph::clear_subnodes()
-{
-    m_subnodes.clear();
-}
-
-void Graph::append_subnode(QQmlListProperty<Node>* l, Node* n)
-{
-    reinterpret_cast<Graph*>(l->data)->append_subnode(n);
-}
-
-void Graph::clear_subnodes(QQmlListProperty<Node>* l)
-{
-    reinterpret_cast<Graph*>(l->data)->clear_subnodes();
-}
-
-Node* Graph::subnode(QQmlListProperty<Node>* l, int index)
-{
-    return reinterpret_cast<Graph*>(l->data)->subnode(index);
-}
-
-int Graph::nsubnodes(QQmlListProperty<Node>* l)
-{
-    return reinterpret_cast<Graph*>(l->data)->nsubnodes();
+    for (const auto& con: m_connections)
+        ;
 }
 
 //-------------------------------------------------------------------------------------------------
-// SOCKETS
+// GRAPH
 //-------------------------------------------------------------------------------------------------
 
-Socket::Socket() {}
-Socket::Socket(Socket const& cp) :
-    c_socket(cp.c_socket), m_name(cp.m_name), m_polarity(cp.m_polarity),
-    m_parent(cp.m_parent)
+inline Connection&
+Graph::connect(Node& source, Node& dest, Routing matrix)
+{
+    return connect(*source.default_outputs(), *dest.default_inputs(), matrix);
+}
+
+inline Connection&
+Graph::connect(Node& source, Socket& dest, Routing matrix)
+{
+    return connect(*source.default_outputs(), dest, matrix);
+}
+
+inline Connection&
+Graph::connect(Socket& source, Node& dest, Routing matrix)
+{
+    return connect(source, *dest.default_inputs(), matrix);
+}
+
+void
+Graph::componentComplete()
 {
 
 }
-Socket::Socket(wpn_socket* csock) : c_socket(csock) {}
 
-Socket::Socket(Node* parent, const char* name, polarity_t polarity) :
-    m_parent(parent), m_name(name), m_polarity(polarity)
+inline void
+Graph::initialize()
 {
-    QObject::connect(parent, &Node::registered, this, &Socket::lookup);
+
 }
 
-void Socket::operator=(Socket const& cp)
+inline pool&
+Graph::run(Node& target)
 {
-    c_socket    = cp.c_socket;
-    m_name      = cp.m_name;
-    m_polarity  = cp.m_polarity;
-    m_parent    = cp.m_parent;
+    target.process();
+    return target.outputs();
 }
 
-void Socket::lookup()
-{
-    // this will be called when parent node's graph registration is complete
-    c_socket = wpn_socket_lookup(m_parent->c_node, m_name);
+//-------------------------------------------------------------------------------------------------
+// CONNECTION
+//-------------------------------------------------------------------------------------------------
 
-    if (m_pending_value > 0) {
-        s_acc acc = hstream_access(c_socket->stream, 0, 0);
-        stream_fillv(&acc, m_pending_value);
+void
+Connection::setTarget(const QQmlProperty& target)
+{
+    auto socket = target.read().value<Socket*>();
+
+    switch(socket->polarity())
+{
+    case OUTPUT:  m_source = socket; break;
+    case INPUT:   m_dest = socket;
     }
 }
 
-//-------------------------------------------------------------------------------------------------
-// CONNECTIONS
-//-------------------------------------------------------------------------------------------------
-
-Connection::Connection() {}
-Connection::Connection(Connection const&) {}
-Connection::Connection(wpn_connection* ccon) : c_connection(ccon) {}
-
-void Connection::setTarget(const QQmlProperty& property)
+void
+Connection::componentComplete()
 {
-    // 'connection' on 'something'
-    // fetch target socket
-    auto socket = property.read().value<Socket>();
+    // allocates/reallocates Connection buffer
+    // allocates/reallocates source/dest buffers as well
+    // depending on both sockets numchannels properties
+    // this means Connection has been explicitely instantiated from QML
+    // we have to push it back to the graph
+    Graph::add_connection(this);
 
-    switch(socket.polarity()) {
-    case INPUT: m_dest = socket; break;
-    case OUTPUT: m_source = socket;
+    // TODO: manage multichannel expansion
+
+    m_source->allocate();
+    m_dest->allocate();
+
+    nchannels_t nchannels = std::max(m_source->nchannels(), m_dest->nchannels());
+    m_buffer = new qreal*[nchannels];
+}
+
+void
+Connection::pull()
+{
+    if (!m_active)
+        return;
+
+    if (!m_feedback) {
+        m_source->parent_node()->process();
     }
-}
 
-void Connection::setSource(Socket source)
-{
-    m_source = source;
-    QObject::connect(source.m_parent, &Node::registered, this, &Connection::onSourceRegistered);
-}
+    // get source buffer
+    // get dest buffer
+    // copy source into this buffer
+    // apply gain
+    // pour into dest buffer, given Connection's routing
 
-void Connection::setDest(Socket dest)
-{
-    m_dest = dest;
-    QObject::connect(dest.m_parent, &Node::registered, this, &Connection::onDestRegistered);
-}
-
-void Connection::setLevel(qreal level)
-{
-    m_level = level;
-}
-
-void Connection::setMuted(bool muted)
-{
-    m_muted = muted;
-}
-
-void Connection::setActive(bool active)
-{
-    m_active = active;
-}
-
-void Connection::setRouting(QVariantList routing)
-{
-    m_routing = routing;
-}
-
-void Connection::componentComplete() {}
-
-void Connection::onSourceRegistered()
-{
-    // update c_socket
-    m_source.c_socket = wpn_socket_lookup(m_source.m_parent->c_node, m_source.m_name);
-
-    if (m_dest.m_parent && m_dest.m_parent->is_registered())
-        cconnect();
-}
-
-void Connection::onDestRegistered()
-{
-    // update c-socket
-    m_dest.c_socket = wpn_socket_lookup(m_dest.m_parent->c_node, m_dest.m_name);
-
-    if (m_source.m_parent && m_source.m_parent->is_registered())
-        cconnect();
-}
-
-void Connection::cconnect()
-{
-    c_connection = wpn_graph_sconnect(&Graph::instance(), m_source.c_socket,
-                   m_dest.c_socket, Node::parseRouting(m_routing));
 }
 
 //-------------------------------------------------------------------------------------------------
 // NODE
 //-------------------------------------------------------------------------------------------------
 
-Node::Node()   {}
-Node::~Node()  {}
-
-void Node::setMuted(bool muted)
-{
-    // mute all output connections
-    m_muted = muted;
-}
-
-void Node::setActive(bool active)
-{
-    // deactivate all input/output connections
-    m_active = active;
-}
-
-void Node::setLevel(qreal level)
-{
-    // set
-    m_level = level;
-}
-
-void Node::setParent(Node* parent)
-{
-    m_parent = parent;
-}
-
-void Node::setRouting(QVariantList routing)
-{
-    // routing for direct & explicit outputs
-}
-
-void Node::setDispatch(Dispatch::Values dispatch)
-{
-    m_dispatch = dispatch;
-}
-
-inline Node& Node::chainout()
-{
-    switch (m_dispatch) {
-    case Dispatch::Values::Upwards:
-        return *this;
-    case Dispatch::Values::Downwards: {
-        if  (m_subnodes.isEmpty())
-             return *this;
-        else return *m_subnodes.back();
-    }
-    }
-
-    assert(false);
-}
-
-wpn_routing Node::parseRouting(QVariantList list)
-{
-    wpn_routing routing {};
-
-    if (list.isEmpty())
-        return routing;
-
-    for ( int n = 0; n < list.size(); n += 2) {
-        routing.cables[n][0] = list[n].toInt();
-        routing.cables[n][1] = list[n+1].toInt();
-        routing.ncables++;
-    }
-
-    return routing;
-}
-
-qreal Node::db(qreal v)
-{
-    // this is not an a->db function
-    // it is a useful, readable and declarative way to signal that the value
-    // used within qml is of the db unit.
-    // consequently, it returns the value as a normal linear amplitude value.
-    // in general, to ease-up calculations, the db should be calculated once and upfront
-    return pow(10, v*.05);
-}
-
-void Node::componentComplete()
-{
-    // handle parent/children connections
-    if (m_subnodes.isEmpty())
-        return;
-
-    for (auto& subnode : m_subnodes)
-         subnode->setParent(this);
-
-    switch(m_dispatch) {
-    case Dispatch::Values::Upwards: {
-        // all subnodes connnect to this node
-        for (auto& subnode : m_subnodes) {
-             auto& source = subnode->chainout();
-             Graph::connect(source, *this,
-             Node::parseRouting(source.routing()));
-        }
-
-        break;
-    }
-    case Dispatch::Values::Downwards: {
-        // effect-chain-like connections
-        auto& front = *m_subnodes.front();
-        Graph::connect(*this, front.chainout());
-
-        for (int n = 0; n < m_subnodes.count()-1; ++n) {
-            auto& source = m_subnodes[n]->chainout();
-            auto& dest = m_subnodes[n+1]->chainout();
-            Graph::connect(source, dest);
-        }
-    }
-    }
-}
-
-void Node::setTarget(const QQmlProperty& property)
-{
-    auto socket = property.read().value<Socket>();
-
-    switch(socket.polarity()) {
-        case INPUT:  Graph::connect(*this, socket); break;
-        case OUTPUT: Graph::connect(socket, *this);
-    }
-}
-
-QVariant Node::socket_get(Socket& s) const
-{
-    return QVariant::fromValue(s);
-}
-
-void Node::socket_set(Socket& s, QVariant v)
-{
-    // single-assignment case
-    if (v.canConvert<Socket>()) {
-        Socket target = v.value<Socket>();
-        Graph::disconnect(s);
-        Graph::connect(s, target);
-    }
-    else if (v.canConvert<Connection>())
-    {
-        auto connection = v.value<Connection>();
-        if (s.polarity() == INPUT) {
-            auto source = connection.csource();
-            auto routing = connection.crouting();
-            wpn_graph_sconnect(&Graph::instance(), source, s.c_socket, routing);
-        } else {
-            auto dest = connection.cdest();
-            auto routing = connection.crouting();
-            wpn_graph_sconnect(&Graph::instance(), s.c_socket, dest, routing);
-        }
-    }
-    else if (v.canConvert<QVariantList>())
-    {
-        // TODO!
-    }
-    else if (v.canConvert<qreal>()) {
-        if (s.c_socket) {
-            s_acc acc = hstream_access(s.c_socket->stream, 0, 0);
-            stream_fillv(&acc, v.toReal());
-        } else {
-            s.m_pending_value = v.toReal();
-        }
-    }
-}
-
-QQmlListProperty<Node> Node::subnodes()
-{
-    return QQmlListProperty<Node>(
-        this, this,
-        &Node::append_subnode,
-        &Node::nsubnodes,
-        &Node::subnode,
-        &Node::clear_subnodes);
-}
-
-Node* Node::subnode(int index) const
-{
-    return m_subnodes[index];
-}
-
-void Node::append_subnode(Node* n)
-{
-    m_subnodes.push_back(n);
-}
-
-int Node::nsubnodes() const
-{
-    return m_subnodes.count();
-}
-
-void Node::clear_subnodes()
-{
-    m_subnodes.clear();
-}
-
-void Node::append_subnode(QQmlListProperty<Node>* l, Node* n)
-{
-    reinterpret_cast<Node*>(l->data)->append_subnode(n);
-}
-
-void Node::clear_subnodes(QQmlListProperty<Node>* l)
-{
-    reinterpret_cast<Node*>(l->data)->clear_subnodes();
-}
-
-Node* Node::subnode(QQmlListProperty<Node>* l, int index)
-{
-    return reinterpret_cast<Node*>(l->data)->subnode(index);
-}
-
-int Node::nsubnodes(QQmlListProperty<Node>* l)
-{
-    return reinterpret_cast<Node*>(l->data)->nsubnodes();
-}
-
-JackIO::JackIO() {}
-JackIO::~JackIO() {}
-
-void JackIO::componentComplete()
-{
-    c_node = wpn_io_jack_register(&c_jack, &Graph::instance(),
-             static_cast<nchannels_t>(m_n_outputs));
-
-    emit registered();
-    Node::componentComplete();
-}
-
-void JackIO::run(QString s)
-{
-    std::string str = s.toStdString();
-
-    if  (s.isEmpty())
-         wpn_io_jack_run(&c_jack);
-    else wpn_io_jack_connect_run(&c_jack, nullptr, str.c_str());
-}
-
+//-------------------------------------------------------------------------------------------------
+// SINETEST
 //-------------------------------------------------------------------------------------------------
 
 Sinetest::Sinetest()
 {
-    c_node = wpn_sinetest_register(&c_sinetest, &Graph::instance());
-    emit registered();
+
+}
+
+void
+Sinetest::initialize(Graph::properties& properties)
+{
+
+}
+
+void
+Sinetest::rwrite(pool& inputs, pool& outputs, vector_t nframes)
+{
+    auto frequency = inputs[Frequency];
+    auto out = outputs[Outputs];
+
+
+
 }
 
 //-------------------------------------------------------------------------------------------------
-// example with something out of the main c library
+// VCA
 //-------------------------------------------------------------------------------------------------
-
-void vca_dcl(wpn_node* node)
-{
-    wpn_socket_declare(node, INPUT, "inputs", 1, true);
-    wpn_socket_declare(node, INPUT, "gain", 1, false);
-    wpn_socket_declare(node, OUTPUT, "outputs", 1, true);
-    strcpy(node->label, "VCA");
-}
-
-void vca_prc(wpn_pool* pool, void* udata, vector_t nframes)
-{
-    strmext(INPUT, inputs);
-    strmext(INPUT, gain);
-    strmext(OUTPUT, outputs);
-
-    stream_muleq(inputs, gain);
-    stream_cpmg(inputs, outputs);
-}
 
 VCA::VCA()
 {
-    c_node = wpn_graph_register(&Graph::instance(),
-             this, vca_dcl, nullptr, vca_prc, nullptr);
 
-    emit registered();
+}
+
+void
+VCA::rwrite(pool& inputs, pool& outputs, vector_t nframes)
+{
+    auto in   = inputs[Inputs];
+    auto out  = outputs[Outputs];
+    auto gain = inputs[Gain];
+
+    FOR_NCHANNELS(c, Outputs)
+        FOR_NFRAMES(n, nframes)
+            out[c][n] = in[c][n] * gain[0][n];
+        END
+    END
+}
+
+//-------------------------------------------------------------------------------------------------
+// IOJACK
+//-------------------------------------------------------------------------------------------------
+
+IOJack::IOJack()
+{
+
 }

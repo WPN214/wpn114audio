@@ -8,175 +8,683 @@
 #include <QQmlListProperty>
 #include <QVector>
 #include <QVariant>
-
-#include <wpn114audio/core/graph.h>
-#include <wpn114audio/nodes/utilities/sinetest.h>
-#include <wpn114audio/nodes/io/io_jack.h>
+#include <cmath>
 
 class Node;
 
-#define WPN_SOCKET(_s, _p)                                                                        \
-private: Q_PROPERTY(QVariant _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                    \
-    protected: Socket m_##_s {this, #_s, _p };                                                    \
-                                                                                                  \
-QVariant get##_s() { return socket_get(m_##_s); }                                                 \
-void set##_s(QVariant v) { socket_set(m_##_s, v); }                                               \
-Q_SIGNAL void _s##Changed();
+// --------------------------------------------------------------------------------------------------
+// CONVENIENCE MACRO DEFINITIONS
+// --------------------------------------------------------------------------------------------------
+
+#define WPN_OBJECT                                                                                  \
+    Q_OBJECT                                                                                        \
+    public: void initialize(Graph::properties&) override;                                           \
+    public: void rwrite(pool& inputs, pool& outputs, vector_t nframes) override; \
+
+#define WPN_SOCKET(_pol, _nm, _idx, _nchn)                                                          \
+private: Q_PROPERTY(Socket _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                        \
+protected: Socket m_##_nm { dynamic_cast<Node*>(this), _pol, _idx, _nchn };                         \
+                                                                                                    \
+Socket get##_nm() { return m_##_nm; }                                                               \
+void set##_nm(Socket v) {  }                                                                        \
+Q_SIGNAL void _nm##Changed();
+
+#define WPN_ENUM_INPUTS(...)                                                                        \
+    enum Inputs {__VA_ARGS__, N_IN};
+
+#define WPN_ENUM_OUTPUTS(...)                                                                       \
+    enum Outputs {__VA_ARGS__, N_OUT};
+
+#define WPN_INPUT_DECLARE(_nm, _nchn)                                                               \
+    WPN_SOCKET(INPUT, _nm, _nm, _nchn)
+
+#define WPN_OUTPUT_DECLARE(_nm, _nchn)                                                              \
+    WPN_SOCKET(OUTPUT, _nm, _nm, _nchn)
+
+#define FOR_NCHANNELS(_iter, _target)                                                               \
+    for(uint8_t _iter = 0; _iter < m_##_target.nchannels(); ++_iter) {
+
+#define FOR_NFRAMES(_iter, _target)                                                                 \
+    for(uint16_t _iter = 0; _iter < _target; ++_iter) {
+
+#define END }
+
+//-------------------------------------------------------------------------------------------------
+
+enum  polarity_t    { OUTPUT = 0, INPUT = 1 };
+using sample_t      = qreal;
+using vector_t      = uint16_t;
+using pool          = sample_t***;
+using nchannels_t   = uint8_t;
+
+class Connection;
+class Node;
 
 //-------------------------------------------------------------------------------------------------
 class Socket : public QObject
+// represents a node single input/output
+// with nchannels_t channels
 //-------------------------------------------------------------------------------------------------
 {
     Q_OBJECT
 
-    friend class Node;
-    friend class Graph;
-    friend class Connection;
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(bool
+    muted MEMBER m_muted WRITE set_muted)
+    // MUTED property: manages and overrides all Socket connections mute property
 
-    public:
-    Socket();
-    Socket(Socket const&);
-    Socket(wpn_socket* csock);
-    Socket(Node* parent, const char* name, polarity_t polarity);
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(bool
+    active MEMBER m_active WRITE set_active)
+    // ACTIVE property: manages and overrides all Socket connections active property
 
-    void operator=(Socket const&);
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(qreal
+    level MEMBER m_level WRITE set_level)
+    // LEVEL property: manages and overrides all Socket connections level property
 
-    polarity_t polarity() { return m_polarity; }
-    polarity_t m_polarity;
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(int
+    nchannels MEMBER m_nchannels WRITE set_nchannels)
+    // NCHANNELS property: for multichannel expansion
+    // and dynamic channel setting/allocation
 
-    public slots:
-    void lookup();
+public:
 
-    private:
-    wpn_socket* c_socket    = nullptr;
-    const char* m_name      = nullptr;
-    Node* m_parent          = nullptr;
-    qreal m_pending_value   = 0;
+    // --------------------------------------------------------------------------------------------
+    Socket() {}
+
+    // --------------------------------------------------------------------------------------------
+    Socket(Socket const& cp)
+    {
+
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Socket(Node* parent, polarity_t polarity, uint8_t index, uint8_t nchannels);
+
+    // --------------------------------------------------------------------------------------------
+    Socket&
+    operator=(Socket const& cp)
+    {
+
+    }
+
+    // --------------------------------------------------------------------------------------------
+    ~Socket()
+    {
+
+    }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_muted(bool muted);
+    // mute/unmute all output connections
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_active(bool active);
+    // activate/deactivate all output connections
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_level(qreal level);
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_nchannels(nchannels_t nchannels)
+    // sets num_channels for socket and
+    // allocate/reallocate its buffer
+    {
+        m_nchannels = nchannels;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    nchannels_t
+    nchannels() const { return m_nchannels; }
+    // returns Socket number of channels
+
+    // --------------------------------------------------------------------------------------------
+    polarity_t
+    polarity() const { return m_polarity; }
+    // returns Socket polarity (INPUT/OUTPUT)
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE bool
+    connected() const { return m_connections.size(); }
+    // returns true if Socket is connected to anything
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE bool
+    connected(Socket const& target) const;
+    // returns true if this Socket is connected to target
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE bool
+    connected(Node const& target) const;
+    // returns true if this Socket is connected to
+    // one of the target's Socket
+
+private:
+
+    // --------------------------------------------------------------------------------------------
+    void
+    add_connection(Connection& con)
+    {
+        m_connections.push_back(&con);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    remove_connection(Connection& con)
+    {
+        std::remove(m_connections.begin(), m_connections.end(), &con);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    polarity_t
+    m_polarity = OUTPUT;
+
+    // --------------------------------------------------------------------------------------------
+    uint8_t
+    m_index = 0;
+
+    // --------------------------------------------------------------------------------------------
+    uint8_t
+    m_nchannels = 0;
+
+    // --------------------------------------------------------------------------------------------
+    std::vector<Connection*>
+    m_connections;
+
+    // --------------------------------------------------------------------------------------------
+    Node*
+    m_parent = nullptr;
+
+    // --------------------------------------------------------------------------------------------
+    sample_t**
+    m_buffer = nullptr;
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    m_muted = false;
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    m_active = true;
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    m_level = 1;
 };
 
-Q_DECLARE_METATYPE(Socket)
-
 //-------------------------------------------------------------------------------------------------
-class Graph : public QObject, public QQmlParserStatus
+class Routing : public QObject
+// connection matrix between 2 sockets
+// materialized as a QVariantList within QML
 //-------------------------------------------------------------------------------------------------
 {
     Q_OBJECT
 
-    Q_PROPERTY    (qreal rate READ rate WRITE setRate)
-    Q_PROPERTY    (int mxv READ mxv WRITE setMxv)
-    Q_PROPERTY    (int mnv READ mnv WRITE setMnv)
-    Q_INTERFACES  (QQmlParserStatus)
+public:
 
-    Q_PROPERTY    (QQmlListProperty<Node> subnodes READ subnodes )
-    Q_CLASSINFO   ("DefaultProperty", "subnodes" )
+    // --------------------------------------------------------------------------------------------
+    using cable = std::array<uint8_t, 2>;
 
-    public:
-    Graph();
-    ~Graph() override;
+    // --------------------------------------------------------------------------------------------
+    Routing() {}
 
-    virtual void classBegin() override {}
-    virtual void componentComplete() override;
+    // --------------------------------------------------------------------------------------------
+    Routing(Routing const& cp)
+    {
 
-    static wpn_graph& instance();
+    }
 
-    static wpn_connection&
-    connect(Socket& source, Socket& dest, wpn_routing routing = {});
+    // --------------------------------------------------------------------------------------------
+    Routing(QVariantList list)
+    {
+        if (list.empty())
+            return;
+        for (int n = 0; n < list.count(); n += 2) {
+            m_routing[n][0] = list[n].toInt();
+            m_routing[n][1] = list[n+1].toInt();
+        }
+    }
 
-    static wpn_connection&
-    connect(Node& source, Node& dest, wpn_routing routing = {});
+    // --------------------------------------------------------------------------------------------
+    Routing&
+    operator=(Routing const& cp)
+    {
 
-    static wpn_connection&
-    connect(Node& source, Socket& dest, wpn_routing routing = {});
+    }
 
-    static wpn_connection&
-    connect(Socket& source, Node& dest, wpn_routing routing = {});
+    // --------------------------------------------------------------------------------------------
+    cable&
+    operator[](uint8_t index) { return m_routing[index]; }
 
-    static void
-    disconnect(Socket&, wpn_routing routing = {});
+    // --------------------------------------------------------------------------------------------
+    bool empty() const { return m_routing.empty(); }
 
-    qreal rate  () const { return m_graph.properties.rate; }
-    int mxv     () const { return m_graph.properties.mxvsz; }
-    int mnv     () const { return m_graph.properties.mnvsz; }
+    // --------------------------------------------------------------------------------------------
+    QVariantList
+    to_qvariant() const
+    {
+        QVariantList lst;
+        for (auto& cable : m_routing) {
+            QVariantList cbl;
+            cbl.append(cable[0]);
+            cbl.append(cable[1]);
+            lst.append(cbl);
+        }
+        return lst;
+    }
 
-    void setRate  (qreal rate);
-    void setMxv   (int);
-    void setMnv   (int);
+private:
 
-    QQmlListProperty<Node> subnodes   ( );
-    Q_INVOKABLE void append_subnode   ( Node*);
-    Q_INVOKABLE int nsubnodes         ( ) const;
-    Q_INVOKABLE Node* subnode         ( int) const;
-    Q_INVOKABLE void clear_subnodes   ( );
-
-    static void append_subnode  (QQmlListProperty<Node>*, Node*);
-    static int nsubnodes        (QQmlListProperty<Node>*);
-    static Node* subnode        (QQmlListProperty<Node>*, int);
-    static void clear_subnodes  (QQmlListProperty<Node>*);
-
-    private:
-    static wpn_graph m_graph;
-    QVector<Node*> m_subnodes;
+    // --------------------------------------------------------------------------------------------
+    std::vector<cable>
+    m_routing;
 };
 
 //-------------------------------------------------------------------------------------------------
 class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
 //-------------------------------------------------------------------------------------------------
 {
-    Q_OBJECT    
-    Q_PROPERTY   (Socket source READ source WRITE setSource)
-    Q_PROPERTY   (Socket dest READ dest WRITE setDest)
-    Q_PROPERTY   (QVariantList routing READ routing WRITE setRouting)
-    Q_PROPERTY   (qreal level READ level WRITE setLevel)
-    Q_PROPERTY   (bool muted READ muted WRITE setMuted)
-    Q_PROPERTY   (bool active READ active WRITE setActive)
+    Q_OBJECT
 
-    Q_INTERFACES (QQmlParserStatus QQmlPropertyValueSource)
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(Socket*
+    source MEMBER m_source)
 
-    public:
-    Connection();
-    Connection(Connection const&);
-    Connection(wpn_connection* ccon);
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(Socket*
+    dest MEMBER m_dest)
 
-    virtual void classBegin() override {}
-    virtual void componentComplete() override;
-    virtual void setTarget(const QQmlProperty &) override;
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(QVariantList
+    routing READ routing WRITE set_routing)
 
-    Socket source  () const { return Socket(c_connection->source); }
-    Socket dest    () const { return Socket(c_connection->dest); }
-    qreal level    () const { return c_connection->level; }
-    bool muted     () const { return c_connection->muted; }
-    bool active    () const { return c_connection->active; }
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (qreal
+    level MEMBER m_level)
 
-    QVariantList routing() const;
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(bool
+    muted MEMBER m_muted)
 
-    wpn_socket* csource   () { return c_connection->source; }
-    wpn_socket* cdest     () { return c_connection->dest; }
-    wpn_routing crouting  () const { return c_connection->routing; }
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(bool
+    active MEMBER m_active)
 
-    void setSource    (Socket source);
-    void setDest      (Socket dest);
-    void setLevel     (qreal level);
-    void setMuted     (bool muted);
-    void setActive    (bool active);
-    void setRouting   (QVariantList routing);
+    // --------------------------------------------------------------------------------------------
+    Q_INTERFACES
+    (QQmlParserStatus QQmlPropertyValueSource)
 
-    protected slots:
-    void onSourceRegistered();
-    void onDestRegistered();
+    // --------------------------------------------------------------------------------------------
+    friend class Socket;
+    friend class Node;
 
-    private:
-    void cconnect();
+public:
 
-    wpn_connection* c_connection = nullptr;
-    Socket m_source;
-    Socket m_dest;
-    bool m_muted = false;
-    bool m_active = true;
-    qreal m_level = 1;
-    QVariantList m_routing;
+    // --------------------------------------------------------------------------------------------
+    Connection() {}
+
+    // --------------------------------------------------------------------------------------------
+    Connection(Connection const& cp) :
+        m_source(cp.m_source)
+      , m_dest(cp.m_dest)
+      , m_routing(cp.m_routing)
+      , m_active(cp.m_active)
+      , m_muted(cp.m_muted)
+      , m_level(cp.m_level) {}
+    // copy constructor, don't really know in which case it should/will be used
+
+    // --------------------------------------------------------------------------------------------
+    Connection(Socket& source, Socket& dest, Routing matrix) :
+        m_source(&source)
+      , m_dest(&dest)
+      , m_routing(matrix) {}
+    // constructor accessed from C++
+
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    classBegin() override {}
+    // unused interface override
+
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override;
+    // allocates/reallocates Connection buffer
+    // allocates/reallocates source/dest buffers as well
+    // depending on both sockets numchannels properties
+
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    setTarget(const QQmlProperty& target) override;
+    // qml property binding, e. g.:
+    // Connection on 'socket' { level: db(-12); routing: [0, 1] }
+
+    // --------------------------------------------------------------------------------------------
+    Socket*
+    source() { return m_source; }
+    // returns Connection's source Socket (output polarity)
+
+    // --------------------------------------------------------------------------------------------
+    Socket*
+    dest() { return m_dest; }
+    // returns Connection's dest Socket (input polarity)
+
+    // --------------------------------------------------------------------------------------------
+    QVariantList
+    routing() const { return m_routing.to_qvariant(); }
+    // returns Connection's routing matrix as QML formatted list
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_routing(QVariantList list) { m_routing = Routing(list); }
+    // sets routing matrix from QML
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_routing(Routing matrix) { m_routing = matrix; }
+    // sets routing matrix from C++
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE qreal
+    db(qreal v) { return std::pow(10, v*.05); }
+    // this is not an a->db function
+    // it is a useful, readable and declarative way to signal that the value
+    // used within qml is of the db unit.
+    // consequently, it returns the value as a normal linear amplitude value.
+    // in general, to ease-up calculations, the db should be calculated once and upfront
+
+private:
+
+    // --------------------------------------------------------------------------------------------
+    void
+    pull();
+    // the main processing function
+
+    // --------------------------------------------------------------------------------------------
+    sample_t**
+    m_buffer = nullptr;
+    // this one should be allocated when instantiated
+
+    // --------------------------------------------------------------------------------------------
+    Socket*
+    m_source = nullptr;
+    // the Connection's source (output polarity)
+
+    // --------------------------------------------------------------------------------------------
+    Socket*
+    m_dest = nullptr;
+    // the Connection's dest (input polarity)
+
+    // --------------------------------------------------------------------------------------------
+    Routing
+    m_routing = {};
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    m_muted = false;
+    // if Connection is muted, it will still process its inputs
+    // but will output 0 continuously
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    m_active = true;
+    // if Connection is inactive, it won't process its inputs
+    // and consequently call the upstream graph
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    m_feedback = false;
+    // if this is a feedback Connection, it will recursively
+    // fetch the previous input buffer without calling input Node's process function again
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    m_level = 1;
+    // Connection's output will be scaled by this ratio
+    // (linear amplitude level, not logarithmic)
 };
 
 Q_DECLARE_METATYPE(Connection)
+
+//-------------------------------------------------------------------------------------------------
+class Graph : public QObject, public QQmlParserStatus
+// embeds all connections between instantiated nodes
+//-------------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(int
+    vector READ vector WRITE set_vector)
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(QQmlListProperty<Node>
+    subnodes READ subnodes )
+
+    // --------------------------------------------------------------------------------------------
+    Q_CLASSINFO
+    ("DefaultProperty", "subnodes" )
+
+    // --------------------------------------------------------------------------------------------
+    Q_INTERFACES
+    (QQmlParserStatus QQmlPropertyValueSource)
+
+public:
+
+    // --------------------------------------------------------------------------------------------
+    struct properties
+    // holds the graph processing properties
+    {
+        sample_t rate    = 44100;
+        vector_t vector  = 512;
+    };
+
+    // --------------------------------------------------------------------------------------------
+    static Graph&
+    instance() { return *s_instance; }
+    // returns the singleton instance of the Graph
+
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    classBegin() override {}
+    // unused interface override
+
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override; // not sure this will be actually useful either
+
+    // --------------------------------------------------------------------------------------------
+    static Connection&
+    connect(Socket& source, Socket& dest, Routing matrix = {})
+    {
+        auto con = Connection(source, dest, matrix);
+        s_connections.push_back(con);
+        return s_connections.back();
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static Connection&
+    connect(Node& source, Node& dest, Routing matrix = {});
+
+    // --------------------------------------------------------------------------------------------
+    static Connection&
+    connect(Node& source, Socket& dest, Routing matrix = {});
+
+    // --------------------------------------------------------------------------------------------
+    static Connection&
+    connect(Socket& source, Node& dest, Routing matrix = {});
+
+    // --------------------------------------------------------------------------------------------
+    static Connection*
+    get_connection(Socket& source, Socket& dest)
+    {
+        for (auto& con : s_connections)
+            if (con.source() == &source &&
+                con.dest() == &dest)
+                return &con;
+
+        return nullptr;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    reconnect(Socket& source, Socket& dest, Routing matrix)
+    {
+        if (auto con = get_connection(source, dest))
+            con->set_routing(matrix);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    disconnect(Socket& source, Socket& dest)
+    {
+        if (auto con = get_connection(source, dest)) {
+            // TODO
+        }
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    initialize();
+    // allocates upstream sockets & connections
+
+    // --------------------------------------------------------------------------------------------
+    static pool&
+    run(Node& target);
+    // the main processing function
+
+    // --------------------------------------------------------------------------------------------
+    uint16_t
+    vector() const { return s_properties.vector; }
+    // returns graph vector size
+
+    // --------------------------------------------------------------------------------------------
+    sample_t
+    rate() const { return s_properties.rate; }
+    // returns graph sample rate
+
+    // --------------------------------------------------------------------------------------------
+    QQmlListProperty<Node>
+    subnodes()
+    {
+        return QQmlListProperty<Node>(
+               this, this,
+               &Graph::append_subnode,
+               &Graph::nsubnodes,
+               &Graph::subnode,
+               &Graph::clear_subnodes);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE void
+    append_subnode(Node* subnode) { m_subnodes.push_back(subnode); }
+    // pushes back subnode to the Graph's direct children
+    // making the necessary implicit connections
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE int
+    nsubnodes() const { return m_subnodes.count(); }
+    // returns the number of direct children Nodes that the Graph holds
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE Node*
+    subnode(int index) const { return m_subnodes[index]; }
+    // retrieve children Node at index
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE void
+    clear_subnodes() { m_subnodes.clear(); }
+    // clear Graph's direct Node children
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    append_subnode(QQmlListProperty<Node>* list, Node* subnode)
+    // static version, see above
+    {
+        reinterpret_cast<Graph*>(list->data)->append_subnode(subnode);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static int
+    nsubnodes(QQmlListProperty<Node>* list)
+    // static version, see above
+    {
+        return reinterpret_cast<Graph*>(list->data)->nsubnodes();
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static Node*
+    subnode(QQmlListProperty<Node>* list, int index)
+    // static version, see above
+    {
+        return reinterpret_cast<Graph*>(list->data)->subnode(index);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    clear_subnodes(QQmlListProperty<Node>* list)
+    // static version, see above
+    {
+        reinterpret_cast<Graph*>(list->data)->clear_subnodes();
+    }
+
+private:
+
+    // --------------------------------------------------------------------------------------------
+    Graph()
+    {
+        s_instance = this;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    virtual ~Graph() override
+    {
+
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static Graph*
+    s_instance;
+
+    // --------------------------------------------------------------------------------------------
+    static std::vector<Connection>
+    s_connections;
+
+    // --------------------------------------------------------------------------------------------
+    static Graph::properties
+    s_properties;
+
+    // --------------------------------------------------------------------------------------------
+    static QVector<Node*>
+    m_subnodes;
+};
+
+//-------------------------------------------------------------------------------------------------
+struct spatial_t
+// TODO
+//-------------------------------------------------------------------------------------------------
+{
+    qreal x = 0, y = 0, z = 0;
+    qreal w = 0, d = 0, h = 0;
+};
+
+//-------------------------------------------------------------------------------------------------
+class Spatial : public QObject
+// TODO
+//-------------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+    std::vector<spatial_t>
+    m_channels;
+};
+
+Q_DECLARE_METATYPE(Spatial)
 
 //-------------------------------------------------------------------------------------------------
 class Dispatch : public QObject
@@ -184,10 +692,8 @@ class Dispatch : public QObject
 {
     Q_OBJECT
 
-    public:
-    enum Values { Upwards = 0, Downwards  = 1 };
-
-    Q_ENUM (Values)
+    public:    
+    enum Values { Upwards = 0, Downwards = 1 }; Q_ENUM (Values)
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -196,138 +702,450 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 {
     Q_OBJECT
 
-    Q_PROPERTY    ( Node* parent READ parent WRITE setParent NOTIFY parentChanged )
-    Q_PROPERTY    ( QQmlListProperty<Node> subnodes READ subnodes )
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(bool
+    muted MEMBER m_muted WRITE set_muted)
 
-    Q_PROPERTY    ( Dispatch::Values dispatch READ dispatch WRITE setDispatch )
-    Q_PROPERTY    ( bool active READ active WRITE setActive )
-    Q_PROPERTY    ( bool muted READ muted WRITE setMuted )
-    Q_PROPERTY    ( qreal level READ level WRITE setLevel )
-    Q_PROPERTY    ( QVariantList routing READ routing WRITE setRouting )
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(bool
+    active MEMBER m_active WRITE set_active)
 
-    Q_CLASSINFO   ( "DefaultProperty", "subnodes" )
-    Q_INTERFACES  ( QQmlParserStatus QQmlPropertyValueSource )
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(qreal
+    level MEMBER m_level WRITE set_level)
 
-    friend class Graph;
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(Spatial
+    space MEMBER m_spatial)
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(QQmlListProperty<Node>
+    subnodes READ subnodes)
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(Dispatch::Values
+    dispatch MEMBER m_dispatch)
+
+    // --------------------------------------------------------------------------------------------
+    Q_CLASSINFO
+    ("DefaultProperty", "subnodes" )
+
+    // --------------------------------------------------------------------------------------------
+    Q_INTERFACES
+    (QQmlParserStatus QQmlPropertyValueSource)
+
+    // --------------------------------------------------------------------------------------------
     friend class Connection;
-    friend class Socket;
+    // connection has to call the process function
+    // but it not should be available for Nodes inheriting from this class
 
-    public:
-    Node();
-    virtual ~Node() override;
+public:
 
-    void classBegin() override {}
-    virtual void componentComplete() override;
-    virtual void setTarget(const QQmlProperty &) override;
+    // --------------------------------------------------------------------------------------------
+    Node() {}
 
-    QVariant socket_get(Socket&) const;
-    void socket_set(Socket&, QVariant);
+    // --------------------------------------------------------------------------------------------
+    virtual ~Node() override {}
 
-    Node& chainout();
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    classBegin() override {}
+    // unused interface override
 
-    bool muted    () const { return m_muted; }
-    bool active   () const { return m_active; }
-    qreal level   () const { return m_level; }
-    Node* parent  () const { return m_parent; }
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override
+    // parses the local graph and builds appropriate connections between this Node
+    // and its subnodes, given the selected dispatch mode
+    {
+        if (m_subnodes.empty())
+            return;
 
-    bool is_registered() const { return c_node; }
+        for (auto& subnode : m_subnodes)
+             subnode->set_parent(this);
 
-    QVariantList routing() const { return m_routing; }
-    static wpn_routing parseRouting(QVariantList);
+        switch(m_dispatch)
+        {
+        case Dispatch::Values::Upwards:
+        {
+            // subnode's chain out connects to this Node
+            for (auto& subnode : m_subnodes) {
+                auto& source = subnode->chainout();
+                Graph::connect(source, *this, source.routing());
+            }
+            break;
+        }
+        case Dispatch::Values::Downwards:
+        {
+            // connect this Node default outputs to first subnode
+            auto& front = *m_subnodes.front();
+            Graph::connect(*this, front.chainout());
 
-    void setMuted      ( bool);
-    void setActive     ( bool);
-    void setLevel      ( qreal);
-    void setParent     ( Node*);
-    void setRouting    ( QVariantList);
-    void setDispatch   ( Dispatch::Values);
+            // chain the following subnodes, until last is reached
+            for (int n = 0; n < m_subnodes.count(); ++n) {
+                auto& source = m_subnodes[n]->chainout();
+                auto& dest = m_subnodes[n+1]->chainout();
+                Graph::connect(source, dest);
+            }
+        }
+        }
+    }
 
-    QQmlListProperty<Node> subnodes  ();
-    Q_INVOKABLE void append_subnode  (Node*);
-    Q_INVOKABLE int nsubnodes        () const;
-    Q_INVOKABLE Node* subnode        (int) const;
-    Q_INVOKABLE void clear_subnodes  ();
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    setTarget(const QQmlProperty& target) override
+    {
+        auto socket = target.read().value<Socket*>();
+        switch (socket->polarity()) {
+        case INPUT: Graph::connect(*this, *socket); break;
+        case OUTPUT: Graph::connect(*socket, *this);
+        }
+    }
 
-    static void append_subnode  (QQmlListProperty<Node>*, Node*);
-    static int nsubnodes        (QQmlListProperty<Node>*);
-    static Node* subnode        (QQmlListProperty<Node>*, int);
-    static void clear_subnodes  (QQmlListProperty<Node>*);
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    initialize(Graph::properties& properties) = 0;
+    // this is called when the graph and allocation are complete
 
-    Dispatch::Values dispatch() const { return m_dispatch; }
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) = 0;
+    // the main processing function to override
 
-    Q_INVOKABLE qreal db(qreal v);
+    // --------------------------------------------------------------------------------------------
+    void
+    set_level(qreal level)
+    // set default outputs level + postfader auxiliary connections level
+    {
+        if (!m_outputs.empty())
+             m_outputs[0]->set_level(level);
+    }
 
-    signals:
-    void parentChanged();
-    void registered();
+    // --------------------------------------------------------------------------------------------
+    void
+    set_muted(bool muted)
+    // mute/unmute all output sockets
+    {
+        for (auto& socket: m_outputs)
+             socket->set_muted(muted);
+    }
 
-    protected:
-    bool m_active   = true;
-    bool m_muted    = false;
-    Node* m_parent  = nullptr;
-    qreal m_level   = 1;
-    qreal m_pending_value = 0;
+    // --------------------------------------------------------------------------------------------
+    void
+    set_active(bool active)
+    // activate/deactivate all output sockets
+    {
+        for (auto& socket: m_outputs)
+             socket->set_active(active);
+    }
 
-    QVariantList m_routing;
-    QVector<Node*> m_subnodes;    
-    Dispatch::Values m_dispatch = Dispatch::Values::Upwards;
-    wpn_node* c_node = nullptr;
-};
+    // --------------------------------------------------------------------------------------------
+    void
+    set_parent(Node* parent) { m_parent = parent; }
+    // sets Node's parent Node, creating appropriate connections
 
-//-------------------------------------------------------------------------------------------------
-class JackIO : public Node
-//-------------------------------------------------------------------------------------------------
-{
-    Q_OBJECT
+    // --------------------------------------------------------------------------------------------
+    void
+    register_socket(Socket& s) { sockets(s.polarity()).push_back(&s); }
+    // this is called from Socket's constructor
+    // adds a pointer to the newly created Socket
 
-    Q_PROPERTY  (int numInputs MEMBER m_n_inputs)
-    Q_PROPERTY  (int numOutputs MEMBER m_n_outputs)
-    WPN_SOCKET  (inputs, INPUT)
-    WPN_SOCKET  (outputs, OUTPUT)
+    // --------------------------------------------------------------------------------------------
+    std::vector<Socket*>&
+    sockets(polarity_t polarity)
+    // returns Node's socket vector matching given polarity
+    {
+        switch(polarity) {
+            case INPUT: return m_inputs;
+            case OUTPUT: return m_outputs;
+        }
+    }
 
-    public:
-    JackIO();
-    ~JackIO();
+    // --------------------------------------------------------------------------------------------
+    Socket*
+    default_inputs()
+    // returns Node's default inputs
+    {
+        if (m_inputs.empty())
+             return nullptr;
+        else return m_inputs.front();
+    }
 
-    virtual void componentComplete() override;
+    // --------------------------------------------------------------------------------------------
+    Socket*
+    default_outputs()
+    // returns Node's default outputs
+    {
+        if (m_outputs.empty())
+             return nullptr;
+        else return m_outputs.front();
+    }
 
-    Q_INVOKABLE void run(QString = {});
+    // --------------------------------------------------------------------------------------------
+    bool
+    connected() { return (connected(INPUT) || connected(OUTPUT)); }
+    // returns true if Node is connected to anything
 
-    protected:
-    wpn_io_jack c_jack;
-    int m_n_inputs  = 0;
-    int m_n_outputs = 2;
+    // --------------------------------------------------------------------------------------------
+    bool
+    connected(polarity_t polarity)
+    // returns true if Node is connected to anything (given polarity)
+    {
+        for (auto& socket : sockets(polarity))
+            if (socket->connected())
+                return true;
+        return false;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    connected(Node const& target)
+    // returns true if this Node is connected to target Node
+    {
+        for (auto& socket : sockets(INPUT))
+            if (socket->connected(target))
+                return true;
+
+        for (auto& socket : sockets(OUTPUT))
+            if (socket->connected(target))
+                return true;
+
+        return false;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    connected(Socket const& target)
+    // returns true if this Node is connected to target Socket
+    {
+
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Routing
+    routing() const { return m_routing; }
+    // returns Node's default output connection routing
+
+    // --------------------------------------------------------------------------------------------
+    Node&
+    chainout()
+    // returns the last Node in the parent-children chain
+    // this would be the Node producing the chain's final output
+    {
+        switch(m_dispatch) {
+        case Dispatch::Values::Upwards: return *this;
+        case Dispatch::Values::Downwards:
+        {
+            if (m_subnodes.empty())
+                return *this;
+            else return *m_subnodes.back();
+        }
+        }
+
+        assert(false);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE qreal
+    db(qreal v) { return std::pow(10, v*.05); }
+    // this is not an a->db function
+    // it is a useful, readable and declarative way to signal that the value
+    // used within qml is of the db unit.
+    // consequently, it returns the value as a normal linear amplitude value.
+    // in general, to ease-up calculations, the db should be calculated once and upfront
+
+    // --------------------------------------------------------------------------------------------
+    QQmlListProperty<Node>
+    subnodes()
+    // returns subnodes (QML format)
+    {
+        return QQmlListProperty<Node>(
+               this, this,
+               &Node::append_subnode,
+               &Node::nsubnodes,
+               &Node::subnode,
+               &Node::clear_subnodes);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE void
+    append_subnode(Node* node) { m_subnodes.push_back(node); }
+    // appends a subnode to this Node children
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE int
+    nsubnodes() const { return m_subnodes.count(); }
+    // returns this Node' subnodes count
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE Node*
+    subnode(int index) const { return m_subnodes[index]; }
+    // returns this Node' subnode at index
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE void
+    clear_subnodes() { m_subnodes.clear(); }
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    append_subnode(QQmlListProperty<Node>* list, Node* node)
+    // static Qml version, see above
+    {
+        reinterpret_cast<Node*>(list->data)->append_subnode(node);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static int
+    nsubnodes(QQmlListProperty<Node>* list)
+    // static Qml version, see above
+    {
+        return reinterpret_cast<Node*>(list)->nsubnodes();
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static Node*
+    subnode(QQmlListProperty<Node>* list, int index)
+    // static Qml version, see above
+    {
+        return reinterpret_cast<Node*>(list)->subnode(index);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    clear_subnodes(QQmlListProperty<Node>* list)
+    // static Qml version, see above
+    {
+        reinterpret_cast<Node*>(list)->clear_subnodes();
+    }
+
+private:
+
+    // --------------------------------------------------------------------------------------------
+    void
+    process()
+    // pre-processing main function
+    {
+
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Spatial
+    m_spatial;
+
+    // --------------------------------------------------------------------------------------------
+    std::vector<Socket*>
+    m_inputs;
+
+    // --------------------------------------------------------------------------------------------
+    std::vector<Socket*>
+    m_outputs;
+
+    // --------------------------------------------------------------------------------------------
+    QVector<Node*>
+    m_subnodes;
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    m_muted = false;
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    m_active = true;
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    m_level = 1;
+
+    // --------------------------------------------------------------------------------------------
+    Dispatch::Values
+    m_dispatch = Dispatch::Values::Upwards;
+
+    // --------------------------------------------------------------------------------------------
+    Routing
+    m_routing;
+
+    // --------------------------------------------------------------------------------------------
+    Node*
+    m_parent = nullptr;
 };
 
 //-------------------------------------------------------------------------------------------------
 class Sinetest : public Node
 //-------------------------------------------------------------------------------------------------
 {
-    Q_OBJECT
-    Q_PROPERTY  (qreal frequency READ frequency WRITE setFrequency)
-    WPN_SOCKET  (output, OUTPUT)
+    // this marks initialize and rwrite as overriden
+    WPN_OBJECT
+
+    // index 0 of enum is always default input/output
+    WPN_ENUM_INPUTS     (Frequency)
+    WPN_ENUM_OUTPUTS    (Outputs)
+
+    // enum name, nchannels (0 if dynamic)
+    WPN_INPUT_DECLARE   (Frequency, 1)
+    WPN_OUTPUT_DECLARE  (Outputs, 1)
 
     public:
     Sinetest();
-
-    qreal frequency() const { return c_sinetest.frequency; }
-    void setFrequency(qreal f) { c_sinetest.frequency = f; }
-
-    private:
-    wpn_sinetest c_sinetest;
 };
 
 //-------------------------------------------------------------------------------------------------
 class VCA : public Node
 //-------------------------------------------------------------------------------------------------
 {
-    Q_OBJECT
-    WPN_SOCKET  (inputs, INPUT)
-    WPN_SOCKET  (gain, INPUT)
-    WPN_SOCKET  (outputs, OUTPUT)
+    WPN_OBJECT
+    WPN_ENUM_INPUTS     (Inputs, Gain)
+    WPN_ENUM_OUTPUTS    (Outputs)
+
+    WPN_INPUT_DECLARE   (Inputs,  0 )
+    WPN_INPUT_DECLARE   (Gain,    1 )
+    WPN_OUTPUT_DECLARE  (Outputs, 0 )
 
     public:
     VCA();
 };
+
+//-------------------------------------------------------------------------------------------------
+class IOJack : public Node
+//-------------------------------------------------------------------------------------------------
+{
+    WPN_OBJECT
+    WPN_ENUM_INPUTS     (Inputs)
+    WPN_ENUM_OUTPUTS    (Outputs)
+
+    WPN_INPUT_DECLARE   (Inputs, 0)
+    WPN_OUTPUT_DECLARE  (Outputs, 0)
+
+    // additional Q_PROPERTY for non-audio qml properties
+    Q_PROPERTY (int numInputs READ n_inputs WRITE setn_inputs)
+    Q_PROPERTY (int numOutputs READ n_outputs WRITE setn_outputs)
+
+    uint8_t m_n_inputs = 0, m_n_outputs = 2;
+
+    public:
+    IOJack();
+    ~IOJack();
+
+    virtual void
+    componentComplete() override;
+
+    Q_INVOKABLE void
+    run(QString target = {});
+
+    Q_INVOKABLE void
+    stop();
+
+    uint8_t
+    n_inputs() const;
+
+    uint8_t
+    n_outputs() const;
+
+    void
+    setn_inputs(uint8_t n_inputs);
+
+    void
+    setn_outputs(uint8_t n_outputs);
+};
+
 
 #endif // QTWRAPPER2_HPP

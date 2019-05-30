@@ -3,7 +3,7 @@ import WPN114.Audio 1.1 as WPN114
 
 Item
 {
-    WPN114.Audiograph
+    WPN114.Graph
     {
         id: graph
 
@@ -12,13 +12,12 @@ Item
         // we configure the global graph with the following parameters:
         rate: 44100
         vector: 512
-        feedback: 64
 
         // output module looks for selected output device
         // or choose the default one if unspecified
         // the audio thread is created, initialized and started
 
-        WPN114.Output
+        WPN114.JackIO
         {
             id: output
 
@@ -37,5 +36,5 @@ Item
     // allocating the different i/o pins
     // and then allocates the connection streams
 
-    Component.onCompleted: audiostream.start();
+    Component.onCompleted: output.run("REAPER")
 }
