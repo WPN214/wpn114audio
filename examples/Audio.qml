@@ -5,36 +5,32 @@ Item
 {
     WPN114.Graph
     {
-        id: graph
+        // these are the default graph property values
+        rate: 44100; vector: 512
 
-        // we instantiate an Output module
-        // when component is complete
-        // we configure the global graph with the following parameters:
-        rate: 44100
-        vector: 512
-
-        // output module looks for selected output device
-        // or choose the default one if unspecified
-        // the audio thread is created, initialized and started
+        // when the graph is complete, start audio processing
+        Component.onCompleted: output.run();
 
         WPN114.JackIO
         {
             id: output
+            // default property values as well
+            numInputs: 0
+            numOutputs: 2
 
             WPN114.Sinetest
             {
                 id: sinetest
-
                 frequency: 440.0
-                WPN114.VCA on outputs { id: vca; gain: db(-12) }
+
+                WPN114.VCA on output
+                {
+                    id: vca; gain: db(-12)
+                    WPN114.Sinetest on gainmod { frequency: 1; level: 0.5 }
+                }
+
+                output.routing: [0, 1]
             }
         }
     }
-
-    // on audio start
-    // graph first initializes all the registered nodes
-    // allocating the different i/o pins
-    // and then allocates the connection streams
-
-    Component.onCompleted: output.run("REAPER")
 }

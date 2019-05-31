@@ -56,6 +56,14 @@ Socket::connected(const Node& n) const
 }
 
 // --------------------------------------------------------------------------------------------
+inline void
+Graph::register_node(Node& node)
+{
+    QObject::connect(s_instance, &Graph::rateChanged, &node, &Node::on_rate_changed);
+    s_nodes.push_back(&node);
+}
+
+// --------------------------------------------------------------------------------------------
 inline Connection&
 Graph::connect(Socket& source, Socket& dest, Routing matrix)
 {
@@ -161,67 +169,5 @@ Connection::pull(vector_t nframes)
             for (vector_t f = 0; f < nframes; ++f)
                 dbuf[m_routing[r][0]][f] += m_level*
                 sbuf[m_routing[r][1]][f];
-
     }
-}
-
-//-------------------------------------------------------------------------------------------------
-// NODE
-//-------------------------------------------------------------------------------------------------
-
-//-------------------------------------------------------------------------------------------------
-// SINETEST
-//-------------------------------------------------------------------------------------------------
-
-Sinetest::Sinetest()
-{
-
-}
-
-void
-Sinetest::initialize(Graph::properties& properties)
-{
-
-}
-
-void
-Sinetest::rwrite(pool& inputs, pool& outputs, vector_t nframes)
-{
-    auto frequency = inputs[Frequency];
-    auto out = outputs[Outputs];
-
-
-
-}
-
-//-------------------------------------------------------------------------------------------------
-// VCA
-//-------------------------------------------------------------------------------------------------
-
-VCA::VCA()
-{
-
-}
-
-void
-VCA::rwrite(pool& inputs, pool& outputs, vector_t nframes)
-{
-    auto in   = inputs[Inputs];
-    auto out  = outputs[Outputs];
-    auto gain = inputs[Gain];
-
-    FOR_NCHANNELS(c, Outputs)
-        FOR_NFRAMES(n, nframes)
-            out[c][n] = in[c][n] * gain[0][n];
-        END
-    END
-}
-
-//-------------------------------------------------------------------------------------------------
-// IOJACK
-//-------------------------------------------------------------------------------------------------
-
-IOJack::IOJack()
-{
-
 }

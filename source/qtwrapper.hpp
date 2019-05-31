@@ -17,9 +17,7 @@ class Node;
 // --------------------------------------------------------------------------------------------------
 
 #define WPN_OBJECT                                                                                  \
-    Q_OBJECT                                                                                        \
-    public: void initialize(Graph::properties&) override;                                           \
-    public: void rwrite(pool& inputs, pool& outputs, vector_t nframes) override; \
+Q_OBJECT
 
 #define WPN_SOCKET(_pol, _nm, _idx, _nchn)                                                          \
 private: Q_PROPERTY(Socket _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                        \
@@ -638,7 +636,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     static void
-    register_node(Node& node) { s_nodes.push_back(&node); }
+    register_node(Node& node);
 
     // --------------------------------------------------------------------------------------------
     static void
@@ -690,11 +688,6 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    static void
-    initialize();
-    // allocates upstream sockets & connections
-
-    // --------------------------------------------------------------------------------------------
     static pool&
     run(Node& target);
     // the main processing function
@@ -704,10 +697,28 @@ public:
     vector() { return s_properties.vector; }
     // returns graph vector size
 
+    static void
+    set_vector(uint16_t vector) { s_properties.vector = vector; }
+
+    // --------------------------------------------------------------------------------------------
+    Q_SIGNAL void
+    rateChanged(sample_t);
+
     // --------------------------------------------------------------------------------------------
     static sample_t
     rate() { return s_properties.rate; }
     // returns graph sample rate
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    set_rate(sample_t rate)
+    // --------------------------------------------------------------------------------------------
+    {
+        if (rate != s_properties.rate) {
+            s_properties.rate = rate;
+            emit s_instance->rateChanged(rate);
+        }
+    }
 
     // --------------------------------------------------------------------------------------------
     QQmlListProperty<Node>
@@ -825,6 +836,13 @@ class Spatial : public QObject
 {
     Q_OBJECT
 
+public:
+    Spatial();
+    Spatial(const Spatial&);
+
+    Spatial& operator=(const Spatial&);
+
+private:
     std::vector<spatial_t>
     m_channels;
 };
@@ -843,33 +861,59 @@ class Dispatch : public QObject
 
 //-------------------------------------------------------------------------------------------------
 class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
+/*! \class Node
+ * \brief the main Node class */
 //-------------------------------------------------------------------------------------------------
 {
     Q_OBJECT
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(bool
-    muted MEMBER m_muted WRITE set_muted)
+    muted MEMBER m_muted WRITE set_muted)    
+    /*!
+     * \property Node::muted
+     * \brief mutes/unmutes all Node's outputs
+    */
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(bool
     active MEMBER m_active WRITE set_active)
+    /*!
+     * \property Node::active
+     * \brief activates/deactivates Node processing
+    */
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(qreal
     level MEMBER m_level WRITE set_level)
+    /*!
+     * \property Node::level
+     * \brief sets Node's default output levels (linear amplitude)
+    */
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(Spatial
     space MEMBER m_spatial)
+    /*!
+     * \property Node::space
+     * \brief unimplemented yet
+    */
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(QQmlListProperty<Node>
     subnodes READ subnodes)
+    /*!
+     * \property Node::subnodes
+     * \brief the list of subnodes that are connected to this Node
+    */
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(Dispatch::Values
     dispatch MEMBER m_dispatch)
+    /*!
+     * \property Node::dispatch
+     * \brief sets dispatch mode for subnode connections
+    */
 
     // --------------------------------------------------------------------------------------------
     Q_CLASSINFO
@@ -975,6 +1019,11 @@ public:
     virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) = 0;
     // the main processing function to override
+
+    // --------------------------------------------------------------------------------------------
+    virtual void
+    on_rate_changed(sample_t rate) {}
+    // this can be overriden and will be called each time the sample rate changes
 
     // --------------------------------------------------------------------------------------------
     void
@@ -1217,6 +1266,7 @@ private:
     // --------------------------------------------------------------------------------------------
     void
     allocate_sockets(vector_t nframes)
+    // --------------------------------------------------------------------------------------------
     {
         for (auto& socket : m_inputs)
              socket->allocate(nframes);
@@ -1261,6 +1311,8 @@ private:
     process(vector_t nframes)
     // pre-processing main function
     // - pull input connections
+    // - call rwrite
+    // - mark node as processed
     // --------------------------------------------------------------------------------------------
     {
         for (auto& socket : m_inputs)
@@ -1332,21 +1384,74 @@ private:
 
 //-------------------------------------------------------------------------------------------------
 class Sinetest : public Node
+/*!
+* \class Sinetest
+* \brief cheap sinusoidal generator
+*/
 //-------------------------------------------------------------------------------------------------
-{
-    // this marks initialize and rwrite as overriden
+{       
     WPN_OBJECT
+    // this marks initialize and rwrite as overriden
 
+    //-------------------------------------------------------------------------------------------------
+    WPN_ENUM_INPUTS  (frequency)
+    WPN_ENUM_OUTPUTS (output)
     // index 0 of enum is always default input/output
-    WPN_ENUM_INPUTS     (Frequency)
-    WPN_ENUM_OUTPUTS    (Outputs)
 
-    // enum name, nchannels (0 if dynamic)
-    WPN_INPUT_DECLARE   (Frequency, 1)
-    WPN_OUTPUT_DECLARE  (Outputs, 1)
+    //-------------------------------------------------------------------------------------------------
+    WPN_INPUT_DECLARE  (frequency, 1)
+    /*!
+     * \property Sinetest::frequency
+     * \brief (audio, input) in Hertz
+     */
 
-    public:
-    Sinetest();
+    //-------------------------------------------------------------------------------------------------
+    WPN_OUTPUT_DECLARE (output, 1)
+    /*!
+     * \property Sinetest::output
+     * \brief (audio, output) main out
+     */
+
+    static constexpr size_t esz = 16384;
+
+public:
+
+    //-------------------------------------------------------------------------------------------------
+    Sinetest()
+    // ctor, do what you want here
+    //-------------------------------------------------------------------------------------------------
+    {
+        m_env = new sample_t[esz];
+
+        for (size_t n = 0; n < esz; ++n)
+            m_env[n] = sin(M_PI*2*n/esz);
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    // the main processing function
+    //-------------------------------------------------------------------------------------------------
+    {
+        auto frequency = inputs[Inputs::frequency][0];
+        auto out = outputs[Outputs::output][0];
+
+        for (vector_t f = 0; f < nframes; ++f) {
+            m_phs += frequency[f]/m_rate * esz;
+            out[f] = m_env[m_phs];
+        }
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    on_rate_changed(sample_t rate) override { m_rate = rate; }
+    // this is called whenever Graph's sample rate changes
+
+private:
+
+    sample_t* m_env = nullptr;
+    sample_t m_rate = 0;
+    size_t m_phs = 0;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -1354,15 +1459,59 @@ class VCA : public Node
 //-------------------------------------------------------------------------------------------------
 {
     WPN_OBJECT
-    WPN_ENUM_INPUTS     (Inputs, Gain)
-    WPN_ENUM_OUTPUTS    (Outputs)
+    WPN_ENUM_INPUTS     (inputs, gainmod)
+    WPN_ENUM_OUTPUTS    (outputs)
 
-    WPN_INPUT_DECLARE   (Inputs,  0 )
-    WPN_INPUT_DECLARE   (Gain,    1 )
-    WPN_OUTPUT_DECLARE  (Outputs, 0 )
+    //-------------------------------------------------------------------------------------------------
+    WPN_INPUT_DECLARE   (inputs,  0 )
+    /*!
+     * \property VCA::inputs
+     * \brief (audio) in, multichannel expansion
+     */
 
-    public:
-    VCA();
+    //-------------------------------------------------------------------------------------------------
+    WPN_INPUT_DECLARE   (gainmod, 1 )
+    /*!
+     * \property VCA::gainmod
+     * \brief (audio) gain modulation (0-1)
+     */
+
+    //-------------------------------------------------------------------------------------------------
+    WPN_OUTPUT_DECLARE  (outputs, 0 )
+    /*!
+     * \property VCA::outputs
+     * \brief (audio) out, multichannel expansion
+     */
+
+    //-------------------------------------------------------------------------------------------------
+    Q_PROPERTY (sample_t gain MEMBER m_gain)
+    /*!
+     * \property VCA::gain
+     * \brief (qreal) gain (linear)
+     */
+
+public:
+
+    VCA() {}
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    // this Node will benefits from multichannel expansion if needed
+    //-------------------------------------------------------------------------------------------------
+    {
+        auto in  = inputs[Inputs::inputs];
+        auto gmd = inputs[Inputs::gainmod][0];
+        auto out = outputs[Outputs::outputs];
+
+        for (nchannels_t c = 0; c < m_outputs.nchannels(); ++c)
+            for (vector_t f = 0; f < nframes; ++f)
+                 out[c][f] = in[c][f] *= m_gain * gmd[f];
+    }
+
+private:
+    sample_t m_gain = 1;
+
 };
 
 //-------------------------------------------------------------------------------------------------
