@@ -96,6 +96,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     Socket(Socket const& cp)
+    // --------------------------------------------------------------------------------------------
     {
 
     }
@@ -106,12 +107,14 @@ public:
     // --------------------------------------------------------------------------------------------
     Socket&
     operator=(Socket const& cp)
+    // --------------------------------------------------------------------------------------------
     {
 
     }
 
     // --------------------------------------------------------------------------------------------
     ~Socket()
+    // --------------------------------------------------------------------------------------------
     {
 
     }
@@ -236,12 +239,15 @@ public:
 
     // --------------------------------------------------------------------------------------------
     Routing(Routing const& cp)
+    // --------------------------------------------------------------------------------------------
     {
 
     }
 
     // --------------------------------------------------------------------------------------------
     Routing(QVariantList list)
+    // creates Routing object from QVariantList within QML
+    // --------------------------------------------------------------------------------------------
     {
         if (list.empty())
             return;
@@ -254,6 +260,7 @@ public:
     // --------------------------------------------------------------------------------------------
     Routing&
     operator=(Routing const& cp)
+    // --------------------------------------------------------------------------------------------
     {
 
     }
@@ -261,13 +268,17 @@ public:
     // --------------------------------------------------------------------------------------------
     cable&
     operator[](uint8_t index) { return m_routing[index]; }
+    // returns routing matrix 'cable' at index
 
     // --------------------------------------------------------------------------------------------
-    bool empty() const { return m_routing.empty(); }
+    bool null() const { return m_routing.empty(); }
+    // returns true if Routing is not explicitely defined
 
     // --------------------------------------------------------------------------------------------
     QVariantList
     to_qvariant() const
+    // returns Routing as QVariantList, for use within QML
+    // --------------------------------------------------------------------------------------------
     {
         QVariantList lst;
         for (auto& cable : m_routing) {
@@ -295,26 +306,40 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(Socket*
     source MEMBER m_source)
+    // Connection source Socket (output polarity) from which the signal will transit
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(Socket*
     dest MEMBER m_dest)
+    // Connection dest Socket (input polarity) to which the signal will transit
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(QVariantList
     routing READ routing WRITE set_routing)
+    // Connection's channel-to-channel routing matrix
+    // materialized as a QVariantList within QML
+    // e.g. [0, 1, 1, 0] will connect output 0 to input 1 and output 1 to input 0
+    // TODO: [[0,1],[1,0]] format as well
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (qreal
     level MEMBER m_level)
+    // Connection's amplitude level (linear)
+    // scales the amplitude of the input signal to transit to the output
+    // this property might be overriden or scaled by Socket's or Node's level property
+    // TODO: prefader/postfader property
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(bool
     muted MEMBER m_muted)
+    // Connection will still process when muted
+    // but will output zeros instead of the normal signal
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(bool
     active MEMBER m_active)
+    // if inactive, Connection won't process the upstream part of the Graph
+    // to which it is connected
 
     // --------------------------------------------------------------------------------------------
     Q_INTERFACES
@@ -461,10 +486,12 @@ class Graph : public QObject, public QQmlParserStatus
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(int
     vector READ vector WRITE set_vector)
+    // Graph's signal vector size (lower is better, but will increase CPU usage)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(QQmlListProperty<Node>
     subnodes READ subnodes )
+    // this is the default list property
 
     // --------------------------------------------------------------------------------------------
     Q_CLASSINFO
@@ -479,6 +506,7 @@ public:
     // --------------------------------------------------------------------------------------------
     struct properties
     // holds the graph processing properties
+    // --------------------------------------------------------------------------------------------
     {
         sample_t rate    = 44100;
         vector_t vector  = 512;
@@ -501,6 +529,9 @@ public:
     // --------------------------------------------------------------------------------------------
     static Connection&
     connect(Socket& source, Socket& dest, Routing matrix = {})
+    // connects two Sockets together
+    // returns a reference to the newly created Connection object for further manipulation
+    // --------------------------------------------------------------------------------------------
     {
         auto con = Connection(source, dest, matrix);
         s_connections.push_back(con);
@@ -510,18 +541,24 @@ public:
     // --------------------------------------------------------------------------------------------
     static Connection&
     connect(Node& source, Node& dest, Routing matrix = {});
+    // connects source Node's default outputs to dest Node's default inputs
 
     // --------------------------------------------------------------------------------------------
     static Connection&
     connect(Node& source, Socket& dest, Routing matrix = {});
+    // connects source Node's default outputs to dest Socket
 
     // --------------------------------------------------------------------------------------------
     static Connection&
     connect(Socket& source, Node& dest, Routing matrix = {});
+    // connects Socket source to dest Node's default inputs
 
     // --------------------------------------------------------------------------------------------
     static Connection*
     get_connection(Socket& source, Socket& dest)
+    // returns the Connection object linking the two Sockets
+    // if Connection cannot be found, returns nullptr
+    // --------------------------------------------------------------------------------------------
     {
         for (auto& con : s_connections)
             if (con.source() == &source &&
@@ -534,6 +571,8 @@ public:
     // --------------------------------------------------------------------------------------------
     static void
     reconnect(Socket& source, Socket& dest, Routing matrix)
+    // reconnects the two Sockets with a new routing
+    // --------------------------------------------------------------------------------------------
     {
         if (auto con = get_connection(source, dest))
             con->set_routing(matrix);
@@ -542,6 +581,8 @@ public:
     // --------------------------------------------------------------------------------------------
     static void
     disconnect(Socket& source, Socket& dest)
+    // disconnects the two Sockets
+    // --------------------------------------------------------------------------------------------
     {
         if (auto con = get_connection(source, dest)) {
             // TODO
@@ -571,6 +612,7 @@ public:
     // --------------------------------------------------------------------------------------------
     QQmlListProperty<Node>
     subnodes()
+    // --------------------------------------------------------------------------------------------
     {
         return QQmlListProperty<Node>(
                this, this,
@@ -637,12 +679,14 @@ private:
 
     // --------------------------------------------------------------------------------------------
     Graph()
+    // --------------------------------------------------------------------------------------------
     {
         s_instance = this;
     }
 
     // --------------------------------------------------------------------------------------------
     virtual ~Graph() override
+    // --------------------------------------------------------------------------------------------
     {
 
     }
@@ -757,6 +801,7 @@ public:
     componentComplete() override
     // parses the local graph and builds appropriate connections between this Node
     // and its subnodes, given the selected dispatch mode
+    // --------------------------------------------------------------------------------------------
     {
         if (m_subnodes.empty())
             return;
@@ -794,6 +839,9 @@ public:
     // --------------------------------------------------------------------------------------------
     virtual void
     setTarget(const QQmlProperty& target) override
+    // a convenience method for quickly adding a processor Node in between
+    // target Socket and the actual output (QML)
+    // --------------------------------------------------------------------------------------------
     {
         auto socket = target.read().value<Socket*>();
         switch (socket->polarity()) {
@@ -816,6 +864,7 @@ public:
     void
     set_level(qreal level)
     // set default outputs level + postfader auxiliary connections level
+    // --------------------------------------------------------------------------------------------
     {
         if (!m_outputs.empty())
              m_outputs[0]->set_level(level);
@@ -825,6 +874,7 @@ public:
     void
     set_muted(bool muted)
     // mute/unmute all output sockets
+    // --------------------------------------------------------------------------------------------
     {
         for (auto& socket: m_outputs)
              socket->set_muted(muted);
@@ -834,6 +884,7 @@ public:
     void
     set_active(bool active)
     // activate/deactivate all output sockets
+    // --------------------------------------------------------------------------------------------
     {
         for (auto& socket: m_outputs)
              socket->set_active(active);
@@ -854,6 +905,7 @@ public:
     std::vector<Socket*>&
     sockets(polarity_t polarity)
     // returns Node's socket vector matching given polarity
+    // --------------------------------------------------------------------------------------------
     {
         switch(polarity) {
             case INPUT: return m_inputs;
@@ -865,6 +917,7 @@ public:
     Socket*
     default_inputs()
     // returns Node's default inputs
+    // --------------------------------------------------------------------------------------------
     {
         if (m_inputs.empty())
              return nullptr;
@@ -875,6 +928,7 @@ public:
     Socket*
     default_outputs()
     // returns Node's default outputs
+    // --------------------------------------------------------------------------------------------
     {
         if (m_outputs.empty())
              return nullptr;
@@ -890,6 +944,7 @@ public:
     bool
     connected(polarity_t polarity)
     // returns true if Node is connected to anything (given polarity)
+    // --------------------------------------------------------------------------------------------
     {
         for (auto& socket : sockets(polarity))
             if (socket->connected())
@@ -901,6 +956,7 @@ public:
     bool
     connected(Node const& target)
     // returns true if this Node is connected to target Node
+    // --------------------------------------------------------------------------------------------
     {
         for (auto& socket : sockets(INPUT))
             if (socket->connected(target))
@@ -917,6 +973,7 @@ public:
     bool
     connected(Socket const& target)
     // returns true if this Node is connected to target Socket
+    // --------------------------------------------------------------------------------------------
     {
 
     }
@@ -931,6 +988,7 @@ public:
     chainout()
     // returns the last Node in the parent-children chain
     // this would be the Node producing the chain's final output
+    // --------------------------------------------------------------------------------------------
     {
         switch(m_dispatch) {
         case Dispatch::Values::Upwards: return *this;
@@ -958,6 +1016,7 @@ public:
     QQmlListProperty<Node>
     subnodes()
     // returns subnodes (QML format)
+    // --------------------------------------------------------------------------------------------
     {
         return QQmlListProperty<Node>(
                this, this,
@@ -1024,6 +1083,7 @@ private:
     void
     process()
     // pre-processing main function
+    // --------------------------------------------------------------------------------------------
     {
 
     }
@@ -1122,27 +1182,38 @@ class IOJack : public Node
     uint8_t m_n_inputs = 0, m_n_outputs = 2;
 
     public:
+
+    //-------------------------------------------------------------------------------------------------
     IOJack();
+
+    //-------------------------------------------------------------------------------------------------
     ~IOJack();
 
+    //-------------------------------------------------------------------------------------------------
     virtual void
     componentComplete() override;
 
+    //-------------------------------------------------------------------------------------------------
     Q_INVOKABLE void
-    run(QString target = {});
+    run(QString target = {});   
 
+    //-------------------------------------------------------------------------------------------------
     Q_INVOKABLE void
     stop();
 
+    //-------------------------------------------------------------------------------------------------
     uint8_t
     n_inputs() const;
 
+    //-------------------------------------------------------------------------------------------------
     uint8_t
     n_outputs() const;
 
+    //-------------------------------------------------------------------------------------------------
     void
     setn_inputs(uint8_t n_inputs);
 
+    //-------------------------------------------------------------------------------------------------
     void
     setn_outputs(uint8_t n_outputs);
 };
