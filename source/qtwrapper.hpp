@@ -73,7 +73,81 @@ allocate_buffer(nchannels_t nchannels, vector_t nframes);
 void
 reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes);
 
-}
+} // namespace wpn114
+
+
+
+//-------------------------------------------------------------------------------------------------
+class Routing : public QObject
+// connection matrix between 2 sockets
+// materialized as a QVariantList within QML
+//-------------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+public:
+
+    // --------------------------------------------------------------------------------------------
+    using cable = std::array<uint8_t, 2>;
+
+    // --------------------------------------------------------------------------------------------
+    Routing() {}
+
+    // --------------------------------------------------------------------------------------------
+    Routing(Routing const& cp) : m_routing(cp.m_routing) {}
+
+    // --------------------------------------------------------------------------------------------
+    Routing(QVariantList list)
+    // creates Routing object from QVariantList within QML
+    // --------------------------------------------------------------------------------------------
+    {
+        if (list.empty())
+            return;
+        for (int n = 0; n < list.count(); n += 2) {
+            m_routing[n][0] = list[n].toInt();
+            m_routing[n][1] = list[n+1].toInt();
+        }
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Routing&
+    operator=(Routing const& cp) { m_routing = cp.m_routing; return *this; }
+
+    // --------------------------------------------------------------------------------------------
+    cable&
+    operator[](uint8_t index) { return m_routing[index]; }
+    // returns routing matrix 'cable' at index
+
+    // --------------------------------------------------------------------------------------------
+    nchannels_t
+    ncables() const { return m_routing.size(); }
+
+    // --------------------------------------------------------------------------------------------
+    bool null() const { return m_routing.empty(); }
+    // returns true if Routing is not explicitely defined
+
+    // --------------------------------------------------------------------------------------------
+    QVariantList
+    to_qvariant() const
+    // returns Routing as QVariantList, for use within QML
+    // --------------------------------------------------------------------------------------------
+    {
+        QVariantList lst;
+        for (auto& cable : m_routing) {
+            QVariantList cbl;
+            cbl.append(cable[0]);
+            cbl.append(cable[1]);
+            lst.append(cbl);
+        }
+        return lst;
+    }
+
+private:
+
+    // --------------------------------------------------------------------------------------------
+    std::vector<cable>
+    m_routing;
+};
 
 //-------------------------------------------------------------------------------------------------
 class Socket : public QObject
@@ -98,6 +172,10 @@ class Socket : public QObject
     nchannels MEMBER m_nchannels WRITE set_nchannels)
     // NCHANNELS property: for multichannel expansion
     // and dynamic channel setting/allocation
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(Routing
+    routing READ routing WRITE set_routing)
 
     // --------------------------------------------------------------------------------------------
     friend class Connection;
@@ -194,6 +272,22 @@ public:
     // returns true if this Socket is connected to
     // one of the target's Socket
 
+    // --------------------------------------------------------------------------------------------
+    Routing
+    routing() const
+    // TODO
+    {
+
+    }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_routing(Routing routing)
+    // TODO
+    {
+
+    }
+
 private:
 
     // --------------------------------------------------------------------------------------------
@@ -259,78 +353,6 @@ private:
     // --------------------------------------------------------------------------------------------
     qreal
     m_level = 1;
-};
-
-//-------------------------------------------------------------------------------------------------
-class Routing : public QObject
-// connection matrix between 2 sockets
-// materialized as a QVariantList within QML
-//-------------------------------------------------------------------------------------------------
-{
-    Q_OBJECT
-
-public:
-
-    // --------------------------------------------------------------------------------------------
-    using cable = std::array<uint8_t, 2>;
-
-    // --------------------------------------------------------------------------------------------
-    Routing() {}
-
-    // --------------------------------------------------------------------------------------------
-    Routing(Routing const& cp) : m_routing(cp.m_routing) {}
-
-    // --------------------------------------------------------------------------------------------
-    Routing(QVariantList list)
-    // creates Routing object from QVariantList within QML
-    // --------------------------------------------------------------------------------------------
-    {
-        if (list.empty())
-            return;
-        for (int n = 0; n < list.count(); n += 2) {
-            m_routing[n][0] = list[n].toInt();
-            m_routing[n][1] = list[n+1].toInt();
-        }
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Routing&
-    operator=(Routing const& cp) { m_routing = cp.m_routing; return *this; }
-
-    // --------------------------------------------------------------------------------------------
-    cable&
-    operator[](uint8_t index) { return m_routing[index]; }
-    // returns routing matrix 'cable' at index
-
-    // --------------------------------------------------------------------------------------------
-    nchannels_t
-    ncables() const { return m_routing.size(); }
-
-    // --------------------------------------------------------------------------------------------
-    bool null() const { return m_routing.empty(); }
-    // returns true if Routing is not explicitely defined
-
-    // --------------------------------------------------------------------------------------------
-    QVariantList
-    to_qvariant() const
-    // returns Routing as QVariantList, for use within QML
-    // --------------------------------------------------------------------------------------------
-    {
-        QVariantList lst;
-        for (auto& cable : m_routing) {
-            QVariantList cbl;
-            cbl.append(cable[0]);
-            cbl.append(cable[1]);
-            lst.append(cbl);
-        }
-        return lst;
-    }
-
-private:
-
-    // --------------------------------------------------------------------------------------------
-    std::vector<cable>
-    m_routing;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -562,6 +584,10 @@ class Graph : public QObject, public QQmlParserStatus
     Q_PROPERTY(int
     vector READ vector WRITE set_vector)
     // Graph's signal vector size (lower is better, but will increase CPU usage)
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(sample_t
+    rate READ rate WRITE set_rate)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(QQmlListProperty<Node>
