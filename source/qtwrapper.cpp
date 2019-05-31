@@ -5,6 +5,8 @@
 
 // --------------------------------------------------------------------------------------------
 Socket::Socket(Node* parent, polarity_t polarity, uint8_t index, uint8_t nchannels) :
+// C++ constructor, called from the macro-declarations
+// we immediately store a pointer in parent Node's input/output socket vector
 // --------------------------------------------------------------------------------------------
     m_parent      (parent),
     m_polarity    (polarity),
@@ -17,19 +19,11 @@ Socket::Socket(Node* parent, polarity_t polarity, uint8_t index, uint8_t nchanne
 // --------------------------------------------------------------------------------------------
 void
 Socket::set_muted(bool muted)
+// mutes all connections, zero output
 // --------------------------------------------------------------------------------------------
 {
     for (const auto& con : m_connections)
          con->m_muted = muted;
-}
-
-// --------------------------------------------------------------------------------------------
-void
-Socket::set_active(bool active)
-// --------------------------------------------------------------------------------------------
-{
-    for (const auto& con : m_connections)
-         con->m_active = active;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -44,6 +38,7 @@ Socket::set_level(qreal level)
 // --------------------------------------------------------------------------------------------
 bool
 Socket::connected(const Socket& s) const
+// TODO for feedback connections
 // --------------------------------------------------------------------------------------------
 {
     for (const auto& con : m_connections)
@@ -53,20 +48,29 @@ Socket::connected(const Socket& s) const
 // --------------------------------------------------------------------------------------------
 bool
 Socket::connected(const Node& n) const
+// TODO for feedback connections
 // --------------------------------------------------------------------------------------------
 {
     for (const auto& con: m_connections)
         ;
 }
 
-//-------------------------------------------------------------------------------------------------
-// GRAPH
-//-------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------
+inline Connection&
+Graph::connect(Socket& source, Socket& dest, Routing matrix)
+{
+    auto con = Connection(source, dest, matrix);
+
+    if (dest.parent_node().connected(source.parent_node()))
+        con.set_feedback(true);
+
+    s_connections.push_back(con);
+    return s_connections.back();
+}
 
 // --------------------------------------------------------------------------------------------
 inline Connection&
 Graph::connect(Node& source, Node& dest, Routing matrix)
-// --------------------------------------------------------------------------------------------
 {
     return connect(*source.default_outputs(), *dest.default_inputs(), matrix);
 }
@@ -74,7 +78,6 @@ Graph::connect(Node& source, Node& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 inline Connection&
 Graph::connect(Node& source, Socket& dest, Routing matrix)
-// --------------------------------------------------------------------------------------------
 {
     return connect(*source.default_outputs(), dest, matrix);
 }
@@ -82,7 +85,6 @@ Graph::connect(Node& source, Socket& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 inline Connection&
 Graph::connect(Socket& source, Node& dest, Routing matrix)
-// --------------------------------------------------------------------------------------------
 {
     return connect(source, *dest.default_inputs(), matrix);
 }
@@ -90,16 +92,7 @@ Graph::connect(Socket& source, Node& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 void
 Graph::componentComplete()
-// --------------------------------------------------------------------------------------------
-{
-    for (auto& con : s_connections)
-         con.allocate(s_properties.vector);
-
-}
-
-// --------------------------------------------------------------------------------------------
-inline void
-Graph::initialize()
+// not really sure what to do here just yet
 // --------------------------------------------------------------------------------------------
 {
 
@@ -108,9 +101,18 @@ Graph::initialize()
 // --------------------------------------------------------------------------------------------
 inline pool&
 Graph::run(Node& target)
+// the main processing function
+// Graph will process itself from target Node and upstream recursively
 // --------------------------------------------------------------------------------------------
 {
-    target.process();
+    vector_t nframes = s_properties.vector;
+    target.process(nframes);
+
+    // clean up inputs buffers and
+    // mark Nodes as unprocessed
+    for (auto& node : s_nodes)
+        node->reset_process(nframes);
+
     return target.outputs();
 }
 
@@ -121,12 +123,14 @@ Graph::run(Node& target)
 // --------------------------------------------------------------------------------------------
 void
 Connection::setTarget(const QQmlProperty& target)
+// qml property binding, e. g.:
+// Connection on 'socket' { level: db(-12); routing: [0, 1] }
 // --------------------------------------------------------------------------------------------
 {
     auto socket = target.read().value<Socket*>();
 
     switch(socket->polarity())
-{
+    {
     case OUTPUT:  m_source = socket; break;
     case INPUT:   m_dest = socket;
     }
@@ -134,43 +138,31 @@ Connection::setTarget(const QQmlProperty& target)
 
 // --------------------------------------------------------------------------------------------
 void
-Connection::componentComplete()
-// --------------------------------------------------------------------------------------------
-{
-    // allocates/reallocates Connection buffer
-    // allocates/reallocates source/dest buffers as well
-    // depending on both sockets numchannels properties
-    // this means Connection has been explicitely instantiated from QML
-    // we have to push it back to the graph
-    Graph::add_connection(this);
-
-    // TODO: manage multichannel expansion
-
-    m_source->allocate();
-    m_dest->allocate();
-
-    nchannels_t nchannels = std::max(m_source->nchannels(), m_dest->nchannels());
-    m_buffer = new qreal*[nchannels];
-}
+Connection::componentComplete() { Graph::add_connection(*this); }
 
 // --------------------------------------------------------------------------------------------
 void
-Connection::pull()
+Connection::pull(vector_t nframes)
 // --------------------------------------------------------------------------------------------
 {
-    if (!m_active)
-        return;
+    if (!m_feedback && !m_source->parent_node().processed())
+        m_source->parent_node().process(nframes);
 
-    if (!m_feedback) {
-        m_source->parent_node()->process();
+    auto sbuf = m_source->buffer();
+    auto dbuf = m_dest->buffer();
+
+    if (m_routing.null())
+        for (nchannels_t c = 0; c < m_nchannels; ++c)
+            for (vector_t f = 0; f < nframes; ++f)
+                 dbuf[c][f] += sbuf[c][f] * m_level;
+    else
+    {
+        for (nchannels_t r = 0; r < m_routing.ncables(); ++r)
+            for (vector_t f = 0; f < nframes; ++f)
+                dbuf[m_routing[r][0]][f] += m_level*
+                sbuf[m_routing[r][1]][f];
+
     }
-
-    // get source buffer
-    // get dest buffer
-    // copy source into this buffer
-    // apply gain
-    // pour into dest buffer, given Connection's routing
-
 }
 
 //-------------------------------------------------------------------------------------------------
