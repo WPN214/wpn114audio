@@ -24,7 +24,7 @@ void qml_plugin::registerTypes(const char* uri)
     //=============================================================================================
 
     qmlRegisterType<Graph, 1>     ("WPN114.Audio", 1, 1, "Audiograph");
-    qmlRegisterType<JackIO, 1>    ("WPN114.Audio", 1, 1, "JackIO");
+    qmlRegisterType<IOJack, 1>    ("WPN114.Audio", 1, 1, "JackIO");
     qmlRegisterType<Sinetest, 1>  ("WPN114.Audio", 1, 1, "Sinetest");
     qmlRegisterType<VCA, 1>       ("WPN114.Audio", 1, 1, "VCA");
 }

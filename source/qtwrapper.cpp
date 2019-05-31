@@ -3,6 +3,36 @@
 #include <vector>
 #include <cmath>
 
+using namespace wpn114;
+
+// --------------------------------------------------------------------------------------------
+inline sample_t**
+allocate_buffer(nchannels_t nchannels, vector_t nframes)
+// we make no assumption as to how many channels each input/output may have
+// by the time the graph is ready/updated, so we can't really template it upfront
+// we also want to allocate the whole thing in a single block
+// --------------------------------------------------------------------------------------------
+{
+    sample_t** block = static_cast<sample_t**>(
+                  malloc(
+                  sizeof(sample_t*)*nchannels +
+                  sizeof(sample_t )*nframes*nchannels));
+
+    for (nchannels_t n = 0; n < nchannels; ++n)
+         block[n] = block[nchannels+n*nframes];
+
+    return block;
+}
+
+// --------------------------------------------------------------------------------------------
+inline void
+reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes)
+// --------------------------------------------------------------------------------------------
+{
+    for (nchannels_t c = 0; c < nchannels; ++c)
+         memset(&buffer[c], 0, sizeof(sample_t)*nframes);
+}
+
 // --------------------------------------------------------------------------------------------
 Socket::Socket(Node* parent, polarity_t polarity, uint8_t index, uint8_t nchannels) :
 // C++ constructor, called from the macro-declarations

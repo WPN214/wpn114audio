@@ -20,8 +20,8 @@ class Node;
 Q_OBJECT
 
 #define WPN_SOCKET(_pol, _nm, _idx, _nchn)                                                          \
-private: Q_PROPERTY(Socket _s READ get##_s WRITE set##_s NOTIFY _s##Changed)                        \
-protected: Socket m_##_nm { dynamic_cast<Node*>(this), _pol, _idx, _nchn };                         \
+private: Q_PROPERTY(Socket _nm READ get##_nm WRITE set##_nm NOTIFY _nm##Changed)                    \
+protected: Socket m_##_nm { this, _pol, _idx, _nchn };                         \
                                                                                                     \
 Socket get##_nm() { return m_##_nm; }                                                               \
 void set##_nm(Socket v) {  }                                                                        \
@@ -63,28 +63,16 @@ namespace wpn114
 {
 
 //-------------------------------------------------------------------------------------------------
-sample_t** allocate_buffer(nchannels_t nchannels, vector_t nframes)
+sample_t**
+allocate_buffer(nchannels_t nchannels, vector_t nframes);
 // we make no assumption as to how many channels each input/output may have
 // by the time the graph is ready/updated, so we can't really template it upfront
 // we also want to allocate the whole thing in a single block
+
 //-------------------------------------------------------------------------------------------------
-{
-    void* block = malloc(sizeof(sample_t*)*nchannels +
-                         sizeof(sample_t )*nframes*nchannels);
+void
+reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes);
 
-    auto buf = static_cast<sample_t**>(block);
-
-    for (nchannels_t n = 0; n < nchannels; ++n)
-         buf[n] = buf[nchannels+n*nframes];
-
-    return buf;
-}
-
-void reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes)
-{
-    for (nchannels_t c = 0; c < nchannels; ++c)
-        memset(&buffer[c], 0, sizeof(sample_t)*nframes);
-}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -586,7 +574,7 @@ class Graph : public QObject, public QQmlParserStatus
 
     // --------------------------------------------------------------------------------------------
     Q_INTERFACES
-    (QQmlParserStatus QQmlPropertyValueSource)
+    (QQmlParserStatus)
 
 public:
 
@@ -598,6 +586,17 @@ public:
         sample_t rate    = 44100;
         vector_t vector  = 512;
     };
+
+    // --------------------------------------------------------------------------------------------
+    Graph() { s_instance = this; }
+
+    // --------------------------------------------------------------------------------------------
+    virtual ~Graph() override
+    // there might be something to be done later on
+    // --------------------------------------------------------------------------------------------
+    {
+
+    }
 
     // --------------------------------------------------------------------------------------------
     static Graph&
@@ -789,17 +788,6 @@ public:
 private:
 
     // --------------------------------------------------------------------------------------------
-    Graph() { s_instance = this; }
-
-    // --------------------------------------------------------------------------------------------
-    virtual ~Graph() override
-    // there might be something to be done later on
-    // --------------------------------------------------------------------------------------------
-    {
-
-    }
-
-    // --------------------------------------------------------------------------------------------
     static Graph*
     s_instance;
 
@@ -837,10 +825,26 @@ class Spatial : public QObject
     Q_OBJECT
 
 public:
-    Spatial();
-    Spatial(const Spatial&);
 
-    Spatial& operator=(const Spatial&);
+    Spatial()
+    {
+
+    }
+
+    Spatial(Spatial const&)
+    {
+
+    }
+
+    Spatial& operator=(Spatial const&)
+    {
+
+    }
+
+    bool operator!=(Spatial const&)
+    {
+
+    }
 
 private:
     std::vector<spatial_t>
@@ -1519,11 +1523,11 @@ class IOJack : public Node
 //-------------------------------------------------------------------------------------------------
 {
     WPN_OBJECT
-    WPN_ENUM_INPUTS     (Inputs)
-    WPN_ENUM_OUTPUTS    (Outputs)
+    WPN_ENUM_INPUTS     (inputs)
+    WPN_ENUM_OUTPUTS    (outputs)
 
-    WPN_INPUT_DECLARE   (Inputs, 0)
-    WPN_OUTPUT_DECLARE  (Outputs, 0)
+    WPN_INPUT_DECLARE   (inputs, 0)
+    WPN_OUTPUT_DECLARE  (outputs, 0)
 
     // additional Q_PROPERTY for non-audio qml properties
     Q_PROPERTY (int numInputs READ n_inputs WRITE setn_inputs)
@@ -1534,38 +1538,77 @@ class IOJack : public Node
     public:
 
     //-------------------------------------------------------------------------------------------------
-    IOJack();
+    IOJack()
+    {
+
+    }
 
     //-------------------------------------------------------------------------------------------------
-    ~IOJack();
+    ~IOJack()
+    {
+
+    }
 
     //-------------------------------------------------------------------------------------------------
     virtual void
-    componentComplete() override;
+    classBegin() override {}
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override
+    {
+
+    }
 
     //-------------------------------------------------------------------------------------------------
     Q_INVOKABLE void
-    run(QString target = {});   
+    run(QString target = {})
+    {
+
+    }
 
     //-------------------------------------------------------------------------------------------------
     Q_INVOKABLE void
-    stop();
+    stop()
+    {
+
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool &inputs, pool &outputs, vector_t nframes) override
+    {
+
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    on_rate_changed(sample_t rate) override
+    {
+
+    }
 
     //-------------------------------------------------------------------------------------------------
     uint8_t
-    n_inputs() const;
+    n_inputs() const { return m_n_inputs; }
 
     //-------------------------------------------------------------------------------------------------
     uint8_t
-    n_outputs() const;
+    n_outputs() const { return m_n_outputs; }
 
     //-------------------------------------------------------------------------------------------------
     void
-    setn_inputs(uint8_t n_inputs);
+    setn_inputs(uint8_t n_inputs)
+    {
+
+    }
 
     //-------------------------------------------------------------------------------------------------
     void
-    setn_outputs(uint8_t n_outputs);
+    setn_outputs(uint8_t n_outputs)
+    {
+
+    }
 };
 
 
