@@ -22,14 +22,12 @@ Item
             {
                 id: sinetest
                 frequency: 440.0
+                output.routing: [0, 1]
 
-                WPN114.VCA on output
-                {
-                    id: vca; gain: db(-12)
+                WPN114.VCA on output {
+                    id: vca; gain: db(-12);
                     WPN114.Sinetest on gainmod { frequency: 1; level: 0.5 }
                 }
-
-                output.routing: [0, 1]
             }
         }
     }
