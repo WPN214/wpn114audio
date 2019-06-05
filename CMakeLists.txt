@@ -13,8 +13,12 @@ set(WPN114AUDIO_QML_SOURCES
     qml_plugin.cpp
     source/graph.hpp
     source/graph.cpp
-    source/external.hpp
-    source/external.cpp
+    source/io/external.hpp
+    source/io/external.cpp
+    source/basics/sinetest.hpp
+    source/basics/sinetest.cpp
+    source/basics/vca.hpp
+    source/basics/vca.cpp
     examples/Audio.qml
     )
 

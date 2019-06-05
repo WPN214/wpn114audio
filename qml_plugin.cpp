@@ -1,5 +1,8 @@
 #include "qml_plugin.hpp"
-#include <source/qtwrapper.hpp>
+#include <source/graph.hpp>
+#include <source/io/external.hpp>
+#include <source/basics/sinetest.hpp>
+#include <source/basics/vca.hpp>
 #include <QQmlEngine>
 #include <qqml.h>
 

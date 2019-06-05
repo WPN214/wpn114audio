@@ -188,28 +188,23 @@ class Socket : public QObject
     Q_OBJECT
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(bool
-    muted MEMBER m_muted WRITE set_muted)
+    Q_PROPERTY (bool muted MEMBER m_muted WRITE set_muted)
     // MUTED property: manages and overrides all Socket connections mute property
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(qreal
-    level MEMBER m_level WRITE set_level)
+    Q_PROPERTY (qreal level MEMBER m_level WRITE set_level)
     // LEVEL property: manages and overrides all Socket connections level property
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(int
-    nchannels MEMBER m_nchannels WRITE set_nchannels)
+    Q_PROPERTY (int nchannels MEMBER m_nchannels WRITE set_nchannels)
     // NCHANNELS property: for multichannel expansion
     // and dynamic channel setting/allocation
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Routing
-    routing READ routing WRITE set_routing)
+    Q_PROPERTY (Routing routing READ routing WRITE set_routing)
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Type
-    type READ type)
+    Q_PROPERTY (Type type READ type)
 
     // --------------------------------------------------------------------------------------------
     friend class Connection;
@@ -435,46 +430,39 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     Q_OBJECT
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Socket*
-    source MEMBER m_source)
+    Q_PROPERTY(Socket* source MEMBER m_source)
     // Connection source Socket (output polarity) from which the signal will transit
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Socket*
-    dest MEMBER m_dest)
+    Q_PROPERTY(Socket* dest MEMBER m_dest)
     // Connection dest Socket (input polarity) to which the signal will transit
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(QVariantList
-    routing READ routing WRITE set_routing)
+    Q_PROPERTY (QVariantList routing READ routing WRITE set_routing)
     // Connection's channel-to-channel routing matrix
     // materialized as a QVariantList within QML
     // e.g. [0, 1, 1, 0] will connect output 0 to input 1 and output 1 to input 0
     // TODO: [[0,1],[1,0]] format as well
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal
-    level MEMBER m_level)
+    Q_PROPERTY (qreal level MEMBER m_level)
     // Connection's amplitude level (linear)
     // scales the amplitude of the input signal to transit to the output
     // this property might be overriden or scaled by Socket's or Node's level property
     // TODO: prefader/postfader property
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(bool
-    muted MEMBER m_muted)
+    Q_PROPERTY (bool muted MEMBER m_muted)
     // Connection will still process when muted
     // but will output zeros instead of the normal signal
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(bool
-    active MEMBER m_active)
+    Q_PROPERTY (bool active MEMBER m_active)
     // if inactive, Connection won't process the upstream part of the Graph
     // to which it is connected
 
     // --------------------------------------------------------------------------------------------
-    Q_INTERFACES
-    (QQmlParserStatus QQmlPropertyValueSource)
+    Q_INTERFACES (QQmlParserStatus QQmlPropertyValueSource)
 
     // --------------------------------------------------------------------------------------------
     friend class Socket;
@@ -659,21 +647,17 @@ class Graph : public QObject, public QQmlParserStatus
     // Graph's signal vector size (lower is better, but will increase CPU usage)
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(sample_t
-    rate READ rate WRITE set_rate)
+    Q_PROPERTY (sample_t rate READ rate WRITE set_rate)
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(QQmlListProperty<Node>
-    subnodes READ subnodes)
+    Q_PROPERTY (QQmlListProperty<Node> subnodes READ subnodes)
     // this is the default list property
 
     // --------------------------------------------------------------------------------------------
-    Q_CLASSINFO
-    ("DefaultProperty", "subnodes")
+    Q_CLASSINFO ("DefaultProperty", "subnodes")
 
     // --------------------------------------------------------------------------------------------
-    Q_INTERFACES
-    (QQmlParserStatus)
+    Q_INTERFACES (QQmlParserStatus)
 
 public:
 
@@ -971,48 +955,42 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Q_OBJECT
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(bool
-    muted MEMBER m_muted WRITE set_muted)    
+    Q_PROPERTY(bool muted MEMBER m_muted WRITE set_muted)
     /*!
      * \property Node::muted
      * \brief mutes/unmutes all Node's outputs
     */
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(bool
-    active MEMBER m_active WRITE set_active)
+    Q_PROPERTY(bool active MEMBER m_active WRITE set_active)
     /*!
      * \property Node::active
      * \brief activates/deactivates Node processing
     */
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(qreal
-    level MEMBER m_level WRITE set_level)
+    Q_PROPERTY(qreal level MEMBER m_level WRITE set_level)
     /*!
      * \property Node::level
      * \brief sets Node's default output levels (linear amplitude)
     */
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Spatial
-    space MEMBER m_spatial)
+    Q_PROPERTY(Spatial space MEMBER m_spatial)
     /*!
      * \property Node::space
      * \brief unimplemented yet
     */
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(QQmlListProperty<Node>
-    subnodes READ subnodes)
+    Q_PROPERTY(QQmlListProperty<Node> subnodes READ subnodes)
     /*!
      * \property Node::subnodes
      * \brief the list of subnodes that are connected to this Node
     */
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Dispatch::Values
-    dispatch MEMBER m_dispatch)
+    Q_PROPERTY(Dispatch::Values dispatch MEMBER m_dispatch)
     /*!
      * \property Node::dispatch
      * \brief sets dispatch mode for subnode connections
@@ -1474,140 +1452,5 @@ private:
     Node*
     m_parent = nullptr;
 };
-
-//=================================================================================================
-class Sinetest : public Node
-/*!
-* \class Sinetest
-* \brief cheap sinusoidal generator
-*/
-//=================================================================================================
-{       
-    WPN_OBJECT
-    // this marks initialize and rwrite as overriden
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_ENUM_INPUTS  (frequency, midi)
-    WPN_ENUM_OUTPUTS (output)
-    // index 0 of enum is always default input/output
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (frequency, Socket::Audio, 1)
-    /*!
-     * \property Sinetest::frequency
-     * \brief (audio, input) in Hertz
-     */
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (midi, Socket::Midi_1_0, 1)
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE (output, Socket::Audio, 1)
-    /*!
-     * \property Sinetest::output
-     * \brief (audio, output) main out
-     */
-
-    static constexpr size_t esz = 16384;
-
-public:
-
-    //-------------------------------------------------------------------------------------------------
-    Sinetest()
-    // ctor, do what you want here
-    //-------------------------------------------------------------------------------------------------
-    {
-        m_env = new sample_t[esz];
-
-        for (size_t n = 0; n < esz; ++n)
-            m_env[n] = sin(M_PI*2*n/esz);
-    }
-
-    ~Sinetest()
-    {
-        delete[] m_env;
-    }
-
-    //-------------------------------------------------------------------------------------------------
-    virtual void
-    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
-    // the main processing function
-    //-------------------------------------------------------------------------------------------------
-    {
-        auto frequency  = inputs[Inputs::frequency][0];
-        auto midi       = inputs[Inputs::midi][0];
-        auto out        = outputs[Outputs::output][0];
-
-        for (vector_t f = 0; f < nframes; ++f) {            
-            m_phs += frequency[f]/m_rate * esz;
-            out[f] = m_env[m_phs];
-        }
-    }
-
-    //-------------------------------------------------------------------------------------------------
-    virtual void
-    on_rate_changed(sample_t rate) override { m_rate = rate; }
-    // this is called whenever Graph's sample rate changes
-
-private:
-
-    sample_t* m_env = nullptr;
-    sample_t m_rate = 0;
-    size_t m_phs = 0;
-};
-
-//=================================================================================================
-class VCA : public Node
-//=================================================================================================
-{
-    WPN_OBJECT
-
-    WPN_ENUM_INPUTS     (inputs, gain)
-    WPN_ENUM_OUTPUTS    (outputs)
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (inputs, Socket::Audio, 0)
-    /*!
-     * \property VCA::inputs
-     * \brief (audio) in, multichannel expansion
-     */
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (gain, Socket::Audio, 1)
-    /*!
-     * \property VCA::gainmod
-     * \brief (audio) gain modulation (0-1)
-     */
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE  (outputs, Socket::Audio, 0)
-    /*!
-     * \property VCA::outputs
-     * \brief (audio) out, multichannel expansion
-     */
-
-public:
-
-    VCA() {}
-
-    //-------------------------------------------------------------------------------------------------
-    virtual void
-    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
-    // this Node will benefits from multichannel expansion if needed
-    //-------------------------------------------------------------------------------------------------
-    {
-        auto in  = inputs[Inputs::inputs];
-        auto gmd = inputs[Inputs::gain][0];
-        auto out = outputs[Outputs::outputs];
-
-        for (nchannels_t c = 0; c < m_outputs.nchannels(); ++c)
-            for (vector_t f = 0; f < nframes; ++f)
-                 out[c][f] = in[c][f] *= gmd[f];
-    }
-
-private:
-
-};
-
 
 #endif // QTWRAPPER2_HPP

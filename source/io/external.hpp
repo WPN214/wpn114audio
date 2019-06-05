@@ -1,6 +1,6 @@
 #pragma once
 
-#include "graph.hpp"
+#include <source/graph.hpp>
 #include <jack/jack.h>
 
 //---------------------------------------------------------------------------------------------
@@ -9,7 +9,6 @@ class ExternalBase
 {
 
 public:
-
     //---------------------------------------------------------------------------------------------
     virtual
     ~ExternalBase() {}
@@ -70,6 +69,7 @@ public:
     virtual void
     on_io_vector_changed(uint16_t vector) {}
 };
+
 
 class External;
 
@@ -161,10 +161,10 @@ class External : public Node
     Q_ENUM (Backend)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (int numInputs READ n_inputs WRITE setn_inputs)
+    Q_PROPERTY  (int numAudioInputs READ n_audio_inputs WRITE setn_audio_inputs)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (int numOutputs READ n_outputs WRITE setn_outputs)
+    Q_PROPERTY  (int numAudioOutputs READ n_audio_outputs WRITE setn_audio_outputs)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (int numMidiInputs READ n_midi_inputs WRITE setn_midi_inputs)
@@ -230,12 +230,12 @@ class External : public Node
 
     //---------------------------------------------------------------------------------------------
     QString
-    name = "wpn114audio-device";
+    m_name = "wpn114audio-device";
 
     //---------------------------------------------------------------------------------------------
     uint8_t
-    m_n_inputs          = 0,
-    m_n_outputs         = 2,
+    m_n_audio_inputs    = 0,
+    m_n_audio_outputs   = 2,
     m_n_midi_inputs     = 0,
     m_n_midi_outputs    = 0;
 
@@ -244,6 +244,7 @@ class External : public Node
     m_backend_id = None;
 
 public:
+
 
     //-------------------------------------------------------------------------------------------------
     External() {}
@@ -261,33 +262,10 @@ public:
     //-------------------------------------------------------------------------------------------------
     {
         m_complete = true;
+        m_backend = new JackExternal(this);
 
-        switch(m_backend_id)
-        {
-        case Backend::None:
-        {
-            return;
-        }
-        case Backend::Alsa:
-        {
-            break;
-        }
-        case Backend::Jack:
-        {
-            break;
-        }
-        case Backend::PulseAudio:
-        {
-            break;
-        }
-        case Backend::VSTHost:
-        {
-            break;
-        }
-        case Backend::Core:
-        {
-        }
-        }
+        if (m_running)
+            m_backend->run();
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -353,34 +331,34 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     uint8_t
-    n_inputs() const { return m_n_inputs; }
+    n_audio_inputs() const { return m_n_audio_inputs; }
 
     //-------------------------------------------------------------------------------------------------
     void
-    setn_inputs(uint8_t n_inputs)
+    setn_audio_inputs(uint8_t n_inputs)
     //-------------------------------------------------------------------------------------------------
     {
-        if (m_complete && n_inputs != m_n_inputs) {
+        if (m_complete && n_inputs != m_n_audio_inputs) {
             m_backend->on_audio_inputs_changed(n_inputs);
         }
 
-        m_n_inputs = n_inputs;
+        m_n_audio_inputs = n_inputs;
     }
 
     //-------------------------------------------------------------------------------------------------
     uint8_t
-    n_outputs() const { return m_n_outputs; }
+    n_audio_outputs() const { return m_n_audio_outputs; }
 
     //-------------------------------------------------------------------------------------------------
     void
-    setn_outputs(uint8_t n_outputs)
+    setn_audio_outputs(uint8_t n_outputs)
     //-------------------------------------------------------------------------------------------------
     {
-        if (m_complete && n_outputs != m_n_outputs) {
+        if (m_complete && n_outputs != m_n_audio_outputs) {
             m_backend->on_audio_outputs_changed(n_outputs);
         }
 
-        m_n_outputs = n_outputs;
+        m_n_audio_outputs = n_outputs;
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -517,6 +495,19 @@ public:
     //---------------------------------------------------------------------------------------------
     {
         m_out_midi_routing = variant;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    QString
+    name() const { return m_name; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_name(QString name)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_name = name;
+        m_backend->on_name_changed(m_name);
     }
 };
 
