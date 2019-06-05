@@ -1,4 +1,4 @@
-#include "qtwrapper.hpp"
+#include "graph.hpp"
 #include <QtDebug>
 #include <vector>
 #include <cmath>
@@ -34,13 +34,14 @@ reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes)
 }
 
 // --------------------------------------------------------------------------------------------
-Socket::Socket(Node* parent, polarity_t polarity, uint8_t index, uint8_t nchannels) :
+Socket::Socket(Node* parent, Type type, polarity_t polarity, uint8_t index, uint8_t nchannels) :
 // C++ constructor, called from the macro-declarations
 // we immediately store a pointer in parent Node's input/output socket vector
 // --------------------------------------------------------------------------------------------
     m_parent      (parent),
     m_polarity    (polarity),
     m_index       (index),
+    m_type        (type),
     m_nchannels   (nchannels)
 {
     parent->register_socket(*this);
@@ -87,7 +88,7 @@ Socket::connected(const Node& n) const
 
 // --------------------------------------------------------------------------------------------
 inline void
-Graph::register_node(Node& node)
+Graph::register_node(Node& node) noexcept
 {
     QObject::connect(s_instance, &Graph::rateChanged, &node, &Node::on_rate_changed);
     s_nodes.push_back(&node);
@@ -138,7 +139,7 @@ Graph::componentComplete()
 
 // --------------------------------------------------------------------------------------------
 inline pool&
-Graph::run(Node& target)
+Graph::run(Node& target) noexcept
 // the main processing function
 // Graph will process itself from target Node and upstream recursively
 // --------------------------------------------------------------------------------------------
@@ -180,7 +181,7 @@ Connection::componentComplete() { Graph::add_connection(*this); }
 
 // --------------------------------------------------------------------------------------------
 void
-Connection::pull(vector_t nframes)
+Connection::pull(vector_t nframes) noexcept
 // --------------------------------------------------------------------------------------------
 {
     if (!m_feedback && !m_source->parent_node().processed())
