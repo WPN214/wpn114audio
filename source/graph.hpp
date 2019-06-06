@@ -10,8 +10,6 @@
 #include <QVariant>
 #include <cmath>
 
-class Node;
-
 // --------------------------------------------------------------------------------------------------
 // CONVENIENCE MACRO DEFINITIONS
 // --------------------------------------------------------------------------------------------------
@@ -39,13 +37,13 @@ WPN_SOCKET(_tp, INPUT, _nm, _nm, _nchn)
 #define WPN_OUTPUT_DECLARE(_nm, _tp, _nchn)                                                         \
 WPN_SOCKET(_tp, OUTPUT, _nm, _nm, _nchn)
 
-#define FOR_NCHANNELS(_iter, _target)                                                               \
-for(uint8_t _iter = 0; _iter < m_##_target.nchannels(); ++_iter) {
-
-#define FOR_NFRAMES(_iter, _target)                                                                 \
-for(uint16_t _iter = 0; _iter < _target; ++_iter) {
-
-#define END }
+#define WPN_TODO
+#define WPN_EXAMINE
+#define WPN_OK
+#define WPN_INCORRECT
+#define WPN_CLEANUP
+#define WPN_INCOMPLETE
+#define WPN_UNIMPLEMENTED
 
 //-------------------------------------------------------------------------------------------------
 
@@ -80,12 +78,12 @@ fill_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes, sample_t
 // fill buffer with a single sample_t value
 
 //-------------------------------------------------------------------------------------------------
-sample_t
+WPN_UNIMPLEMENTED sample_t
 midicps(uint8_t mnote);
 // midi pitch value to frequency (hertz)
 
 //-------------------------------------------------------------------------------------------------
-uint8_t
+WPN_UNIMPLEMENTED uint8_t
 cpsmidi(sample_t f);
 // frequency (hertz) to midi pitch value
 
@@ -168,7 +166,9 @@ private:
 using byte_t = uint8_t;
 
 //=================================================================================================
+WPN_INCOMPLETE
 struct midi_t
+// TODO: properly
 //=================================================================================================
 {
     // we pad the last 3/4 bytes with zeroes
@@ -258,7 +258,7 @@ public:
         // a 0-1 latched value
 
         Trigger
-        // a single 1 impulse
+        // a single pulse (1.f)
     };
 
     Q_ENUM (Type)
@@ -293,31 +293,16 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    Socket&
-    operator=(qreal const v)
-    // fills buffer with value v
-    // --------------------------------------------------------------------------------------------
-    {
-        // TODO
-        return *this;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Socket&
-    operator=(Connection const& con)
-    // dunno if this will work
-    // --------------------------------------------------------------------------------------------
-    {
-        // TODO
-        return *this;
-    }
-
-    // --------------------------------------------------------------------------------------------
     ~Socket() { free(m_buffer); }
 
     // --------------------------------------------------------------------------------------------
     void
     assign(QVariant variant);
+    // this is called from QmlEngine when we assign a specific socket a value:
+    // - a qreal value (will fill the current buffer with this)
+    // - another Socket (will establish a connection with this Socket)
+    // - an explicit Connection object
+    // - a QVariantList, for which each element will in turn be parsed recursively
 
     // --------------------------------------------------------------------------------------------
     void
@@ -327,20 +312,18 @@ public:
     // --------------------------------------------------------------------------------------------
     void
     set_mul(qreal mul);
+    // each connection involving this socket will multiply the signal by this 'mul' factor
 
     // --------------------------------------------------------------------------------------------
     void
     set_add(qreal add);
+    // each connection involving this socket will offset the signal by 'add'
 
     // --------------------------------------------------------------------------------------------
     void
-    set_nchannels(nchannels_t nchannels)
+    set_nchannels(nchannels_t nchannels);
     // sets num_channels for socket and
     // allocate/reallocate its buffer
-    // --------------------------------------------------------------------------------------------
-    {
-        m_nchannels = nchannels;
-    }
 
     // --------------------------------------------------------------------------------------------
     nchannels_t
@@ -389,7 +372,6 @@ public:
     // --------------------------------------------------------------------------------------------
     Routing
     routing() const;
-    // --------------------------------------------------------------------------------------------
 
     // --------------------------------------------------------------------------------------------
     void
@@ -786,7 +768,7 @@ public:
     static void
     unregister_node(Node& node) noexcept
     {
-        std::remove(s_nodes.begin(), s_nodes.end(), &node);
+        s_nodes.erase(std::remove(s_nodes.begin(), s_nodes.end(), &node), s_nodes.end());
     }
 
     // --------------------------------------------------------------------------------------------
@@ -821,7 +803,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    static void
+    WPN_TODO static void
     disconnect(Socket& source, Socket& dest)
     // disconnects the two Sockets
     // --------------------------------------------------------------------------------------------
@@ -848,6 +830,9 @@ public:
     // --------------------------------------------------------------------------------------------
     Q_SIGNAL void
     rateChanged(sample_t);
+
+    Q_SIGNAL void
+    vectorChanged(vector_t);
 
     // --------------------------------------------------------------------------------------------
     static sample_t
@@ -1018,6 +1003,9 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Q_OBJECT
 
     // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(Routing routing READ routing WRITE set_routing)
+
+    // --------------------------------------------------------------------------------------------
     Q_PROPERTY(bool muted MEMBER m_muted WRITE set_muted)
     /*!
      * \property Node::muted
@@ -1173,6 +1161,33 @@ public:
     // this can be overriden and will be called each time the sample rate changes
 
     // --------------------------------------------------------------------------------------------
+    Routing
+    routing()
+    // returns the default audio/midi output routing (audio comes first)
+    // null routing if there is none
+    // --------------------------------------------------------------------------------------------
+    {
+        if (auto out = default_audio_outputs())
+            return out->routing();
+        else if (auto out = default_midi_outputs())
+            return out->routing();
+
+        return Routing();
+    }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_routing(Routing r)
+    // --------------------------------------------------------------------------------------------
+    {
+        if (auto out = default_audio_outputs())
+            out->set_routing(r);
+
+        else if (auto out = default_midi_outputs())
+            out->set_routing(r);
+    }
+
+    // --------------------------------------------------------------------------------------------
     void
     set_mul(qreal mul)
     // set default outputs level + postfader auxiliary connections level
@@ -1194,7 +1209,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    void
+    WPN_OK void
     set_muted(bool muted) noexcept
     // mute/unmute all output sockets
     // --------------------------------------------------------------------------------------------
@@ -1204,7 +1219,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    void
+    WPN_OK void
     set_active(bool active) noexcept
     // activate/deactivate all output socket connections
     // --------------------------------------------------------------------------------------------
@@ -1301,51 +1316,20 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    bool
-    connected(Node const& target) noexcept
-    // returns true if this Node is connected to target Node
+    template<typename T> bool
+    connected(T const& target) noexcept
+    // redirect to input/output sockets
     // --------------------------------------------------------------------------------------------
     {
-        for (auto& socket : sockets(INPUT))
+        for (auto& socket: sockets(INPUT))
             if (socket->connected(target))
                 return true;
-
-        for (auto& socket : sockets(OUTPUT))
+        for (auto& socket: sockets(OUTPUT))
             if (socket->connected(target))
                 return true;
 
         return false;
     }
-
-    // --------------------------------------------------------------------------------------------
-    bool
-    connected(Socket const& target) noexcept
-    // returns true if this Node is connected to target Socket
-    // --------------------------------------------------------------------------------------------
-    {
-        switch(target.polarity())
-        {
-        case INPUT:
-        {
-            for (auto& socket : sockets(OUTPUT))
-                if (socket->connected(target))
-                    return true;
-            break;
-        }
-        case OUTPUT: {
-            for (auto& socket : sockets(INPUT))
-                if (socket->connected(target))
-                    return true;
-        }
-        }
-
-        return false;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Routing
-    routing() const noexcept { return m_routing; }
-    // returns Node's default output connection routing
 
     // --------------------------------------------------------------------------------------------
     Node&
@@ -1488,13 +1472,13 @@ private:
         nchannels_t n = 0;
         for (auto& socket : m_inputs) {
             m_input_pool[n] = socket->buffer();
-            ++n;
+            n++;
         }
 
         n = 0;
         for (auto& socket : m_outputs) {
             m_output_pool[n] = socket->buffer();
-            ++n;
+            n++;
         }
     }
 
@@ -1523,7 +1507,7 @@ private:
 
     // --------------------------------------------------------------------------------------------
     pool
-    m_input_pool = nullptr,
+    m_input_pool  = nullptr,
     m_output_pool = nullptr;
 
     // --------------------------------------------------------------------------------------------
@@ -1548,10 +1532,6 @@ private:
     // --------------------------------------------------------------------------------------------
     Dispatch::Values
     m_dispatch = Dispatch::Values::Upwards;
-
-    // --------------------------------------------------------------------------------------------
-    Routing
-    m_routing;
 
     // --------------------------------------------------------------------------------------------
     Node*

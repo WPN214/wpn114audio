@@ -63,20 +63,14 @@ Item
             {
                 id: sinetest
 
-                // frequency socket has different input connections:
-                // - o GUI one (directly from QML)
-                // - a MIDI one
-                // - a OSC one
 
                 frequency: 440.0                                
-//                frequency.min = 20;
-//                frequency.max = 22050;
-//                frequency.range = [20, 22050];
-//                frequency.values = [220, 440, 880];
-//                frequency.access = WPN114.Access.ReadWrite
-//                frequency.clipmode = WPN114.Clipmode.Both
 
-                audioOutput.routing: [0, 0, 0, 1]
+                // rule is:
+                // audio comes first
+                // if Node has no audio output
+                // routing applies to midi output
+                routing: [0, 0, 0, 1]
 
                 WPN114.VCA on audioOutput {
                     id: vca;

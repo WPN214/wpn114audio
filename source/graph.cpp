@@ -6,7 +6,7 @@
 using namespace wpn114;
 
 // --------------------------------------------------------------------------------------------
-inline sample_t**
+WPN_EXAMINE inline sample_t**
 allocate_buffer(nchannels_t nchannels, vector_t nframes)
 // we make no assumption as to how many channels each input/output may have
 // by the time the graph is ready/updated, so we can't really template it upfront
@@ -25,7 +25,7 @@ allocate_buffer(nchannels_t nchannels, vector_t nframes)
 }
 
 // --------------------------------------------------------------------------------------------
-inline void
+WPN_EXAMINE inline void
 reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes)
 // sets whole buffer to zero
 // --------------------------------------------------------------------------------------------
@@ -49,7 +49,7 @@ Socket::Socket(Node* parent, Type type, polarity_t polarity, uint8_t index, uint
 }
 
 // --------------------------------------------------------------------------------------------
-void
+WPN_INCOMPLETE void
 Socket::assign(QVariant variant)
 // --------------------------------------------------------------------------------------------
 {
@@ -85,7 +85,15 @@ Socket::assign(QVariant variant)
 }
 
 // --------------------------------------------------------------------------------------------
-inline void
+WPN_EXAMINE void
+Socket::set_nchannels(nchannels_t nchannels)
+// --------------------------------------------------------------------------------------------
+{
+    wpn114::allocate_buffer(nchannels, Graph::vector());
+}
+
+// --------------------------------------------------------------------------------------------
+WPN_OK inline void
 Socket::set_mul(qreal mul)
 // this overrides the mul for all connections based on this socket
 // --------------------------------------------------------------------------------------------
@@ -95,7 +103,7 @@ Socket::set_mul(qreal mul)
 }
 
 // --------------------------------------------------------------------------------------------
-inline void
+WPN_OK inline void
 Socket::set_add(qreal add)
 // this overrides the add for all connections based on this socket
 // --------------------------------------------------------------------------------------------
@@ -105,15 +113,17 @@ Socket::set_add(qreal add)
 }
 
 // --------------------------------------------------------------------------------------------
-inline Routing
+WPN_EXAMINE inline Routing
 Socket::routing() const { return m_connections[0]->routing(); }
+// examine in concrete QML situations
 
 // --------------------------------------------------------------------------------------------
-inline void
+WPN_EXAMINE inline void
 Socket::set_routing(Routing r) { m_connections[0]->set_routing(r); }
+// examine in concrete QML situations
 
 // --------------------------------------------------------------------------------------------
-inline void
+WPN_OK inline void
 Socket::set_muted(bool muted)
 // mutes all connections, zero output
 // --------------------------------------------------------------------------------------------
@@ -123,28 +133,46 @@ Socket::set_muted(bool muted)
 }
 
 // --------------------------------------------------------------------------------------------
-bool
+WPN_CLEANUP bool
 Socket::connected(Socket const& s) const
-// TODO for feedback connections
 // --------------------------------------------------------------------------------------------
 {
     for (const auto& connection : m_connections)
-        ;
+    {
+         if (m_polarity == INPUT &&
+             connection->source() == &s)
+             return true;
+         else if (m_polarity == OUTPUT &&
+              connection->dest() == &s)
+             return true;
+    }
+
+    return false;
 }
 
 // --------------------------------------------------------------------------------------------
-bool
+WPN_CLEANUP bool
 Socket::connected(Node const& n) const
-// TODO for feedback connections
 // --------------------------------------------------------------------------------------------
 {
     for (const auto& connection: m_connections)
-        ;
+    {
+        if (m_polarity == INPUT &&
+            &connection->source()->parent_node() == &n)
+            return true;
+        else if (m_polarity == OUTPUT &&
+            &connection->dest()->parent_node() == &n)
+            return true;
+    }
+
+    return false;
 }
 
 // --------------------------------------------------------------------------------------------
-inline void
+WPN_EXAMINE inline void
 Graph::register_node(Node& node) noexcept
+// we should maybe add a vectorChanged signal-slot connection to this
+// we also might not need to store pointers...
 // --------------------------------------------------------------------------------------------
 {
     QObject::connect(s_instance, &Graph::rateChanged, &node, &Node::on_rate_changed);
@@ -152,22 +180,28 @@ Graph::register_node(Node& node) noexcept
 }
 
 // --------------------------------------------------------------------------------------------
-inline Connection&
+WPN_INCOMPLETE inline Connection&
 Graph::connect(Socket& source, Socket& dest, Routing matrix)
+// there's still the Audio/Midi Type to check
+// & debug the connection with a pretty message
 // --------------------------------------------------------------------------------------------
 {
+    assert(source.polarity() == OUTPUT &&
+           dest.polarity() == INPUT);
+
     auto con = Connection(source, dest, matrix);
 
     if (dest.parent_node().connected(source.parent_node()))
         con.set_feedback(true);
 
-    s_connections.push_back(con);
+    s_connections.push_back(con);   
     return s_connections.back();
 }
 
 // --------------------------------------------------------------------------------------------
-inline Connection&
+WPN_EXAMINE inline Connection&
 Graph::connect(Node& source, Node& dest, Routing matrix)
+// might be midi and not audio...
 // --------------------------------------------------------------------------------------------
 {
     return connect(*source.default_audio_outputs(),
@@ -175,23 +209,25 @@ Graph::connect(Node& source, Node& dest, Routing matrix)
 }
 
 // --------------------------------------------------------------------------------------------
-inline Connection&
+WPN_INCOMPLETE inline Connection&
 Graph::connect(Node& source, Socket& dest, Routing matrix)
+// might be midi bis
 // --------------------------------------------------------------------------------------------
 {
     return connect(*source.default_audio_outputs(), dest, matrix);
 }
 
 // --------------------------------------------------------------------------------------------
-inline Connection&
+WPN_INCOMPLETE inline Connection&
 Graph::connect(Socket& source, Node& dest, Routing matrix)
+// midi...
 // --------------------------------------------------------------------------------------------
 {
     return connect(source, *dest.default_audio_inputs(), matrix);
 }
 
 // --------------------------------------------------------------------------------------------
-void
+WPN_EXAMINE void
 Graph::componentComplete()
 // not really sure what to do here just yet
 // --------------------------------------------------------------------------------------------
@@ -200,7 +236,7 @@ Graph::componentComplete()
 }
 
 // --------------------------------------------------------------------------------------------
-inline pool&
+WPN_INCORRECT inline pool&
 Graph::run(Node& target) noexcept
 // the main processing function
 // Graph will process itself from target Node and upstream recursively
@@ -211,6 +247,9 @@ Graph::run(Node& target) noexcept
 
     // clean up inputs buffers and
     // mark Nodes as unprocessed
+
+    // WARNING, this is not good for the 'External' node
+    // as it will hold the actual output in its input pool
     for (auto& node : s_nodes)
         node->reset_process(nframes);
 
@@ -222,10 +261,12 @@ Graph::run(Node& target) noexcept
 //-------------------------------------------------------------------------------------------------
 
 // --------------------------------------------------------------------------------------------
-void
+WPN_EXAMINE void
 Connection::setTarget(const QQmlProperty& target)
 // qml property binding, e. g.:
 // Connection on 'socket' { level: db(-12); routing: [0, 1] }
+// not sure target will give us a Socket pointer though
+// maybe a Socket copy...
 // --------------------------------------------------------------------------------------------
 {
     auto socket = target.read().value<Socket*>();
@@ -237,11 +278,12 @@ Connection::setTarget(const QQmlProperty& target)
 }
 
 // --------------------------------------------------------------------------------------------
-void
+WPN_EXAMINE void
 Connection::componentComplete() { Graph::add_connection(*this); }
+// examine: when Connection is explicitely assigned to a Socket
 
 // --------------------------------------------------------------------------------------------
-void
+WPN_CLEANUP void
 Connection::pull(vector_t nframes) noexcept
 // --------------------------------------------------------------------------------------------
 {
@@ -253,13 +295,21 @@ Connection::pull(vector_t nframes) noexcept
 
     if (m_routing.null())
         for (nchannels_t c = 0; c < m_nchannels; ++c)
-            for (vector_t f = 0; f < nframes; ++f)
-                 dbuf[c][f] += sbuf[c][f] * m_mul + m_add;
+            for (vector_t f = 0; f < nframes; ++f) {
+                if (m_source->type() != Socket::Type::Midi_1_0)
+                     dbuf[c][f] += sbuf[c][f] * m_mul + m_add;
+                else dbuf[c][f] += sbuf[c][f];
+            }
     else
     {
         for (nchannels_t r = 0; r < m_routing.ncables(); ++r)
-            for (vector_t f = 0; f < nframes; ++f)
-                dbuf[m_routing[r][0]][f] += m_mul*
-                sbuf[m_routing[r][1]][f] + m_add;
+            for (vector_t f = 0; f < nframes; ++f) {
+                if (m_source->type() != Socket::Type::Midi_1_0)
+                dbuf[m_routing[r][0]][f] +=
+                        m_mul* sbuf[m_routing[r][1]][f] + m_add;
+                else
+                dbuf[m_routing[r][0]][f] +=
+                        sbuf[m_routing[r][1]][f];
+            }
     }
 }
