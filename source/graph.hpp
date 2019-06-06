@@ -1239,24 +1239,48 @@ public:
 
     // --------------------------------------------------------------------------------------------
     Socket*
-    default_inputs() noexcept
+    default_audio_inputs() noexcept
     // returns Node's default inputs
     // --------------------------------------------------------------------------------------------
     {
-        if (m_inputs.empty())
-             return nullptr;
-        else return m_inputs.front();
+        for (auto& socket : m_inputs)
+            if (socket->type() == Socket::Type::Audio)
+                return socket;
+        return nullptr;
     }
 
     // --------------------------------------------------------------------------------------------
     Socket*
-    default_outputs() noexcept
+    default_audio_outputs() noexcept
     // returns Node's default outputs
     // --------------------------------------------------------------------------------------------
     {
-        if (m_outputs.empty())
-             return nullptr;
-        else return m_outputs.front();
+        for (auto& socket : m_outputs)
+            if (socket->type() == Socket::Type::Audio)
+                return socket;
+        return nullptr;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Socket*
+    default_midi_inputs() noexcept
+    // --------------------------------------------------------------------------------------------
+    {
+        for (auto& socket: m_inputs)
+            if (socket->type() == Socket::Type::Midi_1_0)
+                return socket;
+        return nullptr;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    Socket*
+    default_midi_outputs() noexcept
+    // --------------------------------------------------------------------------------------------
+    {
+        for (auto& socket : m_outputs)
+            if (socket->type() == Socket::Type::Midi_1_0)
+                return socket;
+        return nullptr;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1422,11 +1446,9 @@ public:
     bool
     processed() const noexcept { return m_processed; }
 
+    // --------------------------------------------------------------------------------------------
     void
-    set_processed(bool processed)
-    {
-        m_processed = processed;
-    }
+    set_processed(bool processed) { m_processed = processed; }
 
 private:
 

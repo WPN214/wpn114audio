@@ -170,7 +170,8 @@ inline Connection&
 Graph::connect(Node& source, Node& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 {
-    return connect(*source.default_outputs(), *dest.default_inputs(), matrix);
+    return connect(*source.default_audio_outputs(),
+                   *dest.default_audio_inputs(), matrix);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -178,7 +179,7 @@ inline Connection&
 Graph::connect(Node& source, Socket& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 {
-    return connect(*source.default_outputs(), dest, matrix);
+    return connect(*source.default_audio_outputs(), dest, matrix);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -186,7 +187,7 @@ inline Connection&
 Graph::connect(Socket& source, Node& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 {
-    return connect(source, *dest.default_inputs(), matrix);
+    return connect(source, *dest.default_audio_inputs(), matrix);
 }
 
 // --------------------------------------------------------------------------------------------
