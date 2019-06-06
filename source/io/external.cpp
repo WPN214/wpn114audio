@@ -3,6 +3,8 @@
 //-------------------------------------------------------------------------------------------------
 int
 JackExternal::on_jack_sample_rate_changed(jack_nframes_t rate, void* udata)
+// static callback, from jack whenever sample rate has changed
+// we update the graph, which will in turn notify registered Nodes of this change
 //-------------------------------------------------------------------------------------------------
 {
     Graph::set_rate(rate);
@@ -12,6 +14,8 @@ JackExternal::on_jack_sample_rate_changed(jack_nframes_t rate, void* udata)
 //-------------------------------------------------------------------------------------------------
 int
 JackExternal::on_jack_buffer_size_changed(jack_nframes_t nframes, void* udata)
+// static callback, from jack whenever io buffer size has changed
+// we update the graph, which will in turn notify registered Nodes of this change
 //-------------------------------------------------------------------------------------------------
 {
     Graph::set_vector(nframes);
@@ -21,26 +25,59 @@ JackExternal::on_jack_buffer_size_changed(jack_nframes_t nframes, void* udata)
 //-------------------------------------------------------------------------------------------------
 int
 JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
+// run the graph for a certain amount of frames
+// copy the graph's final output into the jack output buffer
 //-------------------------------------------------------------------------------------------------
 {
-    JackExternal& ext = *static_cast<JackExternal*>(udata);
-    pool& outputs = Graph::run(ext.parent());
+    JackExternal& jext = *static_cast<JackExternal*>(udata);
+    External& ext = jext.parent();
+
+    // write all inputs to external's outputs
+    nchannels_t n = 0;
+
+    auto extout = ext.default_outputs()->buffer();
+
+    for (auto& input : jext.m_audio_inputs)
+    {
+        float* buf = static_cast<float*>(jack_port_get_buffer(input, nframes));
+
+        // graph is processed in qreal, which usually is double
+        // but jack processes in float
+        for (jack_nframes_t f = 0; f < nframes; ++f)
+             extout[n][f] = buf[n];
+
+        n++;
+    }
+
+    n = 0;
+
+    ext.set_processed(true);
+    Graph::run(ext);
+
+    // at this point, the graph's outputs
+    // are located in External's input buffer
+    auto extin = ext.default_inputs()->buffer();
+
+    // we now write it in the jack port output buffers
+    for (auto& output : jext.m_audio_outputs)
+    {
+        float* buf = static_cast<float*>(jack_port_get_buffer(output, nframes));
+        for (jack_nframes_t f = 0; f < nframes; ++f)
+             buf[n] = extin[n][f];
+        n++;
+    }
 
     return 0;
 }
 
 //-------------------------------------------------------------------------------------------------
 void
-JackExternal::rwrite(pool& inputs, pool& outputs, vector_t nframes)
-//-------------------------------------------------------------------------------------------------
-{
-
-}
+JackExternal::rwrite(pool& inputs, pool& outputs, vector_t nframes) {}
+// nothing to be done here...
 
 //-------------------------------------------------------------------------------------------------
 void
-JackExternal::register_ports
-(
+JackExternal::register_ports(
 nchannels_t nchannels,
 const char* port_mask,
 const char* type,

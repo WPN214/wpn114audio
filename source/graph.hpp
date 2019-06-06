@@ -20,11 +20,11 @@ class Node;
 Q_OBJECT
 
 #define WPN_SOCKET(_tp, _pol, _nm, _idx, _nchn)                                                     \
-private: Q_PROPERTY(Socket _nm READ get##_nm WRITE set##_nm NOTIFY _nm##Changed)                    \
+private: Q_PROPERTY(QVariant _nm READ get##_nm WRITE set##_nm NOTIFY _nm##Changed)                   \
 protected: Socket m_##_nm { this, _tp, _pol, _idx, _nchn };                                         \
-                                                                                                    \
-Socket get##_nm() { return m_##_nm; }                                                               \
-void set##_nm(Socket v) {  }                                                                        \
+public:                                                                                             \
+QVariant get##_nm() { return QVariant::fromValue(m_##_nm); }                                                             \
+void set##_nm(QVariant v) { m_##_nm.assign(v); }                                                    \
 Q_SIGNAL void _nm##Changed();
 
 #define WPN_ENUM_INPUTS(...)                                                                        \
@@ -72,19 +72,25 @@ allocate_buffer(nchannels_t nchannels, vector_t nframes);
 //-------------------------------------------------------------------------------------------------
 void
 reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes);
+// sets buffer to zero
 
+//-------------------------------------------------------------------------------------------------
 void
 fill_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes, sample_t value);
+// fill buffer with a single sample_t value
 
+//-------------------------------------------------------------------------------------------------
 sample_t
-u7cps(uint8_t mnote);
+midicps(uint8_t mnote);
+// midi pitch value to frequency (hertz)
 
+//-------------------------------------------------------------------------------------------------
 uint8_t
-cpsu7(sample_t f);
+cpsmidi(sample_t f);
+// frequency (hertz) to midi pitch value
 
 
-
-} // namespace wpn114
+} // end namespace wpn114
 
 //=================================================================================================
 class Routing : public QObject
@@ -161,9 +167,9 @@ private:
 
 using byte_t = uint8_t;
 
-//---------------------------------------------------------------------------------------------
+//=================================================================================================
 struct midi_t
-//---------------------------------------------------------------------------------------------
+//=================================================================================================
 {
     // we pad the last 3/4 bytes with zeroes
     // except if we're processing floats
@@ -185,12 +191,11 @@ struct midi_t
     }
 };
 
-
-
 //=================================================================================================
 class Socket : public QObject
 // represents a node single input/output
-// with nchannels_t channels
+// holding specific types of values
+// and with nchannels_t channels
 //=================================================================================================
 {
     Q_OBJECT
@@ -230,8 +235,8 @@ public:
     {
         // shows what values a specific socket is expecting to receive
         // or is explicitely outputing
-        // a connection between a Midi Socket and any other socket that isn't Midi
-        // will be refused
+        // a connection between a Midi Socket and any other socket
+        // that isn't Midi will be refused
         // otherwise, if connection types mismatch, a warning will be emitted
 
         Audio,
@@ -293,7 +298,8 @@ public:
     // fills buffer with value v
     // --------------------------------------------------------------------------------------------
     {
-        // TODO!
+        // TODO
+        return *this;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -302,11 +308,16 @@ public:
     // dunno if this will work
     // --------------------------------------------------------------------------------------------
     {
-
+        // TODO
+        return *this;
     }
 
     // --------------------------------------------------------------------------------------------
     ~Socket() { free(m_buffer); }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    assign(QVariant variant);
 
     // --------------------------------------------------------------------------------------------
     void
@@ -326,6 +337,7 @@ public:
     set_nchannels(nchannels_t nchannels)
     // sets num_channels for socket and
     // allocate/reallocate its buffer
+    // --------------------------------------------------------------------------------------------
     {
         m_nchannels = nchannels;
     }
@@ -376,19 +388,12 @@ public:
 
     // --------------------------------------------------------------------------------------------
     Routing
-    routing() const
-    // TODO
-    {
-
-    }
+    routing() const;
+    // --------------------------------------------------------------------------------------------
 
     // --------------------------------------------------------------------------------------------
     void
-    set_routing(Routing routing)
-    // TODO
-    {
-
-    }
+    set_routing(Routing routing);
 
 private:
 
@@ -462,6 +467,8 @@ private:
     m_mul = 1,
     m_add = 0;
 };
+
+Q_DECLARE_METATYPE(Socket)
 
 //=================================================================================================
 class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
@@ -616,6 +623,22 @@ public:
     // --------------------------------------------------------------------------------------------
     bool
     feedback() const noexcept { return m_feedback; }
+
+    // --------------------------------------------------------------------------------------------
+    sample_t
+    mul() const { return m_mul; }
+
+    // --------------------------------------------------------------------------------------------
+    sample_t
+    add() const { return m_add; }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_mul(sample_t mul) { m_mul = mul; }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_add(sample_t add) { m_add = add; }
 
     // --------------------------------------------------------------------------------------------
     Q_INVOKABLE qreal
@@ -818,6 +841,7 @@ public:
     vector() noexcept { return s_properties.vector; }
     // returns graph vector size
 
+    // --------------------------------------------------------------------------------------------
     static void
     set_vector(uint16_t vector) { s_properties.vector = vector; }
 
@@ -1156,6 +1180,7 @@ public:
     {
         if (!m_outputs.empty())
              m_outputs[0]->set_mul(mul);
+        m_mul = mul;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1165,6 +1190,7 @@ public:
     {
         if (!m_outputs.empty())
             m_outputs[0]->set_add(add);
+        m_add = add;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1396,6 +1422,12 @@ public:
     bool
     processed() const noexcept { return m_processed; }
 
+    void
+    set_processed(bool processed)
+    {
+        m_processed = processed;
+    }
+
 private:
 
     // --------------------------------------------------------------------------------------------
@@ -1502,6 +1534,13 @@ private:
     // --------------------------------------------------------------------------------------------
     Node*
     m_parent = nullptr;
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    m_mul = 1,
+    m_add = 0;
+
+
 };
 
 #endif // QTWRAPPER2_HPP

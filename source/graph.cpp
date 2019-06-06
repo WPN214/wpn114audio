@@ -27,6 +27,7 @@ allocate_buffer(nchannels_t nchannels, vector_t nframes)
 // --------------------------------------------------------------------------------------------
 inline void
 reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes)
+// sets whole buffer to zero
 // --------------------------------------------------------------------------------------------
 {
     for (nchannels_t c = 0; c < nchannels; ++c)
@@ -49,53 +50,102 @@ Socket::Socket(Node* parent, Type type, polarity_t polarity, uint8_t index, uint
 
 // --------------------------------------------------------------------------------------------
 void
+Socket::assign(QVariant variant)
+// --------------------------------------------------------------------------------------------
+{
+    if (variant.canConvert<Socket>())
+    {
+        // implicit connection
+        auto socket = variant.value<Socket>();
+
+        switch(m_polarity) {
+        case INPUT: Graph::connect(*this, socket); break;
+        case OUTPUT: Graph::connect(socket, *this);
+        }
+    }
+
+    else if (variant.canConvert<Connection>())
+    {
+        // assigning an explicit connection
+        // hmm that can be problematic...
+        auto connection = variant.value<Connection>();
+    }
+
+    else if (variant.canConvert<qreal>())
+    {
+        // fill buffer with value
+        qreal v = variant.value<qreal>();
+
+    }
+
+    else if (variant.canConvert<QVariantList>())
+        for (auto& v : variant.value<QVariantList>())
+             assign(v);
+
+}
+
+// --------------------------------------------------------------------------------------------
+inline void
 Socket::set_mul(qreal mul)
+// this overrides the mul for all connections based on this socket
 // --------------------------------------------------------------------------------------------
 {
-
+    for (auto& connection : m_connections)
+         connection->set_mul(mul);
 }
 
 // --------------------------------------------------------------------------------------------
-void
+inline void
 Socket::set_add(qreal add)
+// this overrides the add for all connections based on this socket
 // --------------------------------------------------------------------------------------------
 {
-
+    for (auto& connection : m_connections)
+         connection->set_add(add);
 }
 
 // --------------------------------------------------------------------------------------------
-void
+inline Routing
+Socket::routing() const { return m_connections[0]->routing(); }
+
+// --------------------------------------------------------------------------------------------
+inline void
+Socket::set_routing(Routing r) { m_connections[0]->set_routing(r); }
+
+// --------------------------------------------------------------------------------------------
+inline void
 Socket::set_muted(bool muted)
 // mutes all connections, zero output
 // --------------------------------------------------------------------------------------------
 {
-    for (const auto& con : m_connections)
-         con->m_muted = muted;
+    for (const auto& connection : m_connections)
+         connection->m_muted = muted;
 }
 
 // --------------------------------------------------------------------------------------------
 bool
-Socket::connected(const Socket& s) const
+Socket::connected(Socket const& s) const
 // TODO for feedback connections
 // --------------------------------------------------------------------------------------------
 {
-    for (const auto& con : m_connections)
+    for (const auto& connection : m_connections)
         ;
 }
 
 // --------------------------------------------------------------------------------------------
 bool
-Socket::connected(const Node& n) const
+Socket::connected(Node const& n) const
 // TODO for feedback connections
 // --------------------------------------------------------------------------------------------
 {
-    for (const auto& con: m_connections)
+    for (const auto& connection: m_connections)
         ;
 }
 
 // --------------------------------------------------------------------------------------------
 inline void
 Graph::register_node(Node& node) noexcept
+// --------------------------------------------------------------------------------------------
 {
     QObject::connect(s_instance, &Graph::rateChanged, &node, &Node::on_rate_changed);
     s_nodes.push_back(&node);
@@ -104,6 +154,7 @@ Graph::register_node(Node& node) noexcept
 // --------------------------------------------------------------------------------------------
 inline Connection&
 Graph::connect(Socket& source, Socket& dest, Routing matrix)
+// --------------------------------------------------------------------------------------------
 {
     auto con = Connection(source, dest, matrix);
 
@@ -117,6 +168,7 @@ Graph::connect(Socket& source, Socket& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 inline Connection&
 Graph::connect(Node& source, Node& dest, Routing matrix)
+// --------------------------------------------------------------------------------------------
 {
     return connect(*source.default_outputs(), *dest.default_inputs(), matrix);
 }
@@ -124,6 +176,7 @@ Graph::connect(Node& source, Node& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 inline Connection&
 Graph::connect(Node& source, Socket& dest, Routing matrix)
+// --------------------------------------------------------------------------------------------
 {
     return connect(*source.default_outputs(), dest, matrix);
 }
@@ -131,6 +184,7 @@ Graph::connect(Node& source, Socket& dest, Routing matrix)
 // --------------------------------------------------------------------------------------------
 inline Connection&
 Graph::connect(Socket& source, Node& dest, Routing matrix)
+// --------------------------------------------------------------------------------------------
 {
     return connect(source, *dest.default_inputs(), matrix);
 }
@@ -199,12 +253,12 @@ Connection::pull(vector_t nframes) noexcept
     if (m_routing.null())
         for (nchannels_t c = 0; c < m_nchannels; ++c)
             for (vector_t f = 0; f < nframes; ++f)
-                 dbuf[c][f] += sbuf[c][f] * m_level;
+                 dbuf[c][f] += sbuf[c][f] * m_mul + m_add;
     else
     {
         for (nchannels_t r = 0; r < m_routing.ncables(); ++r)
             for (vector_t f = 0; f < nframes; ++f)
-                dbuf[m_routing[r][0]][f] += m_level*
-                sbuf[m_routing[r][1]][f];
+                dbuf[m_routing[r][0]][f] += m_mul*
+                sbuf[m_routing[r][1]][f] + m_add;
     }
 }
