@@ -440,21 +440,21 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QVariant
-    out_audio_targets() const   { return m_out_audio_targets; }
+    out_audio_targets() const { return m_out_audio_targets; }
 
     QStringList const&
     out_audio_targets_list() const { return m_out_audio_targets; }
 
     //---------------------------------------------------------------------------------------------
     QVariant
-    in_midi_targets() const     { return m_in_midi_targets; }
+    in_midi_targets() const { return m_in_midi_targets; }
 
     QStringList const&
     in_midi_targets_list() const { return m_in_midi_targets; }
 
     //---------------------------------------------------------------------------------------------
     QVariant
-    out_midi_targets() const    { return m_out_midi_targets; }
+    out_midi_targets() const { return m_out_midi_targets; }
 
     QStringList const&
     out_midi_targets_list() const { return m_out_midi_targets; }
