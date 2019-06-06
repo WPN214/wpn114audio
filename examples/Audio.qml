@@ -71,6 +71,7 @@ Item
                 // if Node has no audio output
                 // routing applies to midi output
                 routing: [0, 0, 0, 1]
+                audioOutput.routing: [0, 0, 0, 1]
 
                 WPN114.VCA on audioOutput {
                     id: vca;

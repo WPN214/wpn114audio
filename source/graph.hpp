@@ -21,7 +21,7 @@ Q_OBJECT
 private: Q_PROPERTY(QVariant _nm READ get##_nm WRITE set##_nm NOTIFY _nm##Changed)                   \
 protected: Socket m_##_nm { this, _tp, _pol, _idx, _nchn };                                         \
 public:                                                                                             \
-QVariant get##_nm() { return QVariant::fromValue(m_##_nm); }                                                             \
+QVariant get##_nm() { return QVariant::fromValue(&m_##_nm); }                                                             \
 void set##_nm(QVariant v) { m_##_nm.assign(v); }                                                    \
 Q_SIGNAL void _nm##Changed();
 
@@ -384,7 +384,7 @@ private:
     allocate(vector_t nframes)
     // --------------------------------------------------------------------------------------------
     {
-        if (m_buffer != nullptr)
+        if (m_buffer)
             free(m_buffer);
 
         m_buffer = wpn114::allocate_buffer(m_nchannels, nframes);
@@ -408,7 +408,8 @@ private:
     void
     remove_connection(Connection& con)
     {
-        std::remove(m_connections.begin(), m_connections.end(), &con);
+        m_connections.erase(std::remove(m_connections.begin(),
+            m_connections.end(), &con), m_connections.end());
     }
 
     // --------------------------------------------------------------------------------------------
@@ -522,6 +523,30 @@ public:
       , m_dest(&dest)
       , m_routing(matrix) {}
     // constructor accessed from C++
+
+    // --------------------------------------------------------------------------------------------
+    Connection&
+    operator=(Connection const& cp)
+    // --------------------------------------------------------------------------------------------
+    {
+        m_source    = cp.m_source;
+        m_dest      = cp.m_dest;
+        m_routing   = cp.m_routing;
+        m_active    = cp.m_active;
+        m_muted     = cp.m_muted;
+        m_mul       = cp.m_mul;
+        m_add       = cp.m_add;
+
+        return *this;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    operator==(Connection const& other)
+    // --------------------------------------------------------------------------------------------
+    {
+        return m_source == other.m_source && m_dest == other.m_dest;
+    }
 
     // --------------------------------------------------------------------------------------------
     virtual void
@@ -772,8 +797,11 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    static void
-    add_connection(Connection& con) noexcept { s_connections.push_back(con); }
+    WPN_EXAMINE static void
+    add_connection(Connection& con) noexcept
+    {
+        s_connections.push_back(con);
+    }
     // this is called when Connection has been explicitely
     // instantiated from a QML context
 
@@ -809,7 +837,12 @@ public:
     // --------------------------------------------------------------------------------------------
     {
         if (auto con = get_connection(source, dest)) {
-            // TODO
+            source.remove_connection(*con);
+            dest.remove_connection(*con);
+
+            s_connections.erase(std::remove(s_connections.begin(),
+                                s_connections.end(), *con),
+                                s_connections.end());
         }
     }
 
@@ -830,6 +863,7 @@ public:
     // --------------------------------------------------------------------------------------------
     Q_SIGNAL void
     rateChanged(sample_t);
+
 
     Q_SIGNAL void
     vectorChanged(vector_t);
