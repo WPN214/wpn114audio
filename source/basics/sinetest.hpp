@@ -13,24 +13,28 @@ class Sinetest : public Node
     // this marks initialize and rwrite as overriden
 
     //-------------------------------------------------------------------------------------------------
-    WPN_ENUM_INPUTS  (frequency, midi)
-    WPN_ENUM_OUTPUTS (output)
+    WPN_ENUM_INPUTS     (frequency, midiInput)
+    WPN_ENUM_OUTPUTS    (audioOutput)
     // index 0 of enum is always default input/output
 
     //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (frequency, Socket::Audio, 1)
+    WPN_INPUT_DECLARE   (frequency, Socket::FloatingPoint, 1)
     /*!
      * \property Sinetest::frequency
-     * \brief (audio, input) in Hertz
+     * \brief (audio/control, input) in Hertz
      */
 
     //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (midi, Socket::Midi_1_0, 1)
+    WPN_INPUT_DECLARE   (midiInput, Socket::Midi_1_0, 1)
+    /*!
+     * \property Sinetest::midiInput
+     * \brief (audio, input) midi, controls frequency of the sine
+     */
 
     //-------------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE (output, Socket::Audio, 1)
+    WPN_OUTPUT_DECLARE (audioOutput, Socket::Audio, 1)
     /*!
-     * \property Sinetest::output
+     * \property Sinetest::audioOutput
      * \brief (audio, output) main out
      */
 
@@ -51,11 +55,9 @@ public:
             m_env[n] = sin(M_PI*2*n/esz);
     }
 
+    //-------------------------------------------------------------------------------------------------
     virtual
-    ~Sinetest() override
-    {
-        delete[] m_env;
-    }
+    ~Sinetest() override { delete[] m_env; }
 
     //-------------------------------------------------------------------------------------------------
     virtual void
@@ -64,8 +66,8 @@ public:
     //-------------------------------------------------------------------------------------------------
     {
         auto frequency  = inputs[Inputs::frequency][0];
-        auto midi       = inputs[Inputs::midi][0];
-        auto out        = outputs[Outputs::output][0];
+        auto midi       = inputs[Inputs::midiInput][0];
+        auto out        = outputs[Outputs::audioOutput][0];
 
         for (vector_t f = 0; f < nframes; ++f) {
             m_phs += frequency[f]/m_rate * esz;

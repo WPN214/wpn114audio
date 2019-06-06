@@ -27,47 +27,51 @@ public:
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_audio_inputs_changed(uint8_t n_inputs) {}
+    on_audio_inputs_changed(uint8_t n_inputs) { Q_UNUSED(n_inputs) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_audio_outputs_changed(uint8_t n_outputs) {}
+    on_audio_outputs_changed(uint8_t n_outputs) { Q_UNUSED(n_outputs) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_midi_inputs_changed(uint8_t n_inputs) {}
+    on_midi_inputs_changed(uint8_t n_inputs) { Q_UNUSED(n_inputs) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_midi_outputs_changed(uint8_t n_outputs) {}
+    on_midi_outputs_changed(uint8_t n_outputs) { Q_UNUSED(n_outputs) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_name_changed(QString& name) {}
+    on_name_changed(QString& name) { Q_UNUSED(name) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_input_midi_targets_changed(QStringList& targets, Routing routing) {}
+    on_input_midi_targets_changed(QStringList& targets, Routing routing)
+    { Q_UNUSED(targets) Q_UNUSED(routing) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_output_midi_targets_changed(QStringList& targets, Routing routing) {}
+    on_output_midi_targets_changed(QStringList& targets, Routing routing)
+    { Q_UNUSED(targets) Q_UNUSED(routing) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_input_audio_targets_changed(QStringList& targets, Routing routing) {}
+    on_input_audio_targets_changed(QStringList& targets, Routing routing)
+    { Q_UNUSED(targets) Q_UNUSED(routing) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_output_audio_targets_changed(QStringList& targets, Routing routing) {}
+    on_output_audio_targets_changed(QStringList& targets, Routing routing)
+    { Q_UNUSED(targets) Q_UNUSED(routing) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_sample_rate_changed(sample_t rate) {}
+    on_sample_rate_changed(sample_t rate) { Q_UNUSED(rate) }
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_io_vector_changed(uint16_t vector) {}
+    on_io_vector_changed(uint16_t nframes) { Q_UNUSED(nframes) }
 };
 
 
@@ -77,7 +81,6 @@ class External;
 class JackExternal : public ExternalBase
 //---------------------------------------------------------------------------------------------
 {
-
     //---------------------------------------------------------------------------------------------
     External&
     m_parent;
@@ -93,13 +96,43 @@ class JackExternal : public ExternalBase
     m_midi_inputs,
     m_midi_outputs;
 
+    static int
+    on_jack_sample_rate_changed(jack_nframes_t nframes, void* udata);
+
+    static int
+    on_jack_buffer_size_changed(jack_nframes_t nframes, void* udata);
+
+    static int
+    jack_process_callback(jack_nframes_t nframes, void* udata);
+
+    void
+    register_ports(nchannels_t nchannels,
+    const char* port_mask,
+    const char* type,
+    int polarity,
+    std::vector<jack_port_t*>& target);
+
+    void
+    connect_ports(std::vector<jack_port_t*>& ports,
+                  int target_polarity, const char *type,
+                  QStringList const& targets,
+                  Routing routing);
+
 public:
 
     //---------------------------------------------------------------------------------------------
     JackExternal(External* parent);
 
     //---------------------------------------------------------------------------------------------
-    virtual ~JackExternal();
+    virtual ~JackExternal() override
+    //---------------------------------------------------------------------------------------------
+    {
+        jack_deactivate(m_client);
+        jack_client_close(m_client);
+    }
+
+    External&
+    parent() { return m_parent; }
 
     //---------------------------------------------------------------------------------------------
     virtual void
@@ -107,7 +140,7 @@ public:
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    stop() override;
+    stop() override { jack_deactivate(m_client); }
 
     //---------------------------------------------------------------------------------------------
     virtual void
@@ -115,7 +148,9 @@ public:
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_name_changed(QString &name) override;
+    on_name_changed(QString &name) override {}
+
+    // TODO: override the other ones...
 
 };
 
@@ -123,7 +158,7 @@ public:
 class External : public Node
 // this is a generic Node wrapper for the external backends
 // it embeds an AbstrackBackend object
-// and will send it commands and notifications when a parameter changed
+// and will send it commands and notifications whenever a property changes
 //=================================================================================================
 {
     WPN_OBJECT
@@ -395,19 +430,34 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QVariant
-    in_audio_targets() const    { return m_in_audio_targets; }
+    in_audio_targets() const { return m_in_audio_targets; }
+
+    QStringList const&
+    in_audio_targets_list() const { return m_in_audio_targets; }
+    // TODO:
+    // not sure q_properties accept template functions as READ/WRITE targets
+    // this is really annoying...
 
     //---------------------------------------------------------------------------------------------
     QVariant
     out_audio_targets() const   { return m_out_audio_targets; }
 
+    QStringList const&
+    out_audio_targets_list() const { return m_out_audio_targets; }
+
     //---------------------------------------------------------------------------------------------
     QVariant
     in_midi_targets() const     { return m_in_midi_targets; }
 
+    QStringList const&
+    in_midi_targets_list() const { return m_in_midi_targets; }
+
     //---------------------------------------------------------------------------------------------
     QVariant
     out_midi_targets() const    { return m_out_midi_targets; }
+
+    QStringList const&
+    out_midi_targets_list() const { return m_out_midi_targets; }
 
     //---------------------------------------------------------------------------------------------
     void

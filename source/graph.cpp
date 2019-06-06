@@ -49,21 +49,28 @@ Socket::Socket(Node* parent, Type type, polarity_t polarity, uint8_t index, uint
 
 // --------------------------------------------------------------------------------------------
 void
+Socket::set_mul(qreal mul)
+// --------------------------------------------------------------------------------------------
+{
+
+}
+
+// --------------------------------------------------------------------------------------------
+void
+Socket::set_add(qreal add)
+// --------------------------------------------------------------------------------------------
+{
+
+}
+
+// --------------------------------------------------------------------------------------------
+void
 Socket::set_muted(bool muted)
 // mutes all connections, zero output
 // --------------------------------------------------------------------------------------------
 {
     for (const auto& con : m_connections)
          con->m_muted = muted;
-}
-
-// --------------------------------------------------------------------------------------------
-void
-Socket::set_level(qreal level)
-// --------------------------------------------------------------------------------------------
-{
-    for (const auto& con : m_connections)
-         con->m_level = level;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -168,10 +175,9 @@ Connection::setTarget(const QQmlProperty& target)
 {
     auto socket = target.read().value<Socket*>();
 
-    switch(socket->polarity())
-    {
-    case OUTPUT:  m_source = socket; break;
-    case INPUT:   m_dest = socket;
+    switch(socket->polarity()) {
+    case OUTPUT: m_source = socket; break;
+    case INPUT: m_dest = socket;
     }
 }
 

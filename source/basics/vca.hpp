@@ -18,7 +18,7 @@ class VCA : public Node
      */
 
     //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE (gain, Socket::Audio, 1)
+    WPN_INPUT_DECLARE (gain, Socket::FloatingPoint, 1)
     /*!
      * \property VCA::gainmod
      * \brief (audio) gain modulation (0-1)
@@ -42,12 +42,12 @@ public:
     //-------------------------------------------------------------------------------------------------
     {
         auto in  = inputs[Inputs::inputs];
-        auto gmd = inputs[Inputs::gain][0];
+        auto gain = inputs[Inputs::gain][0];
         auto out = outputs[Outputs::outputs];
 
         for (nchannels_t c = 0; c < m_outputs.nchannels(); ++c)
             for (vector_t f = 0; f < nframes; ++f)
-                 out[c][f] = in[c][f] *= gmd[f];
+                 out[c][f] = in[c][f] *= gain[f];
     }
 
 private:

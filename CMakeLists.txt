@@ -19,6 +19,7 @@ set(WPN114AUDIO_QML_SOURCES
     source/basics/sinetest.cpp
     source/basics/vca.hpp
     source/basics/vca.cpp
+    source/basics/midi-transpose.hpp
     examples/Audio.qml
     )
 

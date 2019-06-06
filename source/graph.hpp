@@ -76,6 +76,14 @@ reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes);
 void
 fill_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes, sample_t value);
 
+sample_t
+u7cps(uint8_t mnote);
+
+uint8_t
+cpsu7(sample_t f);
+
+
+
 } // namespace wpn114
 
 //=================================================================================================
@@ -192,8 +200,11 @@ class Socket : public QObject
     // MUTED property: manages and overrides all Socket connections mute property
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal level MEMBER m_level WRITE set_level)
-    // LEVEL property: manages and overrides all Socket connections level property
+    Q_PROPERTY (qreal mul MEMBER m_mul WRITE set_mul)
+
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY (qreal add MEMBER m_add WRITE set_add)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (int nchannels MEMBER m_nchannels WRITE set_nchannels)
@@ -217,9 +228,32 @@ public:
     enum Type
     //---------------------------------------------------------------------------------------------
     {
-        Audio       = 0,
-        Cv          = 1,
-        Midi_1_0    = 2
+        // shows what values a specific socket is expecting to receive
+        // or is explicitely outputing
+        // a connection between a Midi Socket and any other socket that isn't Midi
+        // will be refused
+        // otherwise, if connection types mismatch, a warning will be emitted
+
+        Audio,
+        // -1.0 to 1.0 normalized audio signal value
+
+        Midi_1_0,
+        // status byte + 2 other index/value bytes
+
+        Integer,
+        // a control integer value
+
+        FloatingPoint,
+        // a control floating point value
+
+        Cv,
+        // -5.0 to 5.0 control voltage values
+
+        Gate,
+        // a 0-1 latched value
+
+        Trigger
+        // a single 1 impulse
     };
 
     Q_ENUM (Type)
@@ -281,7 +315,11 @@ public:
 
     // --------------------------------------------------------------------------------------------
     void
-    set_level(qreal level);
+    set_mul(qreal mul);
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_add(qreal add);
 
     // --------------------------------------------------------------------------------------------
     void
@@ -397,6 +435,7 @@ private:
     // --------------------------------------------------------------------------------------------
     uint8_t
     m_index = 0;
+    // note: is it really necessary to store the index here?
 
     // --------------------------------------------------------------------------------------------
     uint8_t
@@ -420,7 +459,8 @@ private:
 
     // --------------------------------------------------------------------------------------------
     qreal
-    m_level = 1;
+    m_mul = 1,
+    m_add = 0;
 };
 
 //=================================================================================================
@@ -445,11 +485,14 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     // TODO: [[0,1],[1,0]] format as well
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal level MEMBER m_level)
+    Q_PROPERTY (qreal mul MEMBER m_mul)
     // Connection's amplitude level (linear)
     // scales the amplitude of the input signal to transit to the output
     // this property might be overriden or scaled by Socket's or Node's level property
     // TODO: prefader/postfader property
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (qreal add MEMBER m_add)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (bool muted MEMBER m_muted)
@@ -480,7 +523,8 @@ public:
       , m_routing(cp.m_routing)
       , m_active(cp.m_active)
       , m_muted(cp.m_muted)
-      , m_level(cp.m_level) {}
+      , m_mul(cp.m_mul)
+      , m_add(cp.m_add) {}
     // copy constructor, don't really know in which case it should/will be used
 
     // --------------------------------------------------------------------------------------------
@@ -596,12 +640,9 @@ private:
     // --------------------------------------------------------------------------------------------
     Socket*
     m_source = nullptr;
-    // the Connection's source (output polarity)
 
-    // --------------------------------------------------------------------------------------------
     Socket*
     m_dest = nullptr;
-    // the Connection's dest (input polarity)
 
     // --------------------------------------------------------------------------------------------
     Routing
@@ -627,9 +668,8 @@ private:
 
     // --------------------------------------------------------------------------------------------
     qreal
-    m_level = 1;
-    // Connection's output will be scaled by this ratio
-    // (linear amplitude level, not logarithmic)
+    m_mul = 1,
+    m_add = 0;
 };
 
 Q_DECLARE_METATYPE(Connection)
@@ -642,8 +682,7 @@ class Graph : public QObject, public QQmlParserStatus
     Q_OBJECT
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(int
-    vector READ vector WRITE set_vector)
+    Q_PROPERTY (int vector READ vector WRITE set_vector)
     // Graph's signal vector size (lower is better, but will increase CPU usage)
 
     // --------------------------------------------------------------------------------------------
@@ -969,11 +1008,14 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     */
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(qreal level MEMBER m_level WRITE set_level)
+    Q_PROPERTY(qreal mul MEMBER m_mul WRITE set_mul)
     /*!
-     * \property Node::level
+     * \property Node::mul
      * \brief sets Node's default output levels (linear amplitude)
     */
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(qreal add MEMBER m_add WRITE set_add)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(Spatial space MEMBER m_spatial)
@@ -1108,12 +1150,21 @@ public:
 
     // --------------------------------------------------------------------------------------------
     void
-    set_level(qreal level)
+    set_mul(qreal mul)
     // set default outputs level + postfader auxiliary connections level
     // --------------------------------------------------------------------------------------------
     {
         if (!m_outputs.empty())
-             m_outputs[0]->set_level(level);
+             m_outputs[0]->set_mul(mul);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_add(qreal add)
+    // --------------------------------------------------------------------------------------------
+    {
+        if (!m_outputs.empty())
+            m_outputs[0]->set_add(add);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1222,7 +1273,23 @@ public:
     // returns true if this Node is connected to target Socket
     // --------------------------------------------------------------------------------------------
     {
+        switch(target.polarity())
+        {
+        case INPUT:
+        {
+            for (auto& socket : sockets(OUTPUT))
+                if (socket->connected(target))
+                    return true;
+            break;
+        }
+        case OUTPUT: {
+            for (auto& socket : sockets(INPUT))
+                if (socket->connected(target))
+                    return true;
+        }
+        }
 
+        return false;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1402,10 +1469,7 @@ private:
 
     // --------------------------------------------------------------------------------------------
     pool
-    m_input_pool = nullptr;
-
-    // --------------------------------------------------------------------------------------------
-    pool
+    m_input_pool = nullptr,
     m_output_pool = nullptr;
 
     // --------------------------------------------------------------------------------------------
@@ -1414,10 +1478,7 @@ private:
 
     // --------------------------------------------------------------------------------------------
     std::vector<Socket*>
-    m_inputs;
-
-    // --------------------------------------------------------------------------------------------
-    std::vector<Socket*>
+    m_inputs,
     m_outputs;
 
     // --------------------------------------------------------------------------------------------
@@ -1426,19 +1487,9 @@ private:
 
     // --------------------------------------------------------------------------------------------
     bool
-    m_muted = false;
-
-    // --------------------------------------------------------------------------------------------
-    bool
-    m_active = true;
-
-    // --------------------------------------------------------------------------------------------
-    bool
+    m_muted = false,
+    m_active = true,
     m_processed = false;
-
-    // --------------------------------------------------------------------------------------------
-    qreal
-    m_level = 1;
 
     // --------------------------------------------------------------------------------------------
     Dispatch::Values

@@ -3,14 +3,6 @@ import WPN114.Audio 1.1 as WPN114
 
 Item
 {
-
-    WPN114.OSCQueryServer
-    {
-        id: oscquery_server
-        name: "wpn114server"
-        port: 5678
-    }
-
     WPN114.Graph
     {
         // these are the default graph property values
@@ -20,7 +12,8 @@ Item
         target: io
 
         // when the graph is complete, start audio processing
-        Component.onCompleted: output.run();
+        Component.onCompleted:
+            io.running = true;
 
         WPN114.External
         {
@@ -28,13 +21,12 @@ Item
 
             // the name of the audio device
             // for jack clients etc.
-            name: "wpn114audio"
-
+            name: "wpn114audio-test-device"
             backend: WPN114.External.Jack
-            backend: WPN114.External.Alsa
-            backend: WPN114.External.PulseAudio
-            backend: WPN114.External.Core
-            backend: WPN114.External.VSTHost
+//            backend: WPN114.External.Alsa
+//            backend: WPN114.External.PulseAudio
+//            backend: WPN114.External.Core
+//            backend: WPN114.External.VSTHost
             // +windows stuff
 
             inAudioTargets: "system"
@@ -49,10 +41,9 @@ Item
             outMidiTargets: "Ableton Push"
             outMidiRouting: [0, 1, 1, 0]
 
-
             // default property values as well
-            numInputs:   0
-            numOutputs:  2
+            numAudioInputs:   0
+            numAudioOutputs:  2
 
             numMidiInputs:   1
             numMidiOutputs:  0
@@ -61,8 +52,12 @@ Item
 
             // are midi in/outs connections implicit
             // or should we make them explicit?...
-            midiIn: sinetest.midiIn
-            midiIn.onNoteOn: frequency = mtof(index);
+            WPN114.MIDITransposer on midiInputs {
+                transpose: semitones(-5)
+                outputs: sinetest.midiInput
+            }
+
+//            midiInputs.onNoteOn: frequency = mtof(index);
 
             WPN114.Sinetest
             {
@@ -81,23 +76,17 @@ Item
 //                frequency.access = WPN114.Access.ReadWrite
 //                frequency.clipmode = WPN114.Clipmode.Both
 
-                WPN114.NetNode on frequency
-                {
-                    device: oscquery_server
-                    // not required if the server is in singleDevice mode
+                audioOutput.routing: [0, 0, 0, 1]
 
-                    path: "/sinetest/frequency"
-                    interpolation: WPN114.Exponential
+                WPN114.VCA on audioOutput {
+                    id: vca;
+                    gain: db(-12)
 
-                }
-
-                audioOut.routing:
-                    [0, 0, 0, 1]
-
-                WPN114.VCA on output
-                {
-                    id: vca; gain: db(-12);
-                    WPN114.Sinetest on gainmod { frequency: 1; level: 0.5 }
+                    WPN114.Sinetest on gain {
+                        frequency: 1
+                        mul: 0.25
+                        add: 0.5
+                    }
                 }
             }
         }
