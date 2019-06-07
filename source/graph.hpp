@@ -51,9 +51,11 @@ WPN_SOCKET(_tp, OUTPUT, _nm, _nm, _nchn)
 
 enum  polarity_t    { OUTPUT = 0, INPUT = 1 };
 using sample_t      = qreal;
-using vector_t      = uint16_t;
 using pool          = sample_t***;
 using nchannels_t   = uint8_t;
+using byte_t        = uint8_t;
+using vector_t      = uint16_t;
+using nframes_t     = uint32_t;
 
 class Connection;
 class Node;
@@ -81,16 +83,19 @@ fill_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes, sample_t
 
 //-------------------------------------------------------------------------------------------------
 WPN_UNIMPLEMENTED sample_t
-midicps(uint8_t mnote);
+midicps(byte_t mnote);
 // midi pitch value to frequency (hertz)
 
 //-------------------------------------------------------------------------------------------------
-WPN_UNIMPLEMENTED uint8_t
+WPN_UNIMPLEMENTED byte_t
 cpsmidi(sample_t f);
 // frequency (hertz) to midi pitch value
 
 
 } // end namespace wpn114
+
+//-------------------------------------------------------------------------------------------------
+class Socket;
 
 //=================================================================================================
 class Routing : public QObject
@@ -165,8 +170,6 @@ private:
     m_routing;
 };
 
-using byte_t = uint8_t;
-
 //=================================================================================================
 WPN_INCOMPLETE
 struct midi_t
@@ -175,9 +178,9 @@ struct midi_t
 {
     // we pad the last 3/4 bytes with zeroes
     // except if we're processing floats
-    byte_t status = 0;
-    byte_t b1 = 0;
-    byte_t b2 = 0;
+    byte_t status = 0x0;
+    byte_t b1 = 0x0;
+    byte_t b2 = 0x0;
 
     midi_t(sample_t sample)
     {
@@ -192,8 +195,6 @@ struct midi_t
         return sample;
     }
 };
-
-class Socket;
 
 //=================================================================================================
 class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
@@ -284,10 +285,10 @@ public:
 
     // --------------------------------------------------------------------------------------------
     bool
-    operator==(Connection const& other)
+    operator==(Connection const& rhs) noexcept
     // --------------------------------------------------------------------------------------------
     {
-        return m_source == other.m_source && m_dest == other.m_dest;
+        return m_source == rhs.m_source && m_dest == rhs.m_dest;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -342,12 +343,12 @@ public:
 
     // --------------------------------------------------------------------------------------------
     Socket*
-    source() { return m_source; }
+    source() noexcept { return m_source; }
     // returns Connection's source Socket (output polarity)
 
     // --------------------------------------------------------------------------------------------
     Socket*
-    dest() { return m_dest; }
+    dest() noexcept { return m_dest; }
     // returns Connection's dest Socket (input polarity)
 
     // --------------------------------------------------------------------------------------------
@@ -357,17 +358,17 @@ public:
 
     // --------------------------------------------------------------------------------------------
     void
-    set_routing(QVariantList list) { m_routing = Routing(list); }
+    set_routing(QVariantList list) noexcept { m_routing = Routing(list); }
     // sets routing matrix from QML
 
     // --------------------------------------------------------------------------------------------
     void
-    set_routing(Routing matrix) { m_routing = matrix; }
+    set_routing(Routing matrix) noexcept { m_routing = matrix; }
     // sets routing matrix from C++
 
     // --------------------------------------------------------------------------------------------
     void
-    set_feedback(bool feedback) { m_feedback = feedback; }
+    set_feedback(bool feedback) noexcept { m_feedback = feedback; }
 
     // --------------------------------------------------------------------------------------------
     bool
@@ -375,23 +376,23 @@ public:
 
     // --------------------------------------------------------------------------------------------
     sample_t
-    mul() const { return m_mul; }
+    mul() const noexcept { return m_mul; }
 
     // --------------------------------------------------------------------------------------------
     sample_t
-    add() const { return m_add; }
+    add() const noexcept { return m_add; }
 
     // --------------------------------------------------------------------------------------------
     void
-    set_mul(sample_t mul) { m_mul = mul; }
+    set_mul(sample_t mul) noexcept { m_mul = mul; }
 
     // --------------------------------------------------------------------------------------------
     void
-    set_add(sample_t add) { m_add = add; }
+    set_add(sample_t add) noexcept { m_add = add; }
 
     // --------------------------------------------------------------------------------------------
     Q_INVOKABLE qreal
-    db(qreal v) { return std::pow(10, v*.05); }
+    db(qreal v) noexcept { return std::pow(10, v*.05); }
     // this is not an a->db function
     // it is a useful, readable and declarative way to signal that the value
     // used within qml is of the db unit.
@@ -418,7 +419,7 @@ private:
 
     // --------------------------------------------------------------------------------------------
     Routing
-    m_routing = {};
+    m_routing;
 
     // --------------------------------------------------------------------------------------------
     bool
@@ -465,8 +466,6 @@ class Variant : public QObject
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (int nchannels READ nchannels)
-    // NCHANNELS property: for multichannel expansion
-    // and dynamic channel setting/allocation
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (Routing routing READ routing WRITE set_routing)
@@ -475,78 +474,147 @@ class Variant : public QObject
     union value
     // --------------------------------------------------------------------------------------------
     {
-        value();
-        ~value();
+        // --------------------------------------------------------------------------------------------
+        value() {}
 
-        Socket* socket;
-        Connection connection;
-        qreal real;
-        QVariant variant;
-        QVariantList list;
+        // --------------------------------------------------------------------------------------------
+        ~value() {}
+
+        // --------------------------------------------------------------------------------------------
+        Socket*
+        socket;
+
+        // --------------------------------------------------------------------------------------------
+        Connection
+        connection;
+
+        // --------------------------------------------------------------------------------------------
+        qreal
+        real;
+
+        // --------------------------------------------------------------------------------------------
+        QVariant
+        variant;
+
+        // --------------------------------------------------------------------------------------------
+        QVariantList
+        list;
+
     }   m_value;
 
     // --------------------------------------------------------------------------------------------
-    enum class type { Socket, Connection, Real, QVariant, List}
-    m_type;
+    enum class type
+    { Socket, Connection, Real, QVariant, List} m_type;
 
 public:
 
+    // --------------------------------------------------------------------------------------------
     Variant() {}
 
+    // --------------------------------------------------------------------------------------------
     Variant(Variant const& cp)
     {
 
     }
 
+    // --------------------------------------------------------------------------------------------
     Variant(Socket* s) {
         m_value.socket = s;
         m_type = type::Socket;
     }
 
+    // --------------------------------------------------------------------------------------------
     Variant(Connection c) {
         m_value.connection = c;
         m_type = type::Connection;
     }
 
+    // --------------------------------------------------------------------------------------------
     Variant(qreal v) {
         m_value.real = v;
         m_type = type::Real;
     }
 
+    // --------------------------------------------------------------------------------------------
     Variant(QVariant v) {
         m_value.variant = v;
         m_type = type::QVariant;
     }
 
+    // --------------------------------------------------------------------------------------------
     Variant(QVariantList l) {
         m_value.list = l;
         m_type = type::List;
     }
 
+    // --------------------------------------------------------------------------------------------
     ~Variant() {}
 
+    // --------------------------------------------------------------------------------------------
     Variant& operator=(Variant const& cp)
+    // --------------------------------------------------------------------------------------------
     {
+        m_type = cp.m_type;
         return *this;
     }
 
+    // --------------------------------------------------------------------------------------------
     Variant& operator=(Socket* s)
+    // --------------------------------------------------------------------------------------------
     {
+        m_type = type::Socket;
+        m_value.socket = s;
         return *this;
     }
 
+    // --------------------------------------------------------------------------------------------
     operator Socket*()
+    // --------------------------------------------------------------------------------------------
     {
-        return m_value.socket;
+        if (m_type == type::Socket)
+             return m_value.socket;
+        else return nullptr;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    operator Connection()
+    // --------------------------------------------------------------------------------------------
+    {
+        if (m_type == type::Connection)
+             return m_value.connection;
+        else return Connection();
+    }
+
+    // --------------------------------------------------------------------------------------------
+    operator qreal()
+    // --------------------------------------------------------------------------------------------
+    {
+        if (m_type == type::Real)
+             return m_value.real;
+        else return 0;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    operator QVariant()
+    // --------------------------------------------------------------------------------------------
+    {
+        if (m_type == type::QVariant)
+             return m_value.variant;
+        else return QVariant();
+    }
+
+    // --------------------------------------------------------------------------------------------
+    operator QVariantList()
+    // --------------------------------------------------------------------------------------------
+    {
+        if (m_type == type::List)
+             return m_value.list;
+        else return QVariantList();
     }
 
     // --------------------------------------------------------------------------------------------
     template<typename T> bool
-    canConvert();
-
-    // --------------------------------------------------------------------------------------------
-    template<typename T> T
-    value();
+    canConvert() const noexcept;
 
     // --------------------------------------------------------------------------------------------
     qreal
@@ -735,59 +803,59 @@ public:
 
     // --------------------------------------------------------------------------------------------
     nchannels_t
-    nchannels() const { return m_nchannels; }
+    nchannels() const noexcept { return m_nchannels; }
     // returns Socket number of channels
 
     // --------------------------------------------------------------------------------------------
     polarity_t
-    polarity() const { return m_polarity; }
+    polarity() const noexcept { return m_polarity; }
     // returns Socket polarity (INPUT/OUTPUT)
 
     // --------------------------------------------------------------------------------------------
     Type
-    type() const { return m_type; }
+    type() const noexcept { return m_type; }
 
     // --------------------------------------------------------------------------------------------
     QString
-    name() const { return m_name; }
+    name() const noexcept { return m_name; }
 
     // --------------------------------------------------------------------------------------------
     Node&
-    parent_node() { return *m_parent; }
+    parent_node() noexcept { return *m_parent; }
     // returns Socket's parent Node
 
     // --------------------------------------------------------------------------------------------
     sample_t**
-    buffer() { return m_buffer; }
+    buffer() noexcept { return m_buffer; }
 
     // --------------------------------------------------------------------------------------------
     std::vector<Connection*>&
-    connections() { return m_connections; }
+    connections() noexcept { return m_connections; }
     // returns Socket's current connections
 
     // --------------------------------------------------------------------------------------------
     Q_INVOKABLE bool
-    connected() const { return m_connections.size(); }
+    connected() const noexcept { return m_connections.size(); }
     // returns true if Socket is connected to anything
 
     // --------------------------------------------------------------------------------------------
     Q_INVOKABLE bool
-    connected(Socket const& target) const;
+    connected(Socket const& target) const noexcept;
     // returns true if this Socket is connected to target
 
     // --------------------------------------------------------------------------------------------
     Q_INVOKABLE bool
-    connected(Node const& target) const;
+    connected(Node const& target) const noexcept;
     // returns true if this Socket is connected to
     // one of the target's Socket
 
     // --------------------------------------------------------------------------------------------
     Routing
-    routing() const;
+    routing() const noexcept;
 
     // --------------------------------------------------------------------------------------------
     void
-    set_routing(Routing routing);
+    set_routing(Routing routing) noexcept;
 
 private:
 
@@ -805,6 +873,7 @@ private:
     // --------------------------------------------------------------------------------------------
     void
     reset(vector_t nframes)
+    // --------------------------------------------------------------------------------------------
     {
         wpn114::reset_buffer(m_buffer, m_nchannels, nframes);
     }
@@ -812,6 +881,7 @@ private:
     // --------------------------------------------------------------------------------------------
     void
     add_connection(Connection& con)
+    // --------------------------------------------------------------------------------------------
     {
         m_connections.push_back(&con);
     }
@@ -819,6 +889,7 @@ private:
     // --------------------------------------------------------------------------------------------
     void
     remove_connection(Connection& con)
+    // --------------------------------------------------------------------------------------------
     {
         m_connections.erase(std::remove(m_connections.begin(),
             m_connections.end(), &con), m_connections.end());
@@ -1337,9 +1408,8 @@ public:
     {
         auto socket = target.read().value<Socket*>();
 
-        switch (socket->polarity())
-        {
-        case INPUT:  Graph::connect(*this, *socket); break;
+        switch (socket->polarity()) {
+        case INPUT: Graph::connect(*this, *socket); break;
         case OUTPUT: Graph::connect(*socket, *this);
         }
     }
@@ -1361,7 +1431,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     virtual QString
-    name() const { return "Unnamed"; }
+    name() const { return "UnnamedNode"; }
 
     // --------------------------------------------------------------------------------------------
     Routing
@@ -1541,15 +1611,13 @@ public:
     // this would be the Node producing the chain's final output
     // --------------------------------------------------------------------------------------------
     {
-        switch(m_dispatch)
-        {
-        case Dispatch::Values::Upwards: return *this;
+        switch(m_dispatch) {
+        case Dispatch::Values::Upwards:
+            return *this;
         case Dispatch::Values::Downwards:
-        {
             if (m_subnodes.empty())
                 return *this;
             else return *m_subnodes.back();
-        }
         }
 
         assert(false);
