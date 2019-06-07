@@ -57,21 +57,32 @@ Item
                 outputs: sinetest.midiInput
             }
 
+            WPN114.MidiListener on midiInputs {
+                // this emits a signal whenever a midi message is received
+                // goes back to the main Qt thread
+                onNoteOn: console.log(channel, index, value);
+                onNoteOff: ;
+                //...
+
+            }
+
 //            midiInputs.onNoteOn: frequency = mtof(index);
 
             WPN114.Sinetest
             {
                 id: sinetest
 
-
-                frequency: 440.0                                
-
+                frequency: 440.0                
+                frequency.muted: true
                 // rule is:
                 // audio comes first
                 // if Node has no audio output
                 // routing applies to midi output
                 routing: [0, 0, 0, 1]
-                audioOutput.routing: [0, 0, 0, 1]
+//                audioOutput: vca.inputs
+
+//                audioOutput.routing: [0, 0, 0, 1]
+
 
                 WPN114.VCA on audioOutput {
                     id: vca;

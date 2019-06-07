@@ -5,7 +5,7 @@
 class VCA : public Node
 //=================================================================================================
 {
-    WPN_OBJECT
+    Q_OBJECT
 
     WPN_ENUM_INPUTS   (inputs, gain)
     WPN_ENUM_OUTPUTS  (outputs)

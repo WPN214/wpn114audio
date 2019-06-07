@@ -5,6 +5,12 @@
 
 using namespace wpn114;
 
+Graph* Graph::s_instance;
+std::vector<Connection> Graph::s_connections;
+Graph::properties Graph::s_properties;
+QVector<Node*> Graph::m_subnodes;
+std::vector<Node*> Graph::s_nodes;
+
 // --------------------------------------------------------------------------------------------
 WPN_EXAMINE inline sample_t**
 allocate_buffer(nchannels_t nchannels, vector_t nframes)
@@ -34,12 +40,141 @@ reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes)
          memset(&buffer[c], 0, sizeof(sample_t)*nframes);
 }
 
+//---------------------------------------------------------------------------------------------
+template<> qreal
+Variant::value()
 // --------------------------------------------------------------------------------------------
-Socket::Socket(Node* parent, Type type, polarity_t polarity, uint8_t index, uint8_t nchannels) :
+{
+    if (m_type == type::Real)
+        return m_value.real;
+    return 0;
+}
+
+// --------------------------------------------------------------------------------------------
+template<> Socket*
+Variant::value()
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        return m_value.socket;
+    return nullptr;
+}
+
+// --------------------------------------------------------------------------------------------
+template<> Connection
+Variant::value()
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Connection)
+        return m_value.connection;
+    return Connection();
+}
+
+// --------------------------------------------------------------------------------------------
+template<> QVariant
+Variant::value()
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::QVariant)
+        return m_value.variant;
+    return QVariant();
+}
+
+// --------------------------------------------------------------------------------------------
+template<> QVariantList
+Variant::value()
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::List)
+        return m_value.list;
+    return QVariantList();
+}
+
+// --------------------------------------------------------------------------------------------
+qreal
+Variant::mul() const
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        return m_value.socket->mul();
+    return 0;
+}
+
+// --------------------------------------------------------------------------------------------
+void
+Variant::set_mul(qreal mul)
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        m_value.socket->set_mul(mul);
+}
+
+// --------------------------------------------------------------------------------------------
+qreal
+Variant::add() const
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        return m_value.socket->add();
+    return 0;
+}
+
+// --------------------------------------------------------------------------------------------
+void
+Variant::set_add(qreal add)
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        m_value.socket->set_add(add);
+}
+
+// --------------------------------------------------------------------------------------------
+bool
+Variant::muted() const
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        return m_value.socket->muted();
+    return false;
+}
+
+// --------------------------------------------------------------------------------------------
+void
+Variant::set_muted(bool muted)
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        m_value.socket->set_muted(muted);
+}
+
+// --------------------------------------------------------------------------------------------
+Routing
+Variant::routing() const
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        return m_value.socket->routing();
+    return Routing();
+}
+
+// --------------------------------------------------------------------------------------------
+void
+Variant::set_routing(Routing r)
+// --------------------------------------------------------------------------------------------
+{
+    if (m_type == type::Socket)
+        m_value.socket->set_routing(r);
+}
+
+
+// --------------------------------------------------------------------------------------------
+Socket::Socket(Node* parent, QString name, Type type, polarity_t polarity,
+uint8_t index, uint8_t nchannels) :
 // C++ constructor, called from the macro-declarations
 // we immediately store a pointer in parent Node's input/output socket vector
 // --------------------------------------------------------------------------------------------
     m_parent      (parent),
+    m_name        (name),
     m_polarity    (polarity),
     m_index       (index),
     m_type        (type),
@@ -50,17 +185,17 @@ Socket::Socket(Node* parent, Type type, polarity_t polarity, uint8_t index, uint
 
 // --------------------------------------------------------------------------------------------
 WPN_INCOMPLETE void
-Socket::assign(QVariant variant)
+Socket::assign(Variant variant)
 // --------------------------------------------------------------------------------------------
 {
-    if (variant.canConvert<Socket>())
+    if (variant.canConvert<Socket*>())
     {
         // implicit connection
-        auto socket = variant.value<Socket>();
+        auto socket = variant.value<Socket*>();
 
         switch(m_polarity) {
-        case INPUT: Graph::connect(*this, socket); break;
-        case OUTPUT: Graph::connect(socket, *this);
+        case INPUT: Graph::connect(*this, *socket); break;
+        case OUTPUT: Graph::connect(*socket, *this);
         }
     }
 
@@ -78,9 +213,7 @@ Socket::assign(QVariant variant)
 
     }
 
-    else if (variant.canConvert<QVariantList>())
-        for (auto& v : variant.value<QVariantList>())
-             assign(v);
+    else if (variant.canConvert<QVariantList>());
 
 }
 
@@ -182,7 +315,8 @@ Graph::register_node(Node& node) noexcept
 // --------------------------------------------------------------------------------------------
 WPN_INCOMPLETE inline Connection&
 Graph::connect(Socket& source, Socket& dest, Routing matrix)
-// there's still the Audio/Midi Type to check
+// there's still the Audio/Midi Type to check,
+// the multichannel expansion allocation
 // & debug the connection with a pretty message
 // --------------------------------------------------------------------------------------------
 {
@@ -195,6 +329,17 @@ Graph::connect(Socket& source, Socket& dest, Routing matrix)
         con.set_feedback(true);
 
     s_connections.push_back(con);   
+
+    qDebug() << "Graph: connected Node" << source.parent_node().name()
+             << "(socket:" << source.name() << ")"
+             << "with Node" << dest.parent_node().name()
+             << "(socket:" << dest.name() << ")";
+
+    for (nchannels_t n = 0; n < matrix.ncables(); ++n) {
+        qDebug() << "routing: channel" << QString::number(matrix[n][0])
+                 << ">> channel" << QString::number(matrix[n][1]);
+    }
+
     return s_connections.back();
 }
 

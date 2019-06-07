@@ -9,8 +9,7 @@ class Sinetest : public Node
 */
 //=================================================================================================
 {
-    WPN_OBJECT
-    // this marks initialize and rwrite as overriden
+    Q_OBJECT
 
     //-------------------------------------------------------------------------------------------------
     WPN_ENUM_INPUTS     (frequency, midiInput)

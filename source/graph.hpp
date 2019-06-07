@@ -10,6 +10,8 @@
 #include <QVariant>
 #include <cmath>
 
+#include <QtDebug>
+
 // --------------------------------------------------------------------------------------------------
 // CONVENIENCE MACRO DEFINITIONS
 // --------------------------------------------------------------------------------------------------
@@ -18,11 +20,11 @@
 Q_OBJECT
 
 #define WPN_SOCKET(_tp, _pol, _nm, _idx, _nchn)                                                     \
-private: Q_PROPERTY(QVariant _nm READ get##_nm WRITE set##_nm NOTIFY _nm##Changed)                   \
-protected: Socket m_##_nm { this, _tp, _pol, _idx, _nchn };                                         \
+private: Q_PROPERTY(Variant _nm READ get_##_nm WRITE set_##_nm NOTIFY _nm##Changed)                 \
+protected: Socket m_##_nm { this, #_nm, _tp, _pol, _idx, _nchn };                                   \
 public:                                                                                             \
-QVariant get##_nm() { return QVariant::fromValue(&m_##_nm); }                                                             \
-void set##_nm(QVariant v) { m_##_nm.assign(v); }                                                    \
+Variant get_##_nm() { return &m_##_nm; }                                                            \
+void set_##_nm(Variant v) { m_##_nm.assign(v); }                                                    \
 Q_SIGNAL void _nm##Changed();
 
 #define WPN_ENUM_INPUTS(...)                                                                        \
@@ -191,267 +193,7 @@ struct midi_t
     }
 };
 
-//=================================================================================================
-class Socket : public QObject
-// represents a node single input/output
-// holding specific types of values
-// and with nchannels_t channels
-//=================================================================================================
-{
-    Q_OBJECT
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (bool muted MEMBER m_muted WRITE set_muted)
-    // MUTED property: manages and overrides all Socket connections mute property
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal mul MEMBER m_mul WRITE set_mul)
-
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal add MEMBER m_add WRITE set_add)
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (int nchannels MEMBER m_nchannels WRITE set_nchannels)
-    // NCHANNELS property: for multichannel expansion
-    // and dynamic channel setting/allocation
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (Routing routing READ routing WRITE set_routing)
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (Type type READ type)
-
-    // --------------------------------------------------------------------------------------------
-    friend class Connection;
-    friend class Graph;
-    friend class Node;
-
-public:
-
-    //---------------------------------------------------------------------------------------------
-    enum Type
-    //---------------------------------------------------------------------------------------------
-    {
-        // shows what values a specific socket is expecting to receive
-        // or is explicitely outputing
-        // a connection between a Midi Socket and any other socket
-        // that isn't Midi will be refused
-        // otherwise, if connection types mismatch, a warning will be emitted
-
-        Audio,
-        // -1.0 to 1.0 normalized audio signal value
-
-        Midi_1_0,
-        // status byte + 2 other index/value bytes
-
-        Integer,
-        // a control integer value
-
-        FloatingPoint,
-        // a control floating point value
-
-        Cv,
-        // -5.0 to 5.0 control voltage values
-
-        Gate,
-        // a 0-1 latched value
-
-        Trigger
-        // a single pulse (1.f)
-    };
-
-    Q_ENUM (Type)
-
-    // --------------------------------------------------------------------------------------------
-    Socket() {}
-
-    // --------------------------------------------------------------------------------------------
-    Socket(Node* parent, Type type, polarity_t polarity, uint8_t index, uint8_t nchannels);
-
-    // --------------------------------------------------------------------------------------------
-    Socket(Socket const& cp) :
-        // this is only called because of the macro Socket definitions
-        // it shouldn't be called otherwise in any other context
-        m_polarity  (cp.m_polarity)
-      , m_index     (cp.m_index)
-      , m_nchannels (cp.m_nchannels)
-      , m_type      (cp.m_type)
-      , m_parent    (cp.m_parent) {}
-
-    // --------------------------------------------------------------------------------------------
-    Socket&
-    operator=(Socket const& cp)
-    // same as for the copy constructor
-    // --------------------------------------------------------------------------------------------
-    {
-        m_polarity   = cp.m_polarity;
-        m_index      = cp.m_index;
-        m_nchannels  = cp.m_nchannels;
-        m_parent     = cp.m_parent;
-        m_type       = cp.m_type;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    ~Socket() { free(m_buffer); }
-
-    // --------------------------------------------------------------------------------------------
-    void
-    assign(QVariant variant);
-    // this is called from QmlEngine when we assign a specific socket a value:
-    // - a qreal value (will fill the current buffer with this)
-    // - another Socket (will establish a connection with this Socket)
-    // - an explicit Connection object
-    // - a QVariantList, for which each element will in turn be parsed recursively
-
-    // --------------------------------------------------------------------------------------------
-    void
-    set_muted(bool muted);
-    // mute/unmute all output connections
-
-    // --------------------------------------------------------------------------------------------
-    void
-    set_mul(qreal mul);
-    // each connection involving this socket will multiply the signal by this 'mul' factor
-
-    // --------------------------------------------------------------------------------------------
-    void
-    set_add(qreal add);
-    // each connection involving this socket will offset the signal by 'add'
-
-    // --------------------------------------------------------------------------------------------
-    void
-    set_nchannels(nchannels_t nchannels);
-    // sets num_channels for socket and
-    // allocate/reallocate its buffer
-
-    // --------------------------------------------------------------------------------------------
-    nchannels_t
-    nchannels() const { return m_nchannels; }
-    // returns Socket number of channels
-
-    // --------------------------------------------------------------------------------------------
-    polarity_t
-    polarity() const { return m_polarity; }
-    // returns Socket polarity (INPUT/OUTPUT)
-
-    // --------------------------------------------------------------------------------------------
-    Type
-    type() const { return m_type; }
-
-    // --------------------------------------------------------------------------------------------
-    Node&
-    parent_node() { return *m_parent; }
-    // returns Socket's parent Node
-
-    // --------------------------------------------------------------------------------------------
-    sample_t**
-    buffer() { return m_buffer; }
-
-    // --------------------------------------------------------------------------------------------
-    std::vector<Connection*>&
-    connections() { return m_connections; }
-    // returns Socket's current connections
-
-    // --------------------------------------------------------------------------------------------
-    Q_INVOKABLE bool
-    connected() const { return m_connections.size(); }
-    // returns true if Socket is connected to anything
-
-    // --------------------------------------------------------------------------------------------
-    Q_INVOKABLE bool
-    connected(Socket const& target) const;
-    // returns true if this Socket is connected to target
-
-    // --------------------------------------------------------------------------------------------
-    Q_INVOKABLE bool
-    connected(Node const& target) const;
-    // returns true if this Socket is connected to
-    // one of the target's Socket
-
-    // --------------------------------------------------------------------------------------------
-    Routing
-    routing() const;
-
-    // --------------------------------------------------------------------------------------------
-    void
-    set_routing(Routing routing);
-
-private:
-
-    // --------------------------------------------------------------------------------------------
-    void
-    allocate(vector_t nframes)
-    // --------------------------------------------------------------------------------------------
-    {
-        if (m_buffer)
-            free(m_buffer);
-
-        m_buffer = wpn114::allocate_buffer(m_nchannels, nframes);
-    }
-
-    // --------------------------------------------------------------------------------------------
-    void
-    reset(vector_t nframes)
-    {
-        wpn114::reset_buffer(m_buffer, m_nchannels, nframes);
-    }
-
-    // --------------------------------------------------------------------------------------------
-    void
-    add_connection(Connection& con)
-    {
-        m_connections.push_back(&con);
-    }
-
-    // --------------------------------------------------------------------------------------------
-    void
-    remove_connection(Connection& con)
-    {
-        m_connections.erase(std::remove(m_connections.begin(),
-            m_connections.end(), &con), m_connections.end());
-    }
-
-    // --------------------------------------------------------------------------------------------
-    polarity_t
-    m_polarity;
-
-    // --------------------------------------------------------------------------------------------
-    Type
-    m_type;
-
-    // --------------------------------------------------------------------------------------------
-    uint8_t
-    m_index = 0;
-    // note: is it really necessary to store the index here?
-
-    // --------------------------------------------------------------------------------------------
-    uint8_t
-    m_nchannels = 0;
-
-    // --------------------------------------------------------------------------------------------
-    std::vector<Connection*>
-    m_connections;
-
-    // --------------------------------------------------------------------------------------------
-    Node*
-    m_parent = nullptr;
-
-    // --------------------------------------------------------------------------------------------
-    sample_t**
-    m_buffer = nullptr;
-
-    // --------------------------------------------------------------------------------------------
-    bool
-    m_muted = false;
-
-    // --------------------------------------------------------------------------------------------
-    qreal
-    m_mul = 1,
-    m_add = 0;
-};
-
-Q_DECLARE_METATYPE(Socket)
+class Socket;
 
 //=================================================================================================
 class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
@@ -704,6 +446,429 @@ private:
 
 Q_DECLARE_METATYPE(Connection)
 
+// --------------------------------------------------------------------------------------------
+class Variant : public QObject
+// this one is for allowing to assign various types of values to a specific Socket object
+// (QVariant doesn't allow us to read Socket properties)
+// --------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (bool muted READ muted WRITE set_muted)
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (qreal mul READ mul WRITE set_mul)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY (qreal add READ add WRITE set_add)
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (int nchannels READ nchannels)
+    // NCHANNELS property: for multichannel expansion
+    // and dynamic channel setting/allocation
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (Routing routing READ routing WRITE set_routing)
+
+    // --------------------------------------------------------------------------------------------
+    union value
+    // --------------------------------------------------------------------------------------------
+    {
+        value();
+        ~value();
+
+        Socket* socket;
+        Connection connection;
+        qreal real;
+        QVariant variant;
+        QVariantList list;
+    }   m_value;
+
+    // --------------------------------------------------------------------------------------------
+    enum class type { Socket, Connection, Real, QVariant, List}
+    m_type;
+
+public:
+
+    Variant() {}
+
+    Variant(Variant const& cp)
+    {
+
+    }
+
+    Variant(Socket* s) {
+        m_value.socket = s;
+        m_type = type::Socket;
+    }
+
+    Variant(Connection c) {
+        m_value.connection = c;
+        m_type = type::Connection;
+    }
+
+    Variant(qreal v) {
+        m_value.real = v;
+        m_type = type::Real;
+    }
+
+    Variant(QVariant v) {
+        m_value.variant = v;
+        m_type = type::QVariant;
+    }
+
+    Variant(QVariantList l) {
+        m_value.list = l;
+        m_type = type::List;
+    }
+
+    ~Variant() {}
+
+    Variant& operator=(Variant const& cp)
+    {
+        return *this;
+    }
+
+    Variant& operator=(Socket* s)
+    {
+        return *this;
+    }
+
+    operator Socket*()
+    {
+        return m_value.socket;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    template<typename T> bool
+    canConvert();
+
+    // --------------------------------------------------------------------------------------------
+    template<typename T> T
+    value();
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    mul() const;
+
+    void
+    set_mul(qreal mul);
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    add() const;
+
+    void
+    set_add(qreal add);
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    muted() const;
+
+    void
+    set_muted(bool muted);
+
+    // --------------------------------------------------------------------------------------------
+    nchannels_t
+    nchannels() const;
+
+    // --------------------------------------------------------------------------------------------
+    Routing
+    routing() const;
+
+    void
+    set_routing(Routing r);
+};
+
+Q_DECLARE_METATYPE(Variant)
+
+//=================================================================================================
+class Socket : public QObject
+// represents a node single input/output
+// holding specific types of values
+// and with nchannels_t channels
+//=================================================================================================
+{
+    Q_OBJECT
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (bool muted MEMBER m_muted WRITE set_muted)
+    // MUTED property: manages and overrides all Socket connections mute property
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (qreal mul MEMBER m_mul WRITE set_mul)
+
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY (qreal add MEMBER m_add WRITE set_add)
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (int nchannels MEMBER m_nchannels WRITE set_nchannels)
+    // NCHANNELS property: for multichannel expansion
+    // and dynamic channel setting/allocation
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (Routing routing READ routing WRITE set_routing)
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (Type type READ type)
+
+    // --------------------------------------------------------------------------------------------
+    friend class Connection;
+    friend class Graph;
+    friend class Node;
+
+public:
+
+    //---------------------------------------------------------------------------------------------
+    enum Type
+    //---------------------------------------------------------------------------------------------
+    {
+        // shows what values a specific socket is expecting to receive
+        // or is explicitely outputing
+        // a connection between a Midi Socket and any other socket
+        // that isn't Midi will be refused
+        // otherwise, if connection types mismatch, a warning will be emitted
+
+        Audio,
+        // -1.0 to 1.0 normalized audio signal value
+
+        Midi_1_0,
+        // status byte + 2 other index/value bytes
+
+        Integer,
+        // a control integer value
+
+        FloatingPoint,
+        // a control floating point value
+
+        Cv,
+        // -5.0 to 5.0 control voltage values
+
+        Gate,
+        // a 0-1 latched value
+
+        Trigger
+        // a single pulse (1.f)
+    };
+
+    Q_ENUM (Type)
+
+    // --------------------------------------------------------------------------------------------
+    Socket() {}
+
+    // --------------------------------------------------------------------------------------------
+    Socket(Node* parent, QString name, Type type, polarity_t polarity, uint8_t index, uint8_t nchannels);
+
+    // --------------------------------------------------------------------------------------------
+    Socket(Socket const& cp) :
+        // this is only called because of the macro Socket definitions
+        // it shouldn't be called otherwise in any other context
+        m_polarity  (cp.m_polarity)
+      , m_index     (cp.m_index)
+      , m_nchannels (cp.m_nchannels)
+      , m_type      (cp.m_type)
+      , m_name      (cp.m_name)
+      , m_parent    (cp.m_parent) {}
+
+    // --------------------------------------------------------------------------------------------
+    Socket&
+    operator=(Socket const& cp)
+    // same as for the copy constructor
+    // --------------------------------------------------------------------------------------------
+    {
+        m_polarity   = cp.m_polarity;
+        m_index      = cp.m_index;
+        m_nchannels  = cp.m_nchannels;
+        m_parent     = cp.m_parent;
+        m_type       = cp.m_type;
+        m_name       = cp.m_name;
+    }
+
+    // --------------------------------------------------------------------------------------------
+    ~Socket() { free(m_buffer); }
+
+    // --------------------------------------------------------------------------------------------       
+    Socket& operator=(Variant v)
+    {
+        return *this;
+    }
+
+    void
+    assign(Variant variant);
+    // this is called from QmlEngine when we assign a specific socket a value:
+    // - a qreal value (will fill the current buffer with this)
+    // - another Socket (will establish a connection with this Socket)
+    // - an explicit Connection object
+    // - a QVariantList, for which each element will in turn be parsed recursively
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    muted() const { return m_muted; }
+
+    void
+    set_muted(bool muted);
+    // mute/unmute all output connections
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    mul() const { return m_mul; }
+
+    void
+    set_mul(qreal mul);
+    // each connection involving this socket will multiply the signal by this 'mul' factor
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    add() const { return m_add; }
+
+    void
+    set_add(qreal add);
+    // each connection involving this socket will offset the signal by 'add'
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_nchannels(nchannels_t nchannels);
+    // sets num_channels for socket and
+    // allocate/reallocate its buffer
+
+    // --------------------------------------------------------------------------------------------
+    nchannels_t
+    nchannels() const { return m_nchannels; }
+    // returns Socket number of channels
+
+    // --------------------------------------------------------------------------------------------
+    polarity_t
+    polarity() const { return m_polarity; }
+    // returns Socket polarity (INPUT/OUTPUT)
+
+    // --------------------------------------------------------------------------------------------
+    Type
+    type() const { return m_type; }
+
+    // --------------------------------------------------------------------------------------------
+    QString
+    name() const { return m_name; }
+
+    // --------------------------------------------------------------------------------------------
+    Node&
+    parent_node() { return *m_parent; }
+    // returns Socket's parent Node
+
+    // --------------------------------------------------------------------------------------------
+    sample_t**
+    buffer() { return m_buffer; }
+
+    // --------------------------------------------------------------------------------------------
+    std::vector<Connection*>&
+    connections() { return m_connections; }
+    // returns Socket's current connections
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE bool
+    connected() const { return m_connections.size(); }
+    // returns true if Socket is connected to anything
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE bool
+    connected(Socket const& target) const;
+    // returns true if this Socket is connected to target
+
+    // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE bool
+    connected(Node const& target) const;
+    // returns true if this Socket is connected to
+    // one of the target's Socket
+
+    // --------------------------------------------------------------------------------------------
+    Routing
+    routing() const;
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_routing(Routing routing);
+
+private:
+
+    // --------------------------------------------------------------------------------------------
+    void
+    allocate(vector_t nframes)
+    // --------------------------------------------------------------------------------------------
+    {
+        if (m_buffer)
+            free(m_buffer);
+
+        m_buffer = wpn114::allocate_buffer(m_nchannels, nframes);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    reset(vector_t nframes)
+    {
+        wpn114::reset_buffer(m_buffer, m_nchannels, nframes);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    add_connection(Connection& con)
+    {
+        m_connections.push_back(&con);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    remove_connection(Connection& con)
+    {
+        m_connections.erase(std::remove(m_connections.begin(),
+            m_connections.end(), &con), m_connections.end());
+    }
+
+    // --------------------------------------------------------------------------------------------
+    QString
+    m_name;
+
+    // --------------------------------------------------------------------------------------------
+    polarity_t
+    m_polarity;
+
+    // --------------------------------------------------------------------------------------------
+    Type
+    m_type;
+
+    // --------------------------------------------------------------------------------------------
+    uint8_t
+    m_index = 0;
+    // note: is it really necessary to store the index here?
+
+    // --------------------------------------------------------------------------------------------
+    uint8_t
+    m_nchannels = 0;
+
+    // --------------------------------------------------------------------------------------------
+    std::vector<Connection*>
+    m_connections;
+
+    // --------------------------------------------------------------------------------------------
+    Node*
+    m_parent = nullptr;
+
+    // --------------------------------------------------------------------------------------------
+    sample_t**
+    m_buffer = nullptr;
+
+    // --------------------------------------------------------------------------------------------
+    bool
+    m_muted = false;
+
+    // --------------------------------------------------------------------------------------------
+    qreal
+    m_mul = 1,
+    m_add = 0;
+};
+
+Q_DECLARE_METATYPE(Socket)
+
 //=================================================================================================
 class Graph : public QObject, public QQmlParserStatus
 // embeds all connections between instantiated nodes
@@ -716,7 +881,7 @@ class Graph : public QObject, public QQmlParserStatus
     // Graph's signal vector size (lower is better, but will increase CPU usage)
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (sample_t rate READ rate WRITE set_rate)
+    Q_PROPERTY (qreal rate READ rate WRITE set_rate)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (QQmlListProperty<Node> subnodes READ subnodes)
@@ -793,7 +958,8 @@ public:
     static void
     unregister_node(Node& node) noexcept
     {
-        s_nodes.erase(std::remove(s_nodes.begin(), s_nodes.end(), &node), s_nodes.end());
+        s_nodes.erase(std::remove(s_nodes.begin(),
+            s_nodes.end(), &node), s_nodes.end());
     }
 
     // --------------------------------------------------------------------------------------------
@@ -841,8 +1007,7 @@ public:
             dest.remove_connection(*con);
 
             s_connections.erase(std::remove(s_connections.begin(),
-                                s_connections.end(), *con),
-                                s_connections.end());
+                s_connections.end(), *con), s_connections.end());
         }
     }
 
@@ -864,7 +1029,7 @@ public:
     Q_SIGNAL void
     rateChanged(sample_t);
 
-
+    // --------------------------------------------------------------------------------------------
     Q_SIGNAL void
     vectorChanged(vector_t);
 
@@ -1193,6 +1358,10 @@ public:
     virtual void
     on_rate_changed(sample_t rate) {}
     // this can be overriden and will be called each time the sample rate changes
+
+    // --------------------------------------------------------------------------------------------
+    virtual QString
+    name() const { return "Unnamed"; }
 
     // --------------------------------------------------------------------------------------------
     Routing

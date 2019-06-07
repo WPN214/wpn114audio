@@ -96,27 +96,27 @@ class JackExternal : public ExternalBase
     m_midi_inputs,
     m_midi_outputs;
 
+    //---------------------------------------------------------------------------------------------
     static int
     on_jack_sample_rate_changed(jack_nframes_t nframes, void* udata);
 
+    //---------------------------------------------------------------------------------------------
     static int
     on_jack_buffer_size_changed(jack_nframes_t nframes, void* udata);
 
+    //---------------------------------------------------------------------------------------------
     static int
     jack_process_callback(jack_nframes_t nframes, void* udata);
 
+    //---------------------------------------------------------------------------------------------
     void
-    register_ports(nchannels_t nchannels,
-    const char* port_mask,
-    const char* type,
-    int polarity,
-    std::vector<jack_port_t*>& target);
+    register_ports(nchannels_t nchannels, const char* port_mask, const char* type,
+                   int polarity, std::vector<jack_port_t*>& target);
 
+    //---------------------------------------------------------------------------------------------
     void
-    connect_ports(std::vector<jack_port_t*>& ports,
-                  int target_polarity, const char *type,
-                  QStringList const& targets,
-                  Routing routing);
+    connect_ports(std::vector<jack_port_t*>& ports, int target_polarity, const char *type,
+                  QStringList const& targets, Routing routing);
 
 public:
 
@@ -131,6 +131,7 @@ public:
         jack_client_close(m_client);
     }
 
+    //---------------------------------------------------------------------------------------------
     External&
     parent() { return m_parent; }
 
@@ -161,7 +162,7 @@ class External : public Node
 // and will send it commands and notifications whenever a property changes
 //=================================================================================================
 {
-    WPN_OBJECT
+    Q_OBJECT
 
     //---------------------------------------------------------------------------------------------
     WPN_ENUM_INPUTS     (audioInputs, midiInputs)
@@ -549,7 +550,7 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QString
-    name() const { return m_name; }
+    name() const override { return m_name; }
 
     //---------------------------------------------------------------------------------------------
     void
@@ -558,6 +559,18 @@ public:
     {
         m_name = name;
         m_backend->on_name_changed(m_name);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    bool
+    running() const { return m_running; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_running(bool running)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_running = running;
     }
 };
 
