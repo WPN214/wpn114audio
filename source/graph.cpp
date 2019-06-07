@@ -50,103 +50,6 @@ reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes)
          memset(&buffer[c], 0, sizeof(sample_t)*nframes);
 }
 
-//-------------------------------------------------------------------------------------------------
-template<> bool
-Variant::canConvert<Socket*>() const noexcept { return m_type == type::Socket; }
-
-//-------------------------------------------------------------------------------------------------
-template<> bool
-Variant::canConvert<qreal>() const noexcept { return m_type == type::Real; }
-
-//-------------------------------------------------------------------------------------------------
-template<> bool
-Variant::canConvert<Connection>() const noexcept { return m_type == type::Connection; }
-
-//-------------------------------------------------------------------------------------------------
-template<> bool
-Variant::canConvert<QVariant>() const noexcept { return m_type == type::QVariant; }
-
-//-------------------------------------------------------------------------------------------------
-template<> bool
-Variant::canConvert<QVariantList>() const noexcept { return m_type == type::List; }
-
-// ------------------------------------------------------------------------------------------------
-qreal
-Variant::mul() const
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == type::Socket)
-        return m_value.socket->mul();
-    return 0;
-}
-
-// ------------------------------------------------------------------------------------------------
-void
-Variant::set_mul(qreal mul)
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == type::Socket)
-        m_value.socket->set_mul(mul);
-}
-
-// ------------------------------------------------------------------------------------------------
-qreal
-Variant::add() const
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == type::Socket)
-        return m_value.socket->add();
-    return 0;
-}
-
-// ------------------------------------------------------------------------------------------------
-void
-Variant::set_add(qreal add)
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == type::Socket)
-        m_value.socket->set_add(add);
-}
-
-// ------------------------------------------------------------------------------------------------
-bool
-Variant::muted() const
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == type::Socket)
-        return m_value.socket->muted();
-    return false;
-}
-
-// ------------------------------------------------------------------------------------------------
-void
-Variant::set_muted(bool muted)
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == type::Socket)
-        m_value.socket->set_muted(muted);
-}
-
-// ------------------------------------------------------------------------------------------------
-Routing
-Variant::routing() const
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == type::Socket)
-        return m_value.socket->routing();
-    return Routing();
-}
-
-// ------------------------------------------------------------------------------------------------
-void
-Variant::set_routing(Routing r)
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == type::Socket)
-        m_value.socket->set_routing(r);
-}
-
-
 // ------------------------------------------------------------------------------------------------
 Socket::Socket(Node* parent, QString name, Type type, polarity_t polarity,
 uint8_t index, uint8_t nchannels) :
@@ -165,42 +68,13 @@ uint8_t index, uint8_t nchannels) :
 
 // ------------------------------------------------------------------------------------------------
 WPN_INCOMPLETE void
-Socket::assign(Variant variant)
+Socket::assign(Socket* socket)
 // ------------------------------------------------------------------------------------------------
 {
-    if (variant.canConvert<Socket*>())
-    {
-        // implicit connection
-        auto socket = static_cast<Socket*>(variant);
-
-        switch(m_polarity) {
-        case INPUT: Graph::connect(*this, *socket); break;
-        case OUTPUT: Graph::connect(*socket, *this);
-        }
+    switch(m_polarity) {
+    case INPUT: Graph::connect(*this, *socket); break;
+    case OUTPUT: Graph::connect(*socket, *this);
     }
-
-    else if (variant.canConvert<Connection>())
-    {
-        WPN_TODO
-        // assigning an explicit connection
-        // hmm that can be problematic...
-        auto connection = static_cast<Connection>(variant);
-    }
-
-    else if (variant.canConvert<qreal>())
-    {
-        WPN_TODO
-        // fill buffer with value
-        qreal v = static_cast<qreal>(variant);
-
-    }
-
-    else if (variant.canConvert<QVariantList>())
-    {
-        QVariantList list = static_cast<QVariantList>(variant);
-        // TODO: recursively parse the elements
-    }
-
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -212,7 +86,7 @@ Socket::set_nchannels(nchannels_t nchannels)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_OK inline void
+WPN_OK void
 Socket::set_mul(qreal mul)
 // this overrides the mul for all connections based on this socket
 // ------------------------------------------------------------------------------------------------
@@ -222,7 +96,7 @@ Socket::set_mul(qreal mul)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_OK inline void
+WPN_OK void
 Socket::set_add(qreal add)
 // this overrides the add for all connections based on this socket
 // ------------------------------------------------------------------------------------------------
@@ -232,17 +106,17 @@ Socket::set_add(qreal add)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE inline Routing
+WPN_EXAMINE QVariantList
 Socket::routing() const noexcept { return m_connections[0]->routing(); }
 // examine in concrete QML situations
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE inline void
-Socket::set_routing(Routing r) noexcept { m_connections[0]->set_routing(r); }
+WPN_EXAMINE void
+Socket::set_routing(QVariantList r) noexcept { m_connections[0]->set_routing(r); }
 // examine in concrete QML situations
 
 // ------------------------------------------------------------------------------------------------
-WPN_OK inline void
+WPN_OK void
 Socket::set_muted(bool muted)
 // mutes all connections, zero output
 // ------------------------------------------------------------------------------------------------
@@ -288,7 +162,7 @@ Socket::connected(Node const& n) const noexcept
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE inline void
+WPN_EXAMINE void
 Graph::register_node(Node& node) noexcept
 // we should maybe add a vectorChanged signal-slot connection to this
 // we also might not need to store pointers...

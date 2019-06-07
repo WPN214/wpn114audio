@@ -8,6 +8,8 @@
 #include <QQmlListProperty>
 #include <QVector>
 #include <QVariant>
+#include <QJSValue>
+
 #include <cmath>
 
 #include <QtDebug>
@@ -20,11 +22,11 @@
 Q_OBJECT
 
 #define WPN_SOCKET(_tp, _pol, _nm, _idx, _nchn)                                                     \
-private: Q_PROPERTY(Variant _nm READ get_##_nm WRITE set_##_nm NOTIFY _nm##Changed)                 \
+private: Q_PROPERTY(Socket* _nm READ get_##_nm WRITE set_##_nm NOTIFY _nm##Changed)                 \
 protected: Socket m_##_nm { this, #_nm, _tp, _pol, _idx, _nchn };                                   \
 public:                                                                                             \
-Variant get_##_nm() { return &m_##_nm; }                                                            \
-void set_##_nm(Variant v) { m_##_nm.assign(v); }                                                    \
+Socket* get_##_nm() { return &m_##_nm; }                                                            \
+void set_##_nm(Socket* v) { m_##_nm.assign(v); }                                                    \
 Q_SIGNAL void _nm##Changed();
 
 #define WPN_ENUM_INPUTS(...)                                                                        \
@@ -133,6 +135,12 @@ public:
     Routing&
     operator=(Routing const& cp) { m_routing = cp.m_routing; return *this; }
 
+    Routing&
+    operator=(QJSValue v)
+    {
+        return *this;
+    }
+
     // --------------------------------------------------------------------------------------------
     cable&
     operator[](uint8_t index) { return m_routing[index]; }
@@ -169,6 +177,8 @@ private:
     std::vector<cable>
     m_routing;
 };
+
+Q_DECLARE_METATYPE(Routing)
 
 //=================================================================================================
 WPN_INCOMPLETE
@@ -447,210 +457,6 @@ private:
 
 Q_DECLARE_METATYPE(Connection)
 
-// --------------------------------------------------------------------------------------------
-class Variant : public QObject
-// this one is for allowing to assign various types of values to a specific Socket object
-// (QVariant doesn't allow us to read Socket properties)
-// --------------------------------------------------------------------------------------------
-{
-    Q_OBJECT
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (bool muted READ muted WRITE set_muted)
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal mul READ mul WRITE set_mul)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal add READ add WRITE set_add)
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (int nchannels READ nchannels)
-
-    // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (Routing routing READ routing WRITE set_routing)
-
-    // --------------------------------------------------------------------------------------------
-    union value
-    // --------------------------------------------------------------------------------------------
-    {
-        // --------------------------------------------------------------------------------------------
-        value() {}
-
-        // --------------------------------------------------------------------------------------------
-        ~value() {}
-
-        // --------------------------------------------------------------------------------------------
-        Socket*
-        socket;
-
-        // --------------------------------------------------------------------------------------------
-        Connection
-        connection;
-
-        // --------------------------------------------------------------------------------------------
-        qreal
-        real;
-
-        // --------------------------------------------------------------------------------------------
-        QVariant
-        variant;
-
-        // --------------------------------------------------------------------------------------------
-        QVariantList
-        list;
-
-    }   m_value;
-
-    // --------------------------------------------------------------------------------------------
-    enum class type
-    { Socket, Connection, Real, QVariant, List} m_type;
-
-public:
-
-    // --------------------------------------------------------------------------------------------
-    Variant() {}
-
-    // --------------------------------------------------------------------------------------------
-    Variant(Variant const& cp)
-    {
-
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Variant(Socket* s) {
-        m_value.socket = s;
-        m_type = type::Socket;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Variant(Connection c) {
-        m_value.connection = c;
-        m_type = type::Connection;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Variant(qreal v) {
-        m_value.real = v;
-        m_type = type::Real;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Variant(QVariant v) {
-        m_value.variant = v;
-        m_type = type::QVariant;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Variant(QVariantList l) {
-        m_value.list = l;
-        m_type = type::List;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    ~Variant() {}
-
-    // --------------------------------------------------------------------------------------------
-    Variant& operator=(Variant const& cp)
-    // --------------------------------------------------------------------------------------------
-    {
-        m_type = cp.m_type;
-        return *this;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Variant& operator=(Socket* s)
-    // --------------------------------------------------------------------------------------------
-    {
-        m_type = type::Socket;
-        m_value.socket = s;
-        return *this;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    operator Socket*()
-    // --------------------------------------------------------------------------------------------
-    {
-        if (m_type == type::Socket)
-             return m_value.socket;
-        else return nullptr;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    operator Connection()
-    // --------------------------------------------------------------------------------------------
-    {
-        if (m_type == type::Connection)
-             return m_value.connection;
-        else return Connection();
-    }
-
-    // --------------------------------------------------------------------------------------------
-    operator qreal()
-    // --------------------------------------------------------------------------------------------
-    {
-        if (m_type == type::Real)
-             return m_value.real;
-        else return 0;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    operator QVariant()
-    // --------------------------------------------------------------------------------------------
-    {
-        if (m_type == type::QVariant)
-             return m_value.variant;
-        else return QVariant();
-    }
-
-    // --------------------------------------------------------------------------------------------
-    operator QVariantList()
-    // --------------------------------------------------------------------------------------------
-    {
-        if (m_type == type::List)
-             return m_value.list;
-        else return QVariantList();
-    }
-
-    // --------------------------------------------------------------------------------------------
-    template<typename T> bool
-    canConvert() const noexcept;
-
-    // --------------------------------------------------------------------------------------------
-    qreal
-    mul() const;
-
-    void
-    set_mul(qreal mul);
-
-    // --------------------------------------------------------------------------------------------
-    qreal
-    add() const;
-
-    void
-    set_add(qreal add);
-
-    // --------------------------------------------------------------------------------------------
-    bool
-    muted() const;
-
-    void
-    set_muted(bool muted);
-
-    // --------------------------------------------------------------------------------------------
-    nchannels_t
-    nchannels() const;
-
-    // --------------------------------------------------------------------------------------------
-    Routing
-    routing() const;
-
-    void
-    set_routing(Routing r);
-};
-
-Q_DECLARE_METATYPE(Variant)
-
 //=================================================================================================
 class Socket : public QObject
 // represents a node single input/output
@@ -665,6 +471,9 @@ class Socket : public QObject
     // MUTED property: manages and overrides all Socket connections mute property
 
     // --------------------------------------------------------------------------------------------
+    Q_PROPERTY(QVariant value READ value WRITE set_value)
+
+    // --------------------------------------------------------------------------------------------
     Q_PROPERTY (qreal mul MEMBER m_mul WRITE set_mul)
 
 
@@ -677,7 +486,7 @@ class Socket : public QObject
     // and dynamic channel setting/allocation
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (Routing routing READ routing WRITE set_routing)
+    Q_PROPERTY (QVariantList routing READ routing WRITE set_routing)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (Type type READ type)
@@ -752,24 +561,32 @@ public:
         m_parent     = cp.m_parent;
         m_type       = cp.m_type;
         m_name       = cp.m_name;
+
+        return *this;
     }
 
     // --------------------------------------------------------------------------------------------
     ~Socket() { free(m_buffer); }
 
-    // --------------------------------------------------------------------------------------------       
-    Socket& operator=(Variant v)
-    {
-        return *this;
-    }
-
+    // --------------------------------------------------------------------------------------------
     void
-    assign(Variant variant);
+    assign(Socket* s);
     // this is called from QmlEngine when we assign a specific socket a value:
     // - a qreal value (will fill the current buffer with this)
     // - another Socket (will establish a connection with this Socket)
     // - an explicit Connection object
     // - a QVariantList, for which each element will in turn be parsed recursively
+
+    // --------------------------------------------------------------------------------------------
+    QVariant
+    value() const { return m_value; }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_value(QVariant value)
+    {
+
+    }
 
     // --------------------------------------------------------------------------------------------
     bool
@@ -850,12 +667,12 @@ public:
     // one of the target's Socket
 
     // --------------------------------------------------------------------------------------------
-    Routing
+    QVariantList
     routing() const noexcept;
 
     // --------------------------------------------------------------------------------------------
     void
-    set_routing(Routing routing) noexcept;
+    set_routing(QVariantList routing) noexcept;
 
 private:
 
@@ -936,6 +753,10 @@ private:
     qreal
     m_mul = 1,
     m_add = 0;
+
+    // --------------------------------------------------------------------------------------------
+    QVariant
+    m_value;
 };
 
 Q_DECLARE_METATYPE(Socket)
@@ -1239,12 +1060,12 @@ public:
 
     Spatial& operator=(Spatial const&)
     {
-
+        return *this;
     }
 
     bool operator!=(Spatial const&)
     {
-
+        return false;
     }
 
 private:
@@ -1273,7 +1094,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     Q_OBJECT
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Routing routing READ routing WRITE set_routing)
+    Q_PROPERTY(QVariantList routing READ routing WRITE set_routing)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(bool muted MEMBER m_muted WRITE set_muted)
@@ -1434,7 +1255,7 @@ public:
     name() const { return "UnnamedNode"; }
 
     // --------------------------------------------------------------------------------------------
-    Routing
+    QVariantList
     routing()
     // returns the default audio/midi output routing (audio comes first)
     // null routing if there is none
@@ -1445,12 +1266,12 @@ public:
         else if (auto out = default_midi_outputs())
             return out->routing();
 
-        return Routing();
+        return QVariantList();
     }
 
     // --------------------------------------------------------------------------------------------
     void
-    set_routing(Routing r)
+    set_routing(QVariantList r)
     // --------------------------------------------------------------------------------------------
     {
         if (auto out = default_audio_outputs())
@@ -1523,6 +1344,8 @@ public:
             case INPUT: return m_inputs;
             case OUTPUT: return m_outputs;
         }
+
+        assert(false);
     }
 
     // --------------------------------------------------------------------------------------------
