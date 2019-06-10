@@ -36,87 +36,88 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // write all inputs to external's outputs
     nchannels_t n = 0;
 
-    auto extout_a = ext.default_audio_outputs()->buffer();
-    auto extout_m = ext.default_midi_inputs()->buffer();
-
-    for (auto& input : jext.m_audio_inputs)
+    if (auto extout_a = ext.default_socket(Socket::Audio, OUTPUT))
     {
-        float* buf = static_cast<float*>(jack_port_get_buffer(input, nframes));
-
-        // graph is processed in qreal, which usually is double
-        // but jack processes in float
-        for (jack_nframes_t f = 0; f < nframes; ++f)
-             extout_a[n][f] = buf[n];
-
-        n++;
+        auto extout_a_buffer = extout_a->buffer();
+        for (auto& input : jext.m_audio_inputs) {
+            float* buf = static_cast<float*>(jack_port_get_buffer(input, nframes));
+            // graph is processed in qreal, which usually is double
+            // except is qt is compiled with the qreal=float option
+            // but jack processes in float
+            for (jack_nframes_t f = 0; f < nframes; ++f)
+                 extout_a_buffer[n][f] = buf[n];
+            n++;
+        }
     }
 
-    // now for the midi input part
-    n = 0;
-    jack_midi_event_t ev;
-    for (auto& input : jext.m_midi_inputs)
+    if (auto extout_m = ext.default_socket(Socket::Midi_1_0, OUTPUT))
     {
-        auto buf = jack_port_get_buffer(input, nframes);
-        auto nev = jack_midi_get_event_count(buf);
+        auto extout_m_buffer = extout_m->buffer();
+        jack_midi_event_t ev;
+        n = 0;
 
-        for (jack_nframes_t f = 0; f < nframes; ++f)
-        {
-            for (jack_nframes_t e = 0; e < nev; ++e)
-            {
-                jack_midi_event_get(&ev, buf, e);
-                if (ev.time == f)
+        for (auto& input : jext.m_midi_inputs) {
+            auto buf = jack_port_get_buffer(input, nframes);
+            auto nev = jack_midi_get_event_count(buf);
+
+            for (jack_nframes_t f = 0; f < nframes; ++f) {
+                for (jack_nframes_t e = 0; e < nev; ++e)
                 {
-                    midi_t mt(0);
-                    mt.status = ev.buffer[0];
-                    mt.b1 = ev.buffer[1];
-                    mt.b2 = ev.buffer[2];
-
-                    extout_m[n][f] = mt;
+                    jack_midi_event_get(&ev, buf, e);
+                    if (ev.time == f) {
+                        midi_t mt(0);
+                        mt.status = ev.buffer[0];
+                        mt.b1 = ev.buffer[1];
+                        mt.b2 = ev.buffer[2];
+                        extout_m_buffer[n][f] = mt;
+                    }
                 }
             }
-        }
 
-        n++;
+            n++;
+        }
     }
 
-    ext.set_processed(true);
+
     Graph::run(ext);
 
-    // at this point, the graph's outputs
-    // are located in External's input buffer
-    auto extin_a = ext.default_audio_inputs()->buffer();
-    auto extin_m = ext.default_midi_inputs()->buffer();
-
-    // we now write it in the jack port output buffers
-    // audio out
-    n = 0;
-    for (auto& output : jext.m_audio_outputs)
+    if (auto extin_a = ext.default_socket(Socket::Audio, INPUT))
     {
-        float* buf = static_cast<float*>(jack_port_get_buffer(output, nframes));
-        for (jack_nframes_t f = 0; f < nframes; ++f)
-             buf[n] = extin_a[n][f];
-        n++;
+        auto extin_a_buffer = extin_a->buffer();
+        n = 0;
+
+        for (auto& output : jext.m_audio_outputs) {
+            float* buf = static_cast<float*>(jack_port_get_buffer(output, nframes));
+            for (jack_nframes_t f = 0; f < nframes; ++f)
+                 buf[n] = extin_a_buffer[n][f];
+            n++;
+        }
     }
 
-    // midi out
-    n = 0;
-    for (auto& output : jext.m_midi_outputs)
+    if (auto extin_m = ext.default_socket(Socket::Midi_1_0, INPUT))
     {
-        auto buf = jack_port_get_buffer(output, nframes);
+        auto extin_m_buffer = extin_m->buffer();
+        n = 0;
 
-        for (jack_nframes_t f = 0; f < nframes; ++f)
+        for (auto& output : jext.m_midi_outputs)
         {
-            if (extin_m[n][f] != 0.)
+            auto buf = jack_port_get_buffer(output, nframes);
+
+            for (jack_nframes_t f = 0; f < nframes; ++f)
             {
-                midi_t mt = extin_m[n][f];
-                jack_midi_data_t* ev = jack_midi_event_reserve(buf, n, 3);
-                ev[0] = mt.status;
-                ev[1] = mt.b1;
-                ev[2] = mt.b2;
+                if (extin_m_buffer[n][f] != 0.)
+                {
+                    midi_t mt = extin_m_buffer[n][f];
+                    jack_midi_data_t* ev = jack_midi_event_reserve(buf, n, 3);
+                    ev[0] = mt.status;
+                    ev[1] = mt.b1;
+                    ev[2] = mt.b2;
+                }
             }
+
+            n++;
         }
 
-        n++;
     }
 
     return 0;
@@ -130,11 +131,11 @@ JackExternal::rwrite(pool& inputs, pool& outputs, vector_t nframes) {}
 //-------------------------------------------------------------------------------------------------
 void
 JackExternal::register_ports(
-nchannels_t nchannels,
-const char* port_mask,
-const char* type,
-int polarity,
-std::vector<jack_port_t*>& target
+    nchannels_t nchannels,
+    const char* port_mask,
+    const char* type,
+    int polarity,
+    std::vector<jack_port_t*>& target
 )
 //-------------------------------------------------------------------------------------------------
 {
@@ -168,8 +169,8 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
     srate = jack_get_sample_rate(m_client),
     bsize = jack_get_buffer_size(m_client);
 
-    Graph::set_rate     (srate);
-    Graph::set_vector   (bsize);
+    Graph::set_rate    (srate);
+    Graph::set_vector  (bsize);
 
     // set callbacks
     jack_set_sample_rate_callback(m_client, on_jack_sample_rate_changed, this);
@@ -202,9 +203,10 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
 
 //-------------------------------------------------------------------------------------------------
 void
-JackExternal::connect_ports(std::vector<jack_port_t*>& ports,
-                            int polarity, const char* type,
-                            QStringList const& targets, Routing routing)
+JackExternal::connect_ports(
+        std::vector<jack_port_t*>& ports,
+        int polarity, const char* type,
+        QStringList const& targets, Routing routing)
 //-------------------------------------------------------------------------------------------------
 {
     if (targets.empty())
@@ -243,6 +245,7 @@ JackExternal::connect_ports(std::vector<jack_port_t*>& ports,
 //-------------------------------------------------------------------------------------------------
 void
 JackExternal::run()
+// activates jack client, make the input/output port connections
 //-------------------------------------------------------------------------------------------------
 {
     jack_activate(m_client);

@@ -11,7 +11,7 @@ class VCA : public Node
     WPN_ENUM_OUTPUTS  (outputs)
 
     //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE (inputs, Socket::Audio, 0)
+    WPN_INPUT_DECLARE (inputs, Socket::Audio, 1)
     /*!
      * \property VCA::inputs
      * \brief (audio) in, multichannel expansion available
@@ -25,7 +25,7 @@ class VCA : public Node
      */
 
     //-------------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE (outputs, Socket::Audio, 0)
+    WPN_OUTPUT_DECLARE (outputs, Socket::Audio, 1)
     /*!
      * \property VCA::outputs
      * \brief (audio) out, multichannel expansion available

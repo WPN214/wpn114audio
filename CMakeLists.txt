@@ -13,6 +13,8 @@ set(WPN114AUDIO_QML_SOURCES
     qml_plugin.cpp
     source/graph.hpp
     source/graph.cpp
+    source/spatial.hpp
+    source/rbuffer.hpp
     source/io/external.hpp
     source/io/external.cpp
     source/basics/sinetest.hpp

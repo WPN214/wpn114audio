@@ -190,7 +190,7 @@ class External : public Node
         Alsa         = 1,
         Jack         = 2,
         PulseAudio   = 3,
-        Core         = 4,
+        CoreAudio    = 4,
         VSTHost      = 5
     };
 
@@ -502,19 +502,19 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QVariantList
-    in_audio_routing() const    { return m_in_audio_routing.to_qvariant(); }
+    in_audio_routing() const    { return m_in_audio_routing; }
 
     //---------------------------------------------------------------------------------------------
     QVariantList
-    out_audio_routing() const   { return m_out_audio_routing.to_qvariant(); }
+    out_audio_routing() const   { return m_out_audio_routing; }
 
     //---------------------------------------------------------------------------------------------
     QVariantList
-    in_midi_routing() const     { return m_in_midi_routing.to_qvariant(); }
+    in_midi_routing() const     { return m_in_midi_routing; }
 
     //---------------------------------------------------------------------------------------------
     QVariantList
-    out_midi_routing() const    { return m_out_midi_routing.to_qvariant(); }
+    out_midi_routing() const    { return m_out_midi_routing; }
 
     //---------------------------------------------------------------------------------------------
     void

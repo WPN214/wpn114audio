@@ -14,6 +14,9 @@
 
 #include <QtDebug>
 
+#include <source/spatial.hpp>
+#include <source/rbuffer.hpp>
+
 // --------------------------------------------------------------------------------------------------
 // CONVENIENCE MACRO DEFINITIONS
 // --------------------------------------------------------------------------------------------------
@@ -69,19 +72,6 @@ namespace wpn114
 //-------------------------------------------------------------------------------------------------
 sample_t**
 allocate_buffer(nchannels_t nchannels, vector_t nframes);
-// we make no assumption as to how many channels each input/output may have
-// by the time the graph is ready/updated, so we can't really template it upfront
-// we also want to allocate the whole thing in a single block
-
-//-------------------------------------------------------------------------------------------------
-void
-reset_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes);
-// sets buffer to zero
-
-//-------------------------------------------------------------------------------------------------
-void
-fill_buffer(sample_t** buffer, nchannels_t nchannels, vector_t nframes, sample_t value);
-// fill buffer with a single sample_t value
 
 //-------------------------------------------------------------------------------------------------
 WPN_UNIMPLEMENTED sample_t
@@ -98,6 +88,23 @@ cpsmidi(sample_t f);
 
 //-------------------------------------------------------------------------------------------------
 class Socket;
+
+//=================================================================================================
+class Dispatch : public QObject
+//=================================================================================================
+{
+    Q_OBJECT
+
+public:
+
+    enum Values
+    {
+        Upwards = 0,
+        Downwards = 1
+    };
+
+    Q_ENUM (Values)
+};
 
 //=================================================================================================
 class Routing : public QObject
@@ -121,25 +128,20 @@ public:
     // --------------------------------------------------------------------------------------------
     Routing(QVariantList list)
     // creates Routing object from QVariantList within QML
-    // --------------------------------------------------------------------------------------------
     {
         if (list.empty())
             return;
-        for (int n = 0; n < list.count(); n += 2) {
-            m_routing[n][0] = list[n].toInt();
-            m_routing[n][1] = list[n+1].toInt();
+
+        for (int n = 0; n < list.count(); n += 2)  {
+            m_routing.push_back({
+            static_cast<uint8_t>(list[n].toInt()),
+            static_cast<uint8_t>(list[n+1].toInt())});
         }
     }
 
     // --------------------------------------------------------------------------------------------
     Routing&
     operator=(Routing const& cp) { m_routing = cp.m_routing; return *this; }
-
-    Routing&
-    operator=(QJSValue v)
-    {
-        return *this;
-    }
 
     // --------------------------------------------------------------------------------------------
     cable&
@@ -156,9 +158,8 @@ public:
     // returns true if Routing is not explicitely defined
 
     // --------------------------------------------------------------------------------------------
-    QVariantList
-    to_qvariant() const
-    // returns Routing as QVariantList, for use within QML
+    operator
+    QVariantList() const
     // --------------------------------------------------------------------------------------------
     {
         QVariantList lst;
@@ -263,18 +264,11 @@ public:
     Connection(Connection const& cp) :
         m_source(cp.m_source)
       , m_dest(cp.m_dest)
-      , m_routing(cp.m_routing)
-      , m_active(cp.m_active)
-      , m_muted(cp.m_muted)
-      , m_mul(cp.m_mul)
-      , m_add(cp.m_add) {}
+      , m_routing(cp.m_routing) {}
     // copy constructor, don't really know in which case it should/will be used
 
     // --------------------------------------------------------------------------------------------
-    Connection(Socket& source, Socket& dest, Routing matrix) :
-        m_source(&source)
-      , m_dest(&dest)
-      , m_routing(matrix) {}
+    Connection(Socket& source, Socket& dest, Routing matrix);
     // constructor accessed from C++
 
     // --------------------------------------------------------------------------------------------
@@ -285,19 +279,13 @@ public:
         m_source    = cp.m_source;
         m_dest      = cp.m_dest;
         m_routing   = cp.m_routing;
-        m_active    = cp.m_active;
-        m_muted     = cp.m_muted;
-        m_mul       = cp.m_mul;
-        m_add       = cp.m_add;
 
         return *this;
     }
 
     // --------------------------------------------------------------------------------------------
     bool
-    operator==(Connection const& rhs) noexcept
-    // --------------------------------------------------------------------------------------------
-    {
+    operator==(Connection const& rhs) noexcept {
         return m_source == rhs.m_source && m_dest == rhs.m_dest;
     }
 
@@ -306,12 +294,8 @@ public:
     classBegin() override {}
     // unused interface override
 
-    // --------------------------------------------------------------------------------------------
     virtual void
     componentComplete() override;
-    // allocates/reallocates Connection buffer
-    // allocates/reallocates source/dest buffers as well
-    // depending on both sockets numchannels properties
 
     // --------------------------------------------------------------------------------------------
     virtual void
@@ -323,31 +307,25 @@ public:
     Q_INVOKABLE void
     activate() noexcept { m_active = true; }
 
-    // --------------------------------------------------------------------------------------------
     Q_INVOKABLE void
     deactivate() noexcept { m_active = false; }
 
-    // --------------------------------------------------------------------------------------------
     void
     set_active(bool active) noexcept { m_active = active; }
 
-    // --------------------------------------------------------------------------------------------
-    Q_INVOKABLE void
-    mute() noexcept { m_muted = true; }
-
-    // --------------------------------------------------------------------------------------------
-    Q_INVOKABLE void
-    unmute() noexcept { m_muted = false; }
-
-    // --------------------------------------------------------------------------------------------
-    void
-    set_muted(bool muted) noexcept { m_muted = muted; }
-
-    // --------------------------------------------------------------------------------------------
     bool
     active() const noexcept { return m_active; }
 
     // --------------------------------------------------------------------------------------------
+    Q_INVOKABLE void
+    mute() noexcept {  m_muted = true; }
+
+    Q_INVOKABLE void
+    unmute() noexcept { m_muted = false; }
+
+    void
+    set_muted(bool muted) noexcept { m_muted = muted; }
+
     bool
     muted() const noexcept { return m_muted; }
 
@@ -356,22 +334,19 @@ public:
     source() noexcept { return m_source; }
     // returns Connection's source Socket (output polarity)
 
-    // --------------------------------------------------------------------------------------------
     Socket*
     dest() noexcept { return m_dest; }
     // returns Connection's dest Socket (input polarity)
 
     // --------------------------------------------------------------------------------------------
     QVariantList
-    routing() const noexcept { return m_routing.to_qvariant(); }
+    routing() const noexcept { return m_routing; }
     // returns Connection's routing matrix as QML formatted list
 
-    // --------------------------------------------------------------------------------------------
     void
     set_routing(QVariantList list) noexcept { m_routing = Routing(list); }
     // sets routing matrix from QML
 
-    // --------------------------------------------------------------------------------------------
     void
     set_routing(Routing matrix) noexcept { m_routing = matrix; }
     // sets routing matrix from C++
@@ -380,7 +355,6 @@ public:
     void
     set_feedback(bool feedback) noexcept { m_feedback = feedback; }
 
-    // --------------------------------------------------------------------------------------------
     bool
     feedback() const noexcept { return m_feedback; }
 
@@ -388,15 +362,13 @@ public:
     sample_t
     mul() const noexcept { return m_mul; }
 
-    // --------------------------------------------------------------------------------------------
-    sample_t
-    add() const noexcept { return m_add; }
-
-    // --------------------------------------------------------------------------------------------
     void
     set_mul(sample_t mul) noexcept { m_mul = mul; }
 
     // --------------------------------------------------------------------------------------------
+    sample_t
+    add() const noexcept { return m_add; }
+
     void
     set_add(sample_t add) noexcept { m_add = add; }
 
@@ -432,27 +404,25 @@ private:
     m_routing;
 
     // --------------------------------------------------------------------------------------------
-    bool
-    m_muted = false;
+    std::atomic<bool>
+    m_muted;
     // if Connection is muted, it will still process its inputs
     // but will output 0 continuously
 
-    // --------------------------------------------------------------------------------------------
-    bool
-    m_active = true;
+    std::atomic<bool>
+    m_active;
     // if Connection is inactive, it won't process its inputs
     // and consequently call the upstream graph
+
+    // --------------------------------------------------------------------------------------------
+    std::atomic<qreal>
+    m_mul, m_add;
 
     // --------------------------------------------------------------------------------------------
     bool
     m_feedback = false;
     // if this is a feedback Connection, it will recursively
     // fetch the previous input buffer without calling input Node's process function again
-
-    // --------------------------------------------------------------------------------------------
-    qreal
-    m_mul = 1,
-    m_add = 0;
 };
 
 Q_DECLARE_METATYPE(Connection)
@@ -471,11 +441,10 @@ class Socket : public QObject
     // MUTED property: manages and overrides all Socket connections mute property
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(QVariant value READ value WRITE set_value)
+    Q_PROPERTY (qreal value READ value WRITE set_value)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (qreal mul MEMBER m_mul WRITE set_mul)
-
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY (qreal add MEMBER m_add WRITE set_add)
@@ -536,12 +505,14 @@ public:
     Socket() {}
 
     // --------------------------------------------------------------------------------------------
-    Socket(Node* parent, QString name, Type type, polarity_t polarity, uint8_t index, uint8_t nchannels);
+    Socket(Node* parent, QString name, Type type, polarity_t polarity,
+           uint8_t index, uint8_t nchannels);
 
     // --------------------------------------------------------------------------------------------
     Socket(Socket const& cp) :
         // this is only called because of the macro Socket definitions
         // it shouldn't be called otherwise in any other context
+    // --------------------------------------------------------------------------------------------
         m_polarity  (cp.m_polarity)
       , m_index     (cp.m_index)
       , m_nchannels (cp.m_nchannels)
@@ -571,21 +542,17 @@ public:
     // --------------------------------------------------------------------------------------------
     void
     assign(Socket* s);
-    // this is called from QmlEngine when we assign a specific socket a value:
-    // - a qreal value (will fill the current buffer with this)
-    // - another Socket (will establish a connection with this Socket)
-    // - an explicit Connection object
-    // - a QVariantList, for which each element will in turn be parsed recursively
+    // explicitely assign another socket to this one in ordre to make a connection
 
     // --------------------------------------------------------------------------------------------
-    QVariant
+    qreal
     value() const { return m_value; }
 
-    // --------------------------------------------------------------------------------------------
     void
-    set_value(QVariant value)
+    set_value(qreal value)
     {
-
+        // an asynchronous write (from the Qt/GUI main thread)
+        // with an explicit latched value
     }
 
     // --------------------------------------------------------------------------------------------
@@ -602,7 +569,6 @@ public:
 
     void
     set_mul(qreal mul);
-    // each connection involving this socket will multiply the signal by this 'mul' factor
 
     // --------------------------------------------------------------------------------------------
     qreal
@@ -610,33 +576,28 @@ public:
 
     void
     set_add(qreal add);
-    // each connection involving this socket will offset the signal by 'add'
-
-    // --------------------------------------------------------------------------------------------
-    void
-    set_nchannels(nchannels_t nchannels);
-    // sets num_channels for socket and
-    // allocate/reallocate its buffer
 
     // --------------------------------------------------------------------------------------------
     nchannels_t
     nchannels() const noexcept { return m_nchannels; }
     // returns Socket number of channels
 
+    void
+    set_nchannels(nchannels_t nchannels);
+    // sets num_channels for socket and
+    // allocate/reallocate its buffer
+
     // --------------------------------------------------------------------------------------------
     polarity_t
     polarity() const noexcept { return m_polarity; }
     // returns Socket polarity (INPUT/OUTPUT)
 
-    // --------------------------------------------------------------------------------------------
     Type
     type() const noexcept { return m_type; }
 
-    // --------------------------------------------------------------------------------------------
     QString
     name() const noexcept { return m_name; }
 
-    // --------------------------------------------------------------------------------------------
     Node&
     parent_node() noexcept { return *m_parent; }
     // returns Socket's parent Node
@@ -655,12 +616,10 @@ public:
     connected() const noexcept { return m_connections.size(); }
     // returns true if Socket is connected to anything
 
-    // --------------------------------------------------------------------------------------------
     Q_INVOKABLE bool
     connected(Socket const& target) const noexcept;
     // returns true if this Socket is connected to target
 
-    // --------------------------------------------------------------------------------------------
     Q_INVOKABLE bool
     connected(Node const& target) const noexcept;
     // returns true if this Socket is connected to
@@ -670,7 +629,6 @@ public:
     QVariantList
     routing() const noexcept;
 
-    // --------------------------------------------------------------------------------------------
     void
     set_routing(QVariantList routing) noexcept;
 
@@ -681,9 +639,6 @@ private:
     allocate(vector_t nframes)
     // --------------------------------------------------------------------------------------------
     {
-        if (m_buffer)
-            free(m_buffer);
-
         m_buffer = wpn114::allocate_buffer(m_nchannels, nframes);
     }
 
@@ -692,22 +647,16 @@ private:
     reset(vector_t nframes)
     // --------------------------------------------------------------------------------------------
     {
-        wpn114::reset_buffer(m_buffer, m_nchannels, nframes);
+
     }
 
     // --------------------------------------------------------------------------------------------
     void
-    add_connection(Connection& con)
-    // --------------------------------------------------------------------------------------------
-    {
-        m_connections.push_back(&con);
-    }
+    add_connection(Connection& con) { m_connections.push_back(&con); }
 
     // --------------------------------------------------------------------------------------------
     void
-    remove_connection(Connection& con)
-    // --------------------------------------------------------------------------------------------
-    {
+    remove_connection(Connection& con) {
         m_connections.erase(std::remove(m_connections.begin(),
             m_connections.end(), &con), m_connections.end());
     }
@@ -755,8 +704,8 @@ private:
     m_add = 0;
 
     // --------------------------------------------------------------------------------------------
-    QVariant
-    m_value;
+    qreal
+    m_value = 0;
 };
 
 Q_DECLARE_METATYPE(Socket)
@@ -792,20 +741,15 @@ public:
     // holds the graph processing properties
     // --------------------------------------------------------------------------------------------
     {
-        sample_t rate    = 44100;
-        vector_t vector  = 512;
+        sample_t
+        rate = 44100;
+
+        vector_t
+        vector = 512;
     };
 
     // --------------------------------------------------------------------------------------------
     Graph() { s_instance = this; }
-
-    // --------------------------------------------------------------------------------------------
-    virtual ~Graph() override
-    // there might be something to be done later on
-    // --------------------------------------------------------------------------------------------
-    {
-
-    }
 
     // --------------------------------------------------------------------------------------------
     static Graph&
@@ -813,13 +757,22 @@ public:
     // returns the singleton instance of the Graph
 
     // --------------------------------------------------------------------------------------------
+    virtual ~Graph() override
+    // there might be something to be done later on
+    {
+
+    }
+
+    // --------------------------------------------------------------------------------------------
     virtual void
     classBegin() override {}
     // unused interface override
 
-    // --------------------------------------------------------------------------------------------
     virtual void
     componentComplete() override;
+
+    Q_SIGNAL void
+    complete(Graph::properties const& properties);
 
     // --------------------------------------------------------------------------------------------
     static Connection&
@@ -827,20 +780,42 @@ public:
     // connects two Sockets together
     // returns a reference to the newly created Connection object for further manipulation
 
-    // --------------------------------------------------------------------------------------------
     static Connection&
     connect(Node& source, Node& dest, Routing matrix = {});
     // connects source Node's default outputs to dest Node's default inputs
 
-    // --------------------------------------------------------------------------------------------
     static Connection&
     connect(Node& source, Socket& dest, Routing matrix = {});
     // connects source Node's default outputs to dest Socket
 
-    // --------------------------------------------------------------------------------------------
     static Connection&
     connect(Socket& source, Node& dest, Routing matrix = {});
     // connects Socket source to dest Node's default inputs
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    reconnect(Socket& source, Socket& dest, Routing matrix)
+    // --------------------------------------------------------------------------------------------
+    // reconnects the two Sockets with a new routing
+    {
+        if (auto con = get_connection(source, dest))
+            con->set_routing(matrix);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    disconnect(Socket& source, Socket& dest)
+    // disconnects the two Sockets
+    // --------------------------------------------------------------------------------------------
+    {
+        if (auto con = get_connection(source, dest)) {
+            source.remove_connection(*con);
+            dest.remove_connection(*con);
+
+            s_connections.erase(std::remove(s_connections.begin(),
+                s_connections.end(), *con), s_connections.end());
+        }
+    }
 
     // --------------------------------------------------------------------------------------------
     static void
@@ -848,18 +823,14 @@ public:
 
     // --------------------------------------------------------------------------------------------
     static void
-    unregister_node(Node& node) noexcept
-    {
+    unregister_node(Node& node) noexcept {
         s_nodes.erase(std::remove(s_nodes.begin(),
             s_nodes.end(), &node), s_nodes.end());
     }
 
     // --------------------------------------------------------------------------------------------
     WPN_EXAMINE static void
-    add_connection(Connection& con) noexcept
-    {
-        s_connections.push_back(con);
-    }
+    add_connection(Connection& con) noexcept { s_connections.push_back(con); }
     // this is called when Connection has been explicitely
     // instantiated from a QML context
 
@@ -879,31 +850,6 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    static void
-    reconnect(Socket& source, Socket& dest, Routing matrix)
-    // reconnects the two Sockets with a new routing
-    // --------------------------------------------------------------------------------------------
-    {
-        if (auto con = get_connection(source, dest))
-            con->set_routing(matrix);
-    }
-
-    // --------------------------------------------------------------------------------------------
-    WPN_TODO static void
-    disconnect(Socket& source, Socket& dest)
-    // disconnects the two Sockets
-    // --------------------------------------------------------------------------------------------
-    {
-        if (auto con = get_connection(source, dest)) {
-            source.remove_connection(*con);
-            dest.remove_connection(*con);
-
-            s_connections.erase(std::remove(s_connections.begin(),
-                s_connections.end(), *con), s_connections.end());
-        }
-    }
-
-    // --------------------------------------------------------------------------------------------
     static pool&
     run(Node& target) noexcept;
     // the main processing function
@@ -916,10 +862,6 @@ public:
     // --------------------------------------------------------------------------------------------
     static void
     set_vector(uint16_t vector) { s_properties.vector = vector; }
-
-    // --------------------------------------------------------------------------------------------
-    Q_SIGNAL void
-    rateChanged(sample_t);
 
     // --------------------------------------------------------------------------------------------
     Q_SIGNAL void
@@ -942,9 +884,12 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
+    Q_SIGNAL void
+    rateChanged(sample_t);
+
+    // --------------------------------------------------------------------------------------------
     QQmlListProperty<Node>
     subnodes()
-    // --------------------------------------------------------------------------------------------
     {
         return QQmlListProperty<Node>(
                this, this,
@@ -1031,61 +976,6 @@ private:
 };
 
 //=================================================================================================
-struct spatial_t
-// TODO
-//=================================================================================================
-{
-    qreal x = 0, y = 0, z = 0;
-    qreal w = 0, d = 0, h = 0;
-};
-
-//=================================================================================================
-class Spatial : public QObject
-// TODO
-//=================================================================================================
-{
-    Q_OBJECT
-
-public:
-
-    Spatial()
-    {
-
-    }
-
-    Spatial(Spatial const&)
-    {
-
-    }
-
-    Spatial& operator=(Spatial const&)
-    {
-        return *this;
-    }
-
-    bool operator!=(Spatial const&)
-    {
-        return false;
-    }
-
-private:
-    std::vector<spatial_t>
-    m_channels;
-};
-
-Q_DECLARE_METATYPE(Spatial)
-
-//=================================================================================================
-class Dispatch : public QObject
-//=================================================================================================
-{
-    Q_OBJECT
-
-    public:    
-    enum Values { Upwards = 0, Downwards = 1 }; Q_ENUM (Values)
-};
-
-//=================================================================================================
 class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
 /*! \class Node
  * \brief the main Node class */
@@ -1160,7 +1050,6 @@ public:
     // --------------------------------------------------------------------------------------------
     Node() {}
 
-    // --------------------------------------------------------------------------------------------
     virtual ~Node() override
     {
         Graph::unregister_node(*this);
@@ -1174,12 +1063,10 @@ public:
     classBegin() override {}
     // unused interface override
 
-    // --------------------------------------------------------------------------------------------
     virtual void
     componentComplete() override
     // parses the local graph and builds appropriate connections between this Node
     // and its subnodes, given the selected dispatch mode
-    // --------------------------------------------------------------------------------------------
     {
         Graph::register_node(*this);
 
@@ -1194,8 +1081,7 @@ public:
         case Dispatch::Values::Upwards:
         {
             // subnode's chain out connects to this Node
-            for (auto& subnode : m_subnodes)
-            {
+            for (auto& subnode : m_subnodes) {
                 auto& source = subnode->chainout();
                 Graph::connect(source, *this, source.routing());
             }
@@ -1208,16 +1094,13 @@ public:
             Graph::connect(*this, front.chainout());
 
             // chain the following subnodes, until last is reached
-            for (int n = 0; n < m_subnodes.count(); ++n)
-            {
+            for (int n = 0; n < m_subnodes.count(); ++n) {
                 auto& source = m_subnodes[n]->chainout();
                 auto& dest = m_subnodes[n+1]->chainout();
                 Graph::connect(source, dest);
             }
         }
         }
-
-        allocate_sockets(Graph::vector());
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1225,7 +1108,6 @@ public:
     setTarget(const QQmlProperty& target) override
     // a convenience method for quickly adding a processor Node in between
     // target Socket and the actual output (QML)
-    // --------------------------------------------------------------------------------------------
     {
         auto socket = target.read().value<Socket*>();
 
@@ -1236,16 +1118,24 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    virtual void
-    initialize(Graph::properties& properties) {}
-    // this is called when the graph and allocation are complete
+    Q_SLOT void
+    on_graph_complete(Graph::properties const& properties)
+    {
+        allocate_sockets(properties.vector);
+        allocate_pools(properties.vector);
+
+        initialize(properties);
+    }
 
     // --------------------------------------------------------------------------------------------
+    virtual void
+    initialize(Graph::properties const& properties) {}
+    // this is called when the graph and allocation are complete
+
     virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) = 0;
     // the main processing function to override
 
-    // --------------------------------------------------------------------------------------------
     virtual void
     on_rate_changed(sample_t rate) {}
     // this can be overriden and will be called each time the sample rate changes
@@ -1261,9 +1151,9 @@ public:
     // null routing if there is none
     // --------------------------------------------------------------------------------------------
     {
-        if (auto out = default_audio_outputs())
+        if (auto out = default_socket(Socket::Audio, OUTPUT))
             return out->routing();
-        else if (auto out = default_midi_outputs())
+        else if (auto out = default_socket(Socket::Midi_1_0, OUTPUT))
             return out->routing();
 
         return QVariantList();
@@ -1272,12 +1162,11 @@ public:
     // --------------------------------------------------------------------------------------------
     void
     set_routing(QVariantList r)
-    // --------------------------------------------------------------------------------------------
     {
-        if (auto out = default_audio_outputs())
+        if (auto out = default_socket(Socket::Audio, OUTPUT))
             out->set_routing(r);
 
-        else if (auto out = default_midi_outputs())
+        else if (auto out = default_socket(Socket::Midi_1_0, OUTPUT))
             out->set_routing(r);
     }
 
@@ -1350,46 +1239,22 @@ public:
 
     // --------------------------------------------------------------------------------------------
     Socket*
-    default_audio_inputs() noexcept
-    // returns Node's default inputs
+    default_socket(polarity_t polarity) noexcept
     // --------------------------------------------------------------------------------------------
     {
-        for (auto& socket : m_inputs)
-            if (socket->type() == Socket::Type::Audio)
-                return socket;
-        return nullptr;
+        if (auto dfa = default_socket(Socket::Audio, polarity))
+            return dfa;
+        else
+            return default_socket(Socket::Midi_1_0, polarity);
     }
 
     // --------------------------------------------------------------------------------------------
     Socket*
-    default_audio_outputs() noexcept
-    // returns Node's default outputs
+    default_socket(Socket::Type type, polarity_t polarity) noexcept
     // --------------------------------------------------------------------------------------------
     {
-        for (auto& socket : m_outputs)
-            if (socket->type() == Socket::Type::Audio)
-                return socket;
-        return nullptr;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Socket*
-    default_midi_inputs() noexcept
-    // --------------------------------------------------------------------------------------------
-    {
-        for (auto& socket: m_inputs)
-            if (socket->type() == Socket::Type::Midi_1_0)
-                return socket;
-        return nullptr;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    Socket*
-    default_midi_outputs() noexcept
-    // --------------------------------------------------------------------------------------------
-    {
-        for (auto& socket : m_outputs)
-            if (socket->type() == Socket::Type::Midi_1_0)
+        for (auto& socket : sockets(polarity))
+            if (socket->type() == type)
                 return socket;
         return nullptr;
     }
@@ -1522,26 +1387,13 @@ public:
 
     // --------------------------------------------------------------------------------------------
     bool
-    processed() const noexcept { return m_processed; }
+    processed() const { return m_processed; }
 
     // --------------------------------------------------------------------------------------------
     void
     set_processed(bool processed) { m_processed = processed; }
 
 private:
-
-    // --------------------------------------------------------------------------------------------
-    void
-    reset_process(vector_t nframes) noexcept
-    // resets all input sockets
-    // marks Node's processed flag as false
-    // --------------------------------------------------------------------------------------------
-    {
-        for (auto& socket : m_inputs)
-             socket->reset(nframes);
-
-        m_processed = false;
-    }
 
     // --------------------------------------------------------------------------------------------
     void
@@ -1562,27 +1414,12 @@ private:
     {
         m_input_pool   = new sample_t**[m_inputs.size()];
         m_output_pool  = new sample_t**[m_outputs.size()];
-
-        nchannels_t n = 0;
-        for (auto& socket : m_inputs) {
-            m_input_pool[n] = socket->buffer();
-            n++;
-        }
-
-        n = 0;
-        for (auto& socket : m_outputs) {
-            m_output_pool[n] = socket->buffer();
-            n++;
-        }
     }
 
     // --------------------------------------------------------------------------------------------
     void
     process(vector_t nframes) noexcept
     // pre-processing main function
-    // - pull input connections
-    // - call rwrite
-    // - mark node as processed
     // --------------------------------------------------------------------------------------------
     {
         for (auto& socket : m_inputs)
@@ -1594,7 +1431,11 @@ private:
         m_processed = true;
     }
 
+
     // --------------------------------------------------------------------------------------------
+    pool&
+    inputs() noexcept { return m_input_pool; }
+
     pool&
     outputs() noexcept { return m_output_pool; }
     // returns a collection of all socket outputs
@@ -1625,7 +1466,7 @@ private:
 
     // --------------------------------------------------------------------------------------------
     Dispatch::Values
-    m_dispatch = Dispatch::Values::Upwards;
+    m_dispatch = Dispatch::Values::Downwards;
 
     // --------------------------------------------------------------------------------------------
     Node*
