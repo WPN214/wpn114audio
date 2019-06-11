@@ -102,6 +102,7 @@ Socket::routing() const noexcept
 {
     if (!m_connections.empty())
         return m_connections[0]->routing();
+    return QVariantList();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -165,23 +166,21 @@ Graph::register_node(Node& node) noexcept
 // we also might not need to store pointers...
 // ------------------------------------------------------------------------------------------------
 {
-    QObject::connect(s_instance, &Graph::rateChanged, &node, &Node::on_rate_changed);
-    QObject::connect(s_instance, &Graph::complete, &node, &Node::on_graph_complete);
+    qDebug() << "[GRAPH] registering node:" << node.name();
 
+    QObject::connect(s_instance, &Graph::rateChanged, &node, &Node::on_rate_changed);
     s_nodes.push_back(&node);
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE inline Connection&
+WPN_INCOMPLETE Connection&
 Graph::connect(Socket& source, Socket& dest, Routing matrix)
 // there's still the Audio/Midi Type to check,
 // the multichannel expansion allocation
 // & debug the connection with a pretty message
 // ------------------------------------------------------------------------------------------------
 {
-    assert(source.polarity() == OUTPUT &&
-           dest.polarity() == INPUT);
-
+    assert(source.polarity() == OUTPUT && dest.polarity() == INPUT);
     assert(source.type() == dest.type());
 
     auto con = Connection(source, dest, matrix);
@@ -205,7 +204,7 @@ Graph::connect(Socket& source, Socket& dest, Routing matrix)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE inline Connection&
+WPN_EXAMINE Connection&
 Graph::connect(Node& source, Node& dest, Routing matrix)
 // might be midi and not audio...
 // ------------------------------------------------------------------------------------------------
@@ -215,16 +214,16 @@ Graph::connect(Node& source, Node& dest, Routing matrix)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE inline Connection&
+WPN_INCOMPLETE Connection&
 Graph::connect(Node& source, Socket& dest, Routing matrix)
 // might be midi bis
 // ------------------------------------------------------------------------------------------------
 {
-    return connect(*source.default_socket(OUTPUT), dest, matrix);
+    return connect(*source.default_socket(dest.type(), OUTPUT), dest, matrix);
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE inline Connection&
+WPN_INCOMPLETE Connection&
 Graph::connect(Socket& source, Node& dest, Routing matrix)
 // midi...
 // ------------------------------------------------------------------------------------------------
@@ -239,7 +238,13 @@ Graph::componentComplete()
 // we send signal to all registered Nodes to proceed to socket allocation
 // ------------------------------------------------------------------------------------------------
 {
-    emit complete(s_properties);
+    qDebug() << "Graph component complete,"
+             << "allocating nodes io";
+
+    for (auto& node : s_nodes)
+        node->on_graph_complete(s_properties);
+
+    emit complete();
 }
 
 // ------------------------------------------------------------------------------------------------

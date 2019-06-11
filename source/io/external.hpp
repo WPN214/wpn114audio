@@ -111,7 +111,7 @@ class JackExternal : public ExternalBase
     //---------------------------------------------------------------------------------------------
     void
     register_ports(nchannels_t nchannels, const char* port_mask, const char* type,
-                   int polarity, std::vector<jack_port_t*>& target);
+                   unsigned long polarity, std::vector<jack_port_t*>& target);
 
     //---------------------------------------------------------------------------------------------
     void
@@ -297,6 +297,7 @@ public:
     componentComplete() override
     //-------------------------------------------------------------------------------------------------
     {
+        Node::componentComplete();
         m_complete = true;
         m_backend = new JackExternal(this);
 

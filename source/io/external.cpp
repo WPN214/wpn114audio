@@ -36,7 +36,13 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // write all inputs to external's outputs
     nchannels_t n = 0;
 
-    if (auto extout_a = ext.default_socket(Socket::Audio, OUTPUT))
+    auto extout_m = ext.default_socket(Socket::Midi_1_0, OUTPUT);
+    auto extout_a = ext.default_socket(Socket::Audio, OUTPUT);
+    // note: External's outputs become inputs in Graph's point of view
+    // and obviously External's inputs are what we will be feeding to jack
+
+    // AUDIO INPUTS ------------------------------------------------------------------------------
+    if (extout_a->nchannels())
     {
         auto extout_a_buffer = extout_a->buffer();
         for (auto& input : jext.m_audio_inputs) {
@@ -50,8 +56,11 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         }
     }
 
-    if (auto extout_m = ext.default_socket(Socket::Midi_1_0, OUTPUT))
+    // MIDI INPUTS ------------------------------------------------------------------------------
+
+    if (extout_m->nchannels())
     {
+        // start with MIDI
         auto extout_m_buffer = extout_m->buffer();
         jack_midi_event_t ev;
         n = 0;
@@ -70,19 +79,19 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
                         mt.b1 = ev.buffer[1];
                         mt.b2 = ev.buffer[2];
                         extout_m_buffer[n][f] = mt;
-                    }
-                }
-            }
-
+                    }}}
             n++;
         }
     }
 
+    Graph::run(ext);   
 
-    Graph::run(ext);
+    auto extin_m = ext.default_socket(Socket::Midi_1_0, INPUT);
+    auto extin_a = ext.default_socket(Socket::Audio, INPUT);
 
-    if (auto extin_a = ext.default_socket(Socket::Audio, INPUT))
-    {
+    // AUDIO OUTPUTS ------------------------------------------------------------------------------
+
+    if (extin_a->nchannels()) {
         auto extin_a_buffer = extin_a->buffer();
         n = 0;
 
@@ -94,31 +103,24 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         }
     }
 
-    if (auto extin_m = ext.default_socket(Socket::Midi_1_0, INPUT))
-    {
+    // MIDI OUTPUTS ------------------------------------------------------------------------------
+
+    if (extin_m->nchannels()) {
         auto extin_m_buffer = extin_m->buffer();
         n = 0;
 
-        for (auto& output : jext.m_midi_outputs)
-        {
+        for (auto& output : jext.m_midi_outputs) {
             auto buf = jack_port_get_buffer(output, nframes);
-
-            for (jack_nframes_t f = 0; f < nframes; ++f)
-            {
-                if (extin_m_buffer[n][f] != 0.)
-                {
+            for (jack_nframes_t f = 0; f < nframes; ++f) {
+                if (extin_m_buffer[n][f] != 0.) {
                     midi_t mt = extin_m_buffer[n][f];
                     jack_midi_data_t* ev = jack_midi_event_reserve(buf, n, 3);
                     ev[0] = mt.status;
                     ev[1] = mt.b1;
                     ev[2] = mt.b2;
-                }
-            }
-
+                }}
             n++;
-        }
-
-    }
+        }}
 
     return 0;
 }
@@ -134,7 +136,7 @@ JackExternal::register_ports(
     nchannels_t nchannels,
     const char* port_mask,
     const char* type,
-    int polarity,
+    unsigned long polarity,
     std::vector<jack_port_t*>& target
 )
 //-------------------------------------------------------------------------------------------------
@@ -146,6 +148,9 @@ JackExternal::register_ports(
         strcpy(name, port_mask);
         sprintf(index, "_%d", n);
         strcat(name, index);
+
+        qDebug() << "[JACK] registering jack port:"
+                 << name;
 
         auto port = jack_port_register(m_client, name, type, polarity, 0);
         m_audio_inputs.push_back(port);
@@ -161,13 +166,18 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
     auto name = CSTR(parent->name());
     jack_status_t status;
 
-    m_client = jack_client_open(name, JackNullOption, &status);
+    qDebug() << "[JACK] opening jack client with name:"
+             << parent->name();
 
+    m_client = jack_client_open(name, JackNullOption, &status);
     // sample rate and buffer sizes are defined by the user from jack
     // there's no need to set them from the graph
     jack_nframes_t
     srate = jack_get_sample_rate(m_client),
     bsize = jack_get_buffer_size(m_client);
+
+    qDebug() << "[JACK] samplerate:" << QString::number(srate)
+             << "buffer size:" << QString::number(bsize);
 
     Graph::set_rate    (srate);
     Graph::set_vector  (bsize);

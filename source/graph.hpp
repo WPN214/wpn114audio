@@ -772,7 +772,7 @@ public:
     componentComplete() override;
 
     Q_SIGNAL void
-    complete(Graph::properties const& properties);
+    complete();
 
     // --------------------------------------------------------------------------------------------
     static Connection&
@@ -1068,6 +1068,7 @@ public:
     // parses the local graph and builds appropriate connections between this Node
     // and its subnodes, given the selected dispatch mode
     {
+        qDebug() << "[NODE]" << name() << "component complete";
         Graph::register_node(*this);
 
         if (m_subnodes.empty())
@@ -1219,7 +1220,11 @@ public:
 
     // --------------------------------------------------------------------------------------------
     void
-    register_socket(Socket& s) { sockets(s.polarity()).push_back(&s); }
+    register_socket(Socket& s)
+    {
+//        qDebug() << "[NODE] registering socket" << s.name();
+        sockets(s.polarity()).push_back(&s);
+    }
     // this is called from Socket's constructor
     // adds a pointer to the newly created Socket
 
@@ -1466,7 +1471,7 @@ private:
 
     // --------------------------------------------------------------------------------------------
     Dispatch::Values
-    m_dispatch = Dispatch::Values::Downwards;
+    m_dispatch = Dispatch::Values::Upwards;
 
     // --------------------------------------------------------------------------------------------
     Node*
