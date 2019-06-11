@@ -63,6 +63,15 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     virtual void
+    initialize(const Graph::properties& properties) override { m_rate = properties.rate; }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    on_rate_changed(sample_t rate) override { m_rate = rate; }
+    // this is called whenever Graph's sample rate changes
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     // the main processing function
     //-------------------------------------------------------------------------------------------------
@@ -74,13 +83,11 @@ public:
         for (vector_t f = 0; f < nframes; ++f) {
             m_phs += frequency[f]/m_rate * esz;
             out[f] = m_env[m_phs];
+
+            if (m_phs >= esz)
+                m_phs -= esz;
         }
     }
-
-    //-------------------------------------------------------------------------------------------------
-    virtual void
-    on_rate_changed(sample_t rate) override { m_rate = rate; }
-    // this is called whenever Graph's sample rate changes
 
 private:
 

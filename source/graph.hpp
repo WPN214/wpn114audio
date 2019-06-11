@@ -25,18 +25,18 @@
 Q_OBJECT
 
 #define WPN_SOCKET(_tp, _pol, _nm, _idx, _nchn)                                                     \
-private: Q_PROPERTY(Socket* _nm READ get_##_nm WRITE set_##_nm NOTIFY _nm##Changed)                 \
+private: Q_PROPERTY(QVariant _nm READ get_##_nm WRITE set_##_nm NOTIFY _nm##Changed)                \
 protected: Socket m_##_nm { this, #_nm, _tp, _pol, _idx, _nchn };                                   \
 public:                                                                                             \
-Socket* get_##_nm() { return &m_##_nm; }                                                            \
-void set_##_nm(Socket* v) { m_##_nm.assign(v); }                                                    \
+QVariant get_##_nm() { return QVariant::fromValue(&m_##_nm); }                                                           \
+void set_##_nm(QVariant v) { m_##_nm.assign(v); }                                                   \
 Q_SIGNAL void _nm##Changed();
 
 #define WPN_ENUM_INPUTS(...)                                                                        \
-enum Inputs {__VA_ARGS__, N_IN};
+enum Inputs {__VA_ARGS__, N_IN };
 
 #define WPN_ENUM_OUTPUTS(...)                                                                       \
-enum Outputs {__VA_ARGS__, N_OUT};
+enum Outputs {__VA_ARGS__, N_OUT };
 
 #define WPN_INPUT_DECLARE(_nm, _tp, _nchn)                                                          \
 WPN_SOCKET(_tp, INPUT, _nm, _nm, _nchn)
@@ -406,18 +406,18 @@ private:
 
     // --------------------------------------------------------------------------------------------
     std::atomic<bool>
-    m_muted;
+    m_muted { false };
     // if Connection is muted, it will still process its inputs
     // but will output 0 continuously
 
     std::atomic<bool>
-    m_active;
+    m_active { true };
     // if Connection is inactive, it won't process its inputs
     // and consequently call the upstream graph
 
     // --------------------------------------------------------------------------------------------
     std::atomic<qreal>
-    m_mul, m_add;
+    m_mul { 1 }, m_add { 0 };
 
     // --------------------------------------------------------------------------------------------
     bool
@@ -542,7 +542,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     void
-    assign(Socket* s);
+    assign(QVariant v);
     // explicitely assign another socket to this one in ordre to make a connection
 
     // --------------------------------------------------------------------------------------------
@@ -554,16 +554,19 @@ public:
     pull_value(vector_t nframes) noexcept
     // --------------------------------------------------------------------------------------------
     {
-        sample_t v = m_value;
+        sample_t v = m_value.load(std::memory_order_relaxed);
 
         for (nchannels_t c = 0; c < m_nchannels; ++c)
             for (vector_t f = 0; f < nframes; ++f)
-                m_buffer[c][f] = v;
+                 m_buffer[c][f] = v;
     }
 
     // --------------------------------------------------------------------------------------------
     void
-    set_value(qreal value) { m_value = value; }
+    set_value(qreal value)
+    {
+        m_value.store(value, std::memory_order_relaxed);
+    }
     // an asynchronous write (from the Qt/GUI main thread)
     // with an explicit latched value
 
@@ -652,6 +655,7 @@ private:
     // --------------------------------------------------------------------------------------------
     {
         m_buffer = wpn114::allocate_buffer(m_nchannels, nframes);
+        assert(m_buffer);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -718,7 +722,7 @@ private:
 
     // --------------------------------------------------------------------------------------------
     std::atomic<qreal>
-    m_value {0};
+    m_value;
 };
 
 Q_DECLARE_METATYPE(Socket)
@@ -868,7 +872,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    static pool&
+    static vector_t
     run(Node& target) noexcept;
     // the main processing function
 
@@ -1086,7 +1090,6 @@ public:
     // parses the local graph and builds appropriate connections between this Node
     // and its subnodes, given the selected dispatch mode
     {
-        qDebug() << "[NODE]" << name() << "component complete";
         Graph::register_node(*this);
 
         if (m_subnodes.empty())
@@ -1310,7 +1313,6 @@ public:
         for (auto& socket: sockets(OUTPUT))
             if (socket->connected(target))
                 return true;
-
         return false;
     }
 
@@ -1329,7 +1331,6 @@ public:
                 return *this;
             else return *m_subnodes.back();
         }
-
         assert(false);
     }
 
@@ -1420,6 +1421,8 @@ private:
     // --------------------------------------------------------------------------------------------
     void
     allocate_sockets(vector_t nframes)
+    // called when Graph is complete, before audio processing
+    // allocates all nodes i/o socket buffers
     // --------------------------------------------------------------------------------------------
     {
         for (auto& socket : m_inputs)
@@ -1469,7 +1472,6 @@ private:
         rwrite(m_input_pool, m_output_pool, nframes);
         m_processed = true;
     }
-
 
     // --------------------------------------------------------------------------------------------
     pool&

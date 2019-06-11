@@ -51,7 +51,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
             // except is qt is compiled with the qreal=float option
             // but jack processes in float
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                 extout_a_buffer[n][f] = buf[n];
+                 extout_a_buffer[n][f] = static_cast<sample_t>(buf[n]);
             n++;
         }
     }
@@ -98,7 +98,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         for (auto& output : jext.m_audio_outputs) {
             float* buf = static_cast<float*>(jack_port_get_buffer(output, nframes));
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                 buf[n] = extin_a_buffer[n][f];
+                 buf[n] = static_cast<float>(extin_a_buffer[n][f]);
             n++;
         }
     }
@@ -127,11 +127,6 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 
 //-------------------------------------------------------------------------------------------------
 void
-JackExternal::rwrite(pool& inputs, pool& outputs, vector_t nframes) {}
-// nothing to be done here...
-
-//-------------------------------------------------------------------------------------------------
-void
 JackExternal::register_ports(
     nchannels_t nchannels,
     const char* port_mask,
@@ -153,7 +148,7 @@ JackExternal::register_ports(
                  << name;
 
         auto port = jack_port_register(m_client, name, type, polarity, 0);
-        m_audio_inputs.push_back(port);
+        target.push_back(port);
     }
 }
 
@@ -188,25 +183,19 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
     jack_set_process_callback(m_client, jack_process_callback, this);
 
     // register input/output ports
-    nchannels_t
-    n_audio_inputs   = parent->n_audio_inputs(),
-    n_audio_outputs  = parent->n_audio_outputs(),
-    n_midi_inputs    = parent->n_midi_inputs(),
-    n_midi_outputs   = parent->n_midi_outputs();
-
-    register_ports(n_audio_inputs, "audio_in",
+    register_ports(parent->n_audio_inputs(), "audio_in",
                    JACK_DEFAULT_AUDIO_TYPE,
                    JackPortIsInput, m_audio_inputs);
 
-    register_ports(n_audio_outputs, "audio_out",
+    register_ports(parent->n_audio_outputs(), "audio_out",
                    JACK_DEFAULT_AUDIO_TYPE,
                    JackPortIsOutput, m_audio_outputs);
 
-    register_ports(n_midi_inputs, "midi_in",
+    register_ports(parent->n_midi_inputs(), "midi_in",
                    JACK_DEFAULT_MIDI_TYPE,
                    JackPortIsInput, m_midi_inputs);
 
-    register_ports(n_midi_outputs, "midi_out",
+    register_ports(parent->n_midi_outputs(), "midi_out",
                    JACK_DEFAULT_MIDI_TYPE,
                    JackPortIsOutput, m_midi_outputs);
 }
@@ -222,12 +211,10 @@ JackExternal::connect_ports(
     if (targets.empty())
         return;
 
-    for (auto& target : targets)
-    {
+    for (auto& target : targets) {
         auto ctarget = jack_get_ports(m_client, CSTR(target), type, polarity);
 
-        if (routing.null())
-        {
+        if (routing.null()) {
             for (nchannels_t n = 0; n < ports.size(); ++n) {
                 auto pname = jack_port_name(ports[n]);
                 if (polarity == JackPortIsOutput)
@@ -258,9 +245,12 @@ JackExternal::run()
 // activates jack client, make the input/output port connections
 //-------------------------------------------------------------------------------------------------
 {
+    qDebug() << "[JACK] activating client";
     jack_activate(m_client);
+
     // if there are input/output targets
     // make the connections
+    qDebug() << "[JACK] connecting ports";
     connect_ports(m_audio_inputs, JackPortIsOutput,
                   JACK_DEFAULT_AUDIO_TYPE,
                   m_parent.in_audio_targets_list(),
@@ -280,4 +270,6 @@ JackExternal::run()
                   JACK_DEFAULT_MIDI_TYPE,
                   m_parent.out_midi_targets_list(),
                   m_parent.out_midi_routing());
+
+    qDebug() << "[JACK] running";
 }

@@ -23,22 +23,17 @@ Graph::s_nodes;
 using namespace wpn114;
 
 // ------------------------------------------------------------------------------------------------
-inline sample_t**
+sample_t**
 wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
 // we make no assumption as to how many channels each input/output may have
 // by the time the graph is ready/updated, so we can't really template it upfront
-// we also want to allocate the whole thing in a single block
 // ------------------------------------------------------------------------------------------------
 {
-    sample_t** block = static_cast<sample_t**>(
-                  malloc(
-                  sizeof(sample_t*)*nchannels +
-                  sizeof(sample_t )*nframes*nchannels));
-
+    sample_t** block = new sample_t*[nchannels];
     for (nchannels_t n = 0; n < nchannels; ++n)
-         block[n] = block[nchannels+n*nframes];
+        block[n] = new sample_t[nframes];
 
-return block;
+    return block;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -52,20 +47,38 @@ uint8_t index, uint8_t nchannels) :
     m_polarity    (polarity),
     m_index       (index),
     m_type        (type),
-    m_nchannels   (nchannels)
+    m_nchannels   (nchannels),
+    m_value       (0)
 {
     parent->register_socket(*this);
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE void
-Socket::assign(Socket* socket)
+void
+Socket::assign(QVariant variant)
 // ------------------------------------------------------------------------------------------------
 {
-    switch(m_polarity) {
-    case INPUT: Graph::connect(*this, *socket); break;
-    case OUTPUT: Graph::connect(*socket, *this);
+    if (variant.canConvert<qreal>())
+        set_value(variant.value<qreal>());
+
+    else if (variant.canConvert<Socket*>())
+    {
+        Socket* s = variant.value<Socket*>();
+
+        switch(s->polarity()) {
+        case INPUT: Graph::connect(*this, *s); break;
+        case OUTPUT: Graph::connect(*s, *this);
+        }
     }
+
+    else if (variant.canConvert<Connection>()) {
+        auto connection = variant.value<Connection>();
+        Graph::add_connection(connection);
+    }
+
+    else if (variant.canConvert<QVariantList>())
+        for (auto& v : variant.value<QVariantList>())
+             assign(v);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -189,18 +202,22 @@ Graph::connect(Socket& source, Socket& dest, Routing matrix)
         con.set_feedback(true);
 
     s_connections.push_back(con);   
+    Connection& connection = s_connections.back();
 
-    qDebug() << "Graph: connected Node" << source.parent_node().name()
-             << "(socket:" << source.name() << ")"
+    source.add_connection(connection);
+    dest.add_connection(connection);
+
+    qDebug() << "[GRAPH] connected Node" << source.parent_node().name()
+             << "(socket:" << source.name().append(")")
              << "with Node" << dest.parent_node().name()
-             << "(socket:" << dest.name() << ")";
+             << "(socket:" << dest.name().append(")");
 
     for (nchannels_t n = 0; n < matrix.ncables(); ++n) {
         qDebug() << "routing: channel" << QString::number(matrix[n][0])
                  << ">> channel" << QString::number(matrix[n][1]);
     }
 
-    return s_connections.back();
+    return connection;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -238,17 +255,19 @@ Graph::componentComplete()
 // we send signal to all registered Nodes to proceed to socket allocation
 // ------------------------------------------------------------------------------------------------
 {
-    qDebug() << "Graph component complete,"
-             << "allocating nodes io";
+    qDebug() << "[GRAPH] component complete,"
+             << "allocating nodes i/o";
 
     for (auto& node : s_nodes)
         node->on_graph_complete(s_properties);
+
+    qDebug() << "[GRAPH] i/o allocation complete";
 
     emit complete();
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE WPN_AUDIOTHREAD pool&
+WPN_INCOMPLETE WPN_AUDIOTHREAD vector_t
 Graph::run(Node& target) noexcept
 // the main processing function
 // Graph will process itself from target Node and upstream recursively
@@ -257,13 +276,14 @@ Graph::run(Node& target) noexcept
     // take a little amount of time to process asynchronous graph update requests (TODO)
     WPN_TODO
 
-    // process target, return outputs
-    target.process(s_properties.vector);
+    // process target, return outputs            
+    vector_t nframes = s_properties.vector;
+    target.process(nframes);
 
     for (auto& node : s_nodes)
          node->set_processed(false);
 
-    return target.outputs();
+    return nframes;
 }
 
 // ------------------------------------------------------------------------------------------------

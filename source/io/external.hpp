@@ -145,12 +145,12 @@ public:
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    rwrite(pool& inputs, pool& outputs, vector_t nframes) override;
+    rwrite(pool&, pool&, vector_t) override {}
+    // nothing to be done here
 
     //---------------------------------------------------------------------------------------------
     virtual void
     on_name_changed(QString &name) override {}
-
     // TODO: override the other ones...
 
 };
@@ -298,6 +298,12 @@ public:
     //-------------------------------------------------------------------------------------------------
     {
         Node::componentComplete();
+        m_audioInputs.set_nchannels(m_n_audio_outputs);
+        m_audioOutputs.set_nchannels(m_n_audio_outputs);
+
+        m_midiInputs.set_nchannels(m_n_midi_outputs);
+        m_midiOutputs.set_nchannels(m_n_midi_outputs);
+
         m_complete = true;
         m_backend = new JackExternal(this);
 
@@ -470,7 +476,6 @@ public:
 
         if (m_in_audio_targets != list) {
             m_in_audio_targets = list;
-
         }
 
         if (m_complete)
