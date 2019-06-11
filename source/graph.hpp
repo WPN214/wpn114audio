@@ -51,6 +51,7 @@ WPN_SOCKET(_tp, OUTPUT, _nm, _nm, _nchn)
 #define WPN_CLEANUP
 #define WPN_INCOMPLETE
 #define WPN_UNIMPLEMENTED
+#define WPN_AUDIOTHREAD
 
 //-------------------------------------------------------------------------------------------------
 
@@ -548,12 +549,23 @@ public:
     qreal
     value() const { return m_value; }
 
-    void
-    set_value(qreal value)
+    // --------------------------------------------------------------------------------------------
+    WPN_AUDIOTHREAD void
+    pull_value(vector_t nframes) noexcept
+    // --------------------------------------------------------------------------------------------
     {
-        // an asynchronous write (from the Qt/GUI main thread)
-        // with an explicit latched value
+        sample_t v = m_value;
+
+        for (nchannels_t c = 0; c < m_nchannels; ++c)
+            for (vector_t f = 0; f < nframes; ++f)
+                m_buffer[c][f] = v;
     }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    set_value(qreal value) { m_value = value; }
+    // an asynchronous write (from the Qt/GUI main thread)
+    // with an explicit latched value
 
     // --------------------------------------------------------------------------------------------
     bool
@@ -645,9 +657,10 @@ private:
     // --------------------------------------------------------------------------------------------
     void
     reset(vector_t nframes)
+    // note: this one is actually never called at the moment
     // --------------------------------------------------------------------------------------------
     {
-
+        memset(m_buffer, 0, sizeof(sample_t)*m_nchannels*nframes);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -704,8 +717,8 @@ private:
     m_add = 0;
 
     // --------------------------------------------------------------------------------------------
-    qreal
-    m_value = 0;
+    std::atomic<qreal>
+    m_value {0};
 };
 
 Q_DECLARE_METATYPE(Socket)
@@ -820,13 +833,18 @@ public:
     // --------------------------------------------------------------------------------------------
     static void
     register_node(Node& node) noexcept;
+    // if this happens while graph is running, we have to set a Queued request
+    // Graph will take a little amount of time to process it in between two runs
 
     // --------------------------------------------------------------------------------------------
     static void
-    unregister_node(Node& node) noexcept {
+    unregister_node(Node& node) noexcept
+    // if this happens while graph is running, we have to set a Queued request
+    // Graph will take a little amount of time to process it in between two runs
+    {
         s_nodes.erase(std::remove(s_nodes.begin(),
             s_nodes.end(), &node), s_nodes.end());
-    }
+    }  
 
     // --------------------------------------------------------------------------------------------
     WPN_EXAMINE static void
@@ -1247,10 +1265,9 @@ public:
     default_socket(polarity_t polarity) noexcept
     // --------------------------------------------------------------------------------------------
     {
-        if (auto dfa = default_socket(Socket::Audio, polarity))
-            return dfa;
-        else
-            return default_socket(Socket::Midi_1_0, polarity);
+        if (Socket* default_audio = default_socket(Socket::Audio, polarity))
+             return default_audio;
+        else return default_socket(Socket::Midi_1_0, polarity);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1419,18 +1436,35 @@ private:
     {
         m_input_pool   = new sample_t**[m_inputs.size()];
         m_output_pool  = new sample_t**[m_outputs.size()];
+
+        nchannels_t n = 0;
+        for (auto& socket : m_inputs) {
+            m_input_pool[n] = socket->buffer();
+            n++;
+        }
+
+        n = 0;
+        for (auto& socket : m_outputs) {
+            m_output_pool[n] = socket->buffer();
+            n++;
+        }
     }
 
     // --------------------------------------------------------------------------------------------
-    void
+    WPN_AUDIOTHREAD void
     process(vector_t nframes) noexcept
     // pre-processing main function
     // --------------------------------------------------------------------------------------------
     {
-        for (auto& socket : m_inputs)
+        for (auto& socket : m_inputs) {
+            // we start by pulling the input socket value
+            // that has been (or not) set asynchronously from the user thread
+            socket->pull_value(nframes);
+            // then, we pull all socket connections (we'll see later for multithreading)
             for (auto& connection : socket->connections())
                 if (connection->active())
                     connection->pull(nframes);
+        }
 
         rwrite(m_input_pool, m_output_pool, nframes);
         m_processed = true;

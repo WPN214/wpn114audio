@@ -248,13 +248,14 @@ Graph::componentComplete()
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE inline pool&
+WPN_INCOMPLETE WPN_AUDIOTHREAD pool&
 Graph::run(Node& target) noexcept
 // the main processing function
 // Graph will process itself from target Node and upstream recursively
 // ------------------------------------------------------------------------------------------------
 {
     // take a little amount of time to process asynchronous graph update requests (TODO)
+    WPN_TODO
 
     // process target, return outputs
     target.process(s_properties.vector);
@@ -301,7 +302,7 @@ Connection::componentComplete() { Graph::add_connection(*this); }
 // examine: when Connection is explicitely assigned to a Socket
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE void
+WPN_INCOMPLETE WPN_AUDIOTHREAD void
 Connection::pull(vector_t nframes) noexcept
 // ------------------------------------------------------------------------------------------------
 {    
