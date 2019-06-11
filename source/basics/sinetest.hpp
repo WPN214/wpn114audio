@@ -50,7 +50,7 @@ public:
         m_rate  = Graph::rate();
 
         for (size_t n = 0; n < esz; ++n)
-            m_env[n] = sin(M_PI*2*n/esz);
+            m_env[n] = sin(M_PI*2*static_cast<sample_t>(n)/esz);
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -75,18 +75,25 @@ public:
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     // the main processing function
     //-------------------------------------------------------------------------------------------------
-    {
-        auto frequency  = inputs[Inputs::frequency][0];
-        auto midi       = inputs[Inputs::midiInput][0];
-        auto out        = outputs[Outputs::audioOutput][0];
+    {        
+        sample_t
+        *frequency  = inputs[Inputs::frequency][0],
+        *midi_in    = inputs[Inputs::midiInput][0],
+        *out        = outputs[Outputs::audioOutput][0];
+
+        size_t
+        phs = m_phs;
+
+        const sample_t
+        rate = m_rate;
 
         for (vector_t f = 0; f < nframes; ++f) {
-            m_phs += frequency[f]/m_rate * esz;
-            out[f] = m_env[m_phs];
-
-            if (m_phs >= esz)
-                m_phs -= esz;
+            phs += static_cast<size_t>(frequency[f]/rate * esz);
+            wpnwrap(phs, esz);
+            out[f] = m_env[phs];
         }
+
+        m_phs = phs;
     }
 
 private:

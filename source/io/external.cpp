@@ -30,14 +30,20 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 // copy the graph's final output into the jack output buffer
 //-------------------------------------------------------------------------------------------------
 {
-    JackExternal& jext = *static_cast<JackExternal*>(udata);
-    External& ext = jext.parent();
+    JackExternal&
+    jext = *static_cast<JackExternal*>(udata);
 
-    // write all inputs to external's outputs
-    nchannels_t n = 0;
+    External&
+    ext = jext.parent();
 
-    auto extout_m = ext.default_socket(Socket::Midi_1_0, OUTPUT);
-    auto extout_a = ext.default_socket(Socket::Audio, OUTPUT);
+    nchannels_t
+    n = 0;
+
+    Socket
+    *extout_m = ext.default_socket(Socket::Midi_1_0, OUTPUT),
+    *extout_a = ext.default_socket(Socket::Audio, OUTPUT),
+    *extin_m  = ext.default_socket(Socket::Midi_1_0, INPUT),
+    *extin_a  = ext.default_socket(Socket::Audio, INPUT);
     // note: External's outputs become inputs in Graph's point of view
     // and obviously External's inputs are what we will be feeding to jack
 
@@ -86,9 +92,6 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 
     Graph::run(ext);   
 
-    auto extin_m = ext.default_socket(Socket::Midi_1_0, INPUT);
-    auto extin_a = ext.default_socket(Socket::Audio, INPUT);
-
     // AUDIO OUTPUTS ------------------------------------------------------------------------------
 
     if (extin_a->nchannels()) {
@@ -98,7 +101,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         for (auto& output : jext.m_audio_outputs) {
             float* buf = static_cast<float*>(jack_port_get_buffer(output, nframes));
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                 buf[n] = static_cast<float>(extin_a_buffer[n][f]);
+                buf[f] = static_cast<float>(extin_a_buffer[n][f]);
             n++;
         }
     }

@@ -44,6 +44,8 @@ WPN_SOCKET(_tp, INPUT, _nm, _nm, _nchn)
 #define WPN_OUTPUT_DECLARE(_nm, _tp, _nchn)                                                         \
 WPN_SOCKET(_tp, OUTPUT, _nm, _nm, _nchn)
 
+#define wpnwrap(_v, _limit) if (_v >= _limit) _v -= _limit
+
 #define WPN_TODO
 #define WPN_EXAMINE
 #define WPN_OK
@@ -263,6 +265,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     Connection(Connection const& cp) :
+        m_nchannels(cp.m_nchannels),
         m_source(cp.m_source)
       , m_dest(cp.m_dest)
       , m_routing(cp.m_routing) {}
@@ -277,9 +280,10 @@ public:
     operator=(Connection const& cp)
     // --------------------------------------------------------------------------------------------
     {
-        m_source    = cp.m_source;
-        m_dest      = cp.m_dest;
-        m_routing   = cp.m_routing;
+        m_source     = cp.m_source;
+        m_dest       = cp.m_dest;
+        m_routing    = cp.m_routing;
+        m_nchannels  = cp.m_nchannels;
 
         return *this;
     }
@@ -790,6 +794,10 @@ public:
 
     Q_SIGNAL void
     complete();
+
+    // --------------------------------------------------------------------------------------------
+    static void
+    debug(QString str)  { qDebug() << "[GRAPH]" << str; }
 
     // --------------------------------------------------------------------------------------------
     static Connection&

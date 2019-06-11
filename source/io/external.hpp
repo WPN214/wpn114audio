@@ -297,12 +297,12 @@ public:
     componentComplete() override
     //-------------------------------------------------------------------------------------------------
     {
-        Node::componentComplete();
         m_audioInputs.set_nchannels(m_n_audio_outputs);
-        m_audioOutputs.set_nchannels(m_n_audio_outputs);
-
+        m_audioOutputs.set_nchannels(m_n_audio_outputs);        
         m_midiInputs.set_nchannels(m_n_midi_outputs);
         m_midiOutputs.set_nchannels(m_n_midi_outputs);
+
+        Node::componentComplete();
 
         m_complete = true;
         m_backend = new JackExternal(this);

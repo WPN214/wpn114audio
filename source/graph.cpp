@@ -84,9 +84,10 @@ Socket::assign(QVariant variant)
 // ------------------------------------------------------------------------------------------------
 WPN_TODO void
 Socket::set_nchannels(nchannels_t nchannels)
+// todo: async call when graph is running
 // ------------------------------------------------------------------------------------------------
 {
-
+    m_nchannels = nchannels;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -255,14 +256,12 @@ Graph::componentComplete()
 // we send signal to all registered Nodes to proceed to socket allocation
 // ------------------------------------------------------------------------------------------------
 {
-    qDebug() << "[GRAPH] component complete,"
-             << "allocating nodes i/o";
+    Graph::debug("component complete, allocating nodes i/o");
 
     for (auto& node : s_nodes)
         node->on_graph_complete(s_properties);
 
-    qDebug() << "[GRAPH] i/o allocation complete";
-
+    Graph::debug("i/o allocation complete");
     emit complete();
 }
 
@@ -295,7 +294,7 @@ Connection::Connection(Socket& source, Socket& dest, Routing matrix) :
   , m_dest     (&dest)
   , m_routing  (matrix)
 {
-
+    m_nchannels = std::min(source.nchannels(), dest.nchannels());
 }
 
 
@@ -331,8 +330,11 @@ Connection::pull(vector_t nframes) noexcept
     if (!source.processed())
         source.process(nframes);
 
-    auto sbuf = m_source->buffer();
-    auto dbuf = m_dest->buffer();
+    sample_t
+    **sbuf = m_source->buffer(),
+    **dbuf = m_dest->buffer(),
+      mul  = m_mul,
+      add  = m_add;
 
     if (m_muted) {
         for (nchannels_t c = 0; c < m_dest->nchannels(); ++c)
@@ -341,12 +343,16 @@ Connection::pull(vector_t nframes) noexcept
     }
 
     if (m_routing.null())
-        for (nchannels_t c = 0; c < m_dest->nchannels(); ++c)
+        for (nchannels_t c = 0; c < m_nchannels; ++c)
             for (vector_t f = 0; f < nframes; ++f) {
-                if (m_source->type() != Socket::Type::Midi_1_0)
-                     dbuf[c][f] += sbuf[c][f] * m_mul + m_add;
+                if (m_source->type() != Socket::Type::Midi_1_0) {
+                    auto v = sbuf[c][f] * mul + add;
+                     dbuf[c][f] += v;
+                }
                 else dbuf[c][f] = sbuf[c][f];
-            } else {
+            }
+    else
+    {
         for (nchannels_t r = 0; r < m_routing.ncables(); ++r) {
             for (vector_t f = 0; f < nframes; ++f) {
                 if (m_source->type() != Socket::Type::Midi_1_0)  {
