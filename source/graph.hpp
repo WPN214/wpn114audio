@@ -266,9 +266,13 @@ public:
     // --------------------------------------------------------------------------------------------
     Connection(Connection const& cp) :
         m_nchannels(cp.m_nchannels),
-        m_source(cp.m_source)
-      , m_dest(cp.m_dest)
-      , m_routing(cp.m_routing) {}
+        m_source(cp.m_source),
+        m_dest(cp.m_dest),
+        m_routing(cp.m_routing)
+    {
+        m_mul = cp.m_mul.load();
+        m_add = cp.m_add.load();
+    }
     // copy constructor, don't really know in which case it should/will be used
 
     // --------------------------------------------------------------------------------------------
@@ -284,6 +288,8 @@ public:
         m_dest       = cp.m_dest;
         m_routing    = cp.m_routing;
         m_nchannels  = cp.m_nchannels;
+        m_mul        = cp.m_mul.load();
+        m_add        = cp.m_add.load();
 
         return *this;
     }
@@ -1213,10 +1219,9 @@ public:
     set_mul(qreal mul)
     // set default outputs level + postfader auxiliary connections level
     // --------------------------------------------------------------------------------------------
-    {
-        if (!m_outputs.empty())
-             m_outputs[0]->set_mul(mul);
-        m_mul = mul;
+    {        
+        if (auto out = default_socket(Socket::Audio, OUTPUT))
+            out->set_mul(mul);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1224,9 +1229,8 @@ public:
     set_add(qreal add)
     // --------------------------------------------------------------------------------------------
     {
-        if (!m_outputs.empty())
-            m_outputs[0]->set_add(add);
-        m_add = add;
+        if (auto out = default_socket(Socket::Audio, OUTPUT))
+            out->set_add(add);
     }
 
     // --------------------------------------------------------------------------------------------

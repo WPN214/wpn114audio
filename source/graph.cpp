@@ -96,6 +96,7 @@ Socket::set_mul(qreal mul)
 // this overrides the mul for all connections based on this socket
 // ------------------------------------------------------------------------------------------------
 {
+    m_mul = mul;
     for (auto& connection : m_connections)
          connection->set_mul(mul);
 }
@@ -106,6 +107,7 @@ Socket::set_add(qreal add)
 // this overrides the add for all connections based on this socket
 // ------------------------------------------------------------------------------------------------
 {
+    m_add = add;
     for (auto& connection : m_connections)
          connection->set_add(add);
 }
@@ -291,6 +293,9 @@ Connection::Connection(Socket& source, Socket& dest, Routing matrix) :
   , m_routing  (matrix)
 {
     m_nchannels = std::min(source.nchannels(), dest.nchannels());
+
+    m_mul = source.mul() * dest.mul();
+    m_add = source.add() + dest.add();
 }
 
 
