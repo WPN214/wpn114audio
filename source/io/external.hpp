@@ -164,24 +164,10 @@ class External : public Node
 {
     Q_OBJECT
 
-    //---------------------------------------------------------------------------------------------
-    WPN_ENUM_INPUTS     (audioInputs, midiInputs)
+    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_out, Polarity::Input, 0)
+    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_in, Polarity::Output, 0)
 
-    //---------------------------------------------------------------------------------------------
-    WPN_ENUM_OUTPUTS    (audioOutputs, midiOutputs)
-
-    //---------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (audioInputs, Socket::Audio, 0)
-
-    //---------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (midiInputs, Socket::Midi_1_0, 0)
-
-    //---------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE  (audioOutputs, Socket::Audio, 0)
-
-    //---------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE  (midiOutputs, Socket::Midi_1_0, 0)
-
+public:
     //---------------------------------------------------------------------------------------------
     enum Backend
     //---------------------------------------------------------------------------------------------
@@ -197,6 +183,15 @@ class External : public Node
     Q_ENUM (Backend)
 
     //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (Backend backend READ backend WRITE set_backend)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QString name READ name WRITE set_name)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (bool running READ running WRITE set_running)
+
+    //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (int numAudioInputs READ n_audio_inputs WRITE setn_audio_inputs)
 
     //---------------------------------------------------------------------------------------------
@@ -206,40 +201,28 @@ class External : public Node
     Q_PROPERTY  (int numMidiInputs READ n_midi_inputs WRITE setn_midi_inputs)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (int numMidiOutputs READ n_midi_outputs WRITE setn_midi_outputs)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (Backend backend READ backend WRITE set_backend)
+    Q_PROPERTY  (QVariant outAudioTargets READ out_audio_targets WRITE set_out_audio_targets)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariant inAudioTargets READ in_audio_targets WRITE set_in_audio_targets)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant outAudioTargets READ out_audio_targets WRITE set_out_audio_targets)
+    Q_PROPERTY  (QVariant outMidiTargets READ out_midi_targets WRITE set_out_midi_targets)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariant inMidiTargets READ in_midi_targets WRITE set_in_midi_targets)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant outMidiTargets READ out_midi_targets WRITE set_out_midi_targets)
+    Q_PROPERTY  (QVariantList outAudioRouting READ out_audio_routing WRITE set_out_audio_routing)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariantList inAudioRouting READ in_audio_routing WRITE set_in_audio_routing)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariantList outAudioRouting READ out_audio_routing WRITE set_out_audio_routing)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariantList inMidiRouting READ in_midi_routing WRITE set_in_midi_routing)
-
-    //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariantList outMidiRouting READ out_midi_routing WRITE set_out_midi_routing)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QString name READ name WRITE set_name)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (bool running READ running WRITE set_running)
+    Q_PROPERTY  (QVariantList inMidiRouting READ in_midi_routing WRITE set_in_midi_routing)
 
     //---------------------------------------------------------------------------------------------
     QStringList
@@ -250,10 +233,17 @@ class External : public Node
 
     //---------------------------------------------------------------------------------------------
     Routing
-    m_in_audio_routing,
     m_out_audio_routing,
-    m_in_midi_routing,
-    m_out_midi_routing;
+    m_out_midi_routing,
+    m_in_audio_routing,
+    m_in_midi_routing;
+
+    //---------------------------------------------------------------------------------------------
+    uint8_t
+    m_out_audio_nchannels   = 2,
+    m_out_midi_nchannels    = 0,
+    m_in_audio_nchannels    = 0,
+    m_in_midi_nchannels     = 0;
 
     //---------------------------------------------------------------------------------------------
     ExternalBase*
@@ -269,18 +259,10 @@ class External : public Node
     m_name = "wpn114audio-device";
 
     //---------------------------------------------------------------------------------------------
-    uint8_t
-    m_n_audio_inputs    = 0,
-    m_n_audio_outputs   = 2,
-    m_n_midi_inputs     = 0,
-    m_n_midi_outputs    = 0;
-
-    //---------------------------------------------------------------------------------------------
     Backend
     m_backend_id = None;
 
 public:
-
 
     //-------------------------------------------------------------------------------------------------
     External() {}
@@ -297,10 +279,9 @@ public:
     componentComplete() override
     //-------------------------------------------------------------------------------------------------
     {
-        m_audioInputs.set_nchannels(m_n_audio_outputs);
-        m_audioOutputs.set_nchannels(m_n_audio_outputs);        
-        m_midiInputs.set_nchannels(m_n_midi_outputs);
-        m_midiOutputs.set_nchannels(m_n_midi_outputs);
+        // note: these are reverted compared to Graph's point of view
+        m_audio_in.set_nchannels(m_out_audio_nchannels);
+        m_audio_out.set_nchannels(m_in_audio_nchannels);
 
         Node::componentComplete();
 
@@ -331,19 +312,11 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     virtual void
-    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
-    //-------------------------------------------------------------------------------------------------
-    {
-        m_backend->rwrite(inputs, outputs, nframes);
-    }
+    rwrite(pool&, pool&, vector_t) override {}
 
     //-------------------------------------------------------------------------------------------------
     virtual void
-    on_rate_changed(sample_t rate) override
-    //-------------------------------------------------------------------------------------------------
-    {
-        m_backend->on_sample_rate_changed(rate);
-    }
+    on_rate_changed(sample_t rate) override { m_backend->on_sample_rate_changed(rate); }
 
     //-------------------------------------------------------------------------------------------------
     Backend
@@ -374,66 +347,42 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     uint8_t
-    n_audio_inputs() const { return m_n_audio_inputs; }
+    n_audio_inputs() const { return m_in_audio_nchannels; }
 
-    //-------------------------------------------------------------------------------------------------
     void
-    setn_audio_inputs(uint8_t n_inputs)
-    //-------------------------------------------------------------------------------------------------
+    setn_audio_inputs(uint8_t nchannels)
     {
-        if (m_complete && n_inputs != m_n_audio_inputs) {
-            m_backend->on_audio_inputs_changed(n_inputs);
-        }
-
-        m_n_audio_inputs = n_inputs;
+        m_in_audio_nchannels = nchannels;
     }
 
     //-------------------------------------------------------------------------------------------------
     uint8_t
-    n_audio_outputs() const { return m_n_audio_outputs; }
+    n_audio_outputs() const { return m_out_audio_nchannels; }
 
-    //-------------------------------------------------------------------------------------------------
     void
-    setn_audio_outputs(uint8_t n_outputs)
-    //-------------------------------------------------------------------------------------------------
+    setn_audio_outputs(uint8_t nchannels)
     {
-        if (m_complete && n_outputs != m_n_audio_outputs) {
-            m_backend->on_audio_outputs_changed(n_outputs);
-        }
-
-        m_n_audio_outputs = n_outputs;
+        m_out_audio_nchannels = nchannels;
     }
 
     //-------------------------------------------------------------------------------------------------
     uint8_t
-    n_midi_inputs() const { return m_n_midi_inputs; }
+    n_midi_inputs() const { return m_in_midi_nchannels; }
 
-    //-------------------------------------------------------------------------------------------------
     void
-    setn_midi_inputs(uint8_t n_inputs)
-    //-------------------------------------------------------------------------------------------------
+    setn_midi_inputs(uint8_t nchannels)
     {
-        if (m_complete && n_inputs != m_n_midi_inputs) {
-            m_backend->on_midi_inputs_changed(n_inputs);
-        }
-
-        m_n_midi_inputs = n_inputs;
+        m_in_midi_nchannels = nchannels;
     }
 
     //-------------------------------------------------------------------------------------------------
     uint8_t
-    n_midi_outputs() const { return m_n_midi_outputs; }
+    n_midi_outputs() const { return m_out_midi_nchannels; }
 
-    //-------------------------------------------------------------------------------------------------
     void
-    setn_midi_outputs(uint8_t n_outputs)
-    //-------------------------------------------------------------------------------------------------
+    setn_midi_outputs(uint8_t nchannels)
     {
-        if (m_complete && n_outputs != m_n_midi_outputs) {
-            m_backend->on_midi_outputs_changed(n_outputs);
-        }
-
-        m_n_midi_outputs = n_outputs;
+        m_out_midi_nchannels = nchannels;
     }
 
     //---------------------------------------------------------------------------------------------

@@ -11,39 +11,20 @@ class Sinetest : public Node
 {
     Q_OBJECT
 
-    //-------------------------------------------------------------------------------------------------
-    WPN_ENUM_INPUTS     (frequency, midiInput)
-    WPN_ENUM_OUTPUTS    (audioOutput)
-    // index 0 of enum is always default input/output
+    WPN_PORT (Port::Audio, Polarity::Input, frequency, true, 1)
+    WPN_PORT (Port::Midi_1_0, Polarity::Input, midi_in, false, 1)
+    WPN_PORT (Port::Audio, Polarity::Output, audio_out, true, 1)
+
 
     //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (frequency, Socket::FloatingPoint, 1)
-    /*!
-     * \property Sinetest::frequency
-     * \brief (audio/control, input) in Hertz
-     */
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_INPUT_DECLARE   (midiInput, Socket::Midi_1_0, 1)
-    /*!
-     * \property Sinetest::midiInput
-     * \brief (audio, input) midi, controls frequency of the sine
-     */
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE (audioOutput, Socket::Audio, 1)
-    /*!
-     * \property Sinetest::audioOutput
-     * \brief (audio, output) main out
-     */
-
     static constexpr size_t
     esz = 16384;
 
 public:
+
     //-------------------------------------------------------------------------------------------------
-    Sinetest() {}
-    // ctor, do what you want here
+    Sinetest() { m_dispatch = Dispatch::Values::Downwards; }
+    // this would be the default dipsatch behaviour withinin Sinetest QML scope
 
     //-------------------------------------------------------------------------------------------------
     virtual
@@ -76,9 +57,9 @@ public:
     // the main processing function
     //-------------------------------------------------------------------------------------------------
     {        
-        auto frequency  = inputs[Inputs::frequency][0];
-        auto midi_in    = inputs[Inputs::midiInput][0];
-        auto out        = outputs[Outputs::audioOutput][0];
+        auto frequency = inputs[0][0];
+        auto midi = inputs[1][0];
+        auto out = outputs[0][0];
 
         size_t phs = m_phs;
         sample_t const rate = m_rate;

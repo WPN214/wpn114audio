@@ -39,11 +39,11 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     nchannels_t
     n = 0;
 
-    Socket
-    *extout_m = ext.default_socket(Socket::Midi_1_0, OUTPUT),
-    *extout_a = ext.default_socket(Socket::Audio, OUTPUT),
-    *extin_m  = ext.default_socket(Socket::Midi_1_0, INPUT),
-    *extin_a  = ext.default_socket(Socket::Audio, INPUT);
+    Port
+    *extout_m = ext.default_port(Port::Midi_1_0, Polarity::Output),
+    *extout_a = ext.default_port(Port::Audio, Polarity::Output),
+    *extin_m  = ext.default_port(Port::Midi_1_0, Polarity::Input),
+    *extin_a  = ext.default_port(Port::Audio, Polarity::Input);
     // note: External's outputs become inputs in Graph's point of view
     // and obviously External's inputs are what we will be feeding to jack
 

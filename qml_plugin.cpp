@@ -17,11 +17,11 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterUncreatableType<Node, 1>
     ("WPN114.Audio", 1, 1, "Node", "Uncreatable");
 
-    qmlRegisterUncreatableType<Socket, 1>
-    ("WPN114.Audio", 1, 1, "Socket", "Uncreatable");
+    qmlRegisterUncreatableType<Port, 1>
+    ("WPN114.Audio", 1, 1, "Port", "Uncreatable");
 
-    qmlRegisterType<Connection, 1>
-    ("WPN114.Audio", 1, 1, "Connection");
+    qmlRegisterUncreatableType<PortContainer, 1>
+    ("WPN114.Audio", 1, 1, "PortContainer", "Uncreatable");
 
     qmlRegisterUncreatableType<Routing, 1>
     ("WPN114.Audio", 1, 1, "Routing", "Uncreatable");
@@ -33,6 +33,9 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterType<Graph, 1>
     ("WPN114.Audio", 1, 1, "Graph");
 
+    qmlRegisterType<Connection, 1>
+    ("WPN114.Audio", 1, 1, "Connection");
+
     qmlRegisterType<External, 1>
     ("WPN114.Audio", 1, 1, "External");
 
@@ -42,7 +45,7 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterType<VCA, 1>
     ("WPN114.Audio", 1, 1, "VCA");
 
-    qmlRegisterType<MidiTransposer, 1>
-    ("WPN114.Audio", 1, 1, "MIDITransposer");
+//    qmlRegisterType<MidiTransposer, 1>
+//    ("WPN114.Audio", 1, 1, "MIDITransposer");
 
 }

@@ -37,53 +37,35 @@ wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
 }
 
 // ------------------------------------------------------------------------------------------------
-Socket::Socket(Node* parent, QString name, Type type, polarity_t polarity,
-uint8_t index, uint8_t nchannels) :
+Port::Port(Node* parent, QString name, Type type, Polarity polarity,
+bool is_default, uint8_t nchannels) :
 // C++ constructor, called from the macro-declarations
-// we immediately store a pointer in parent Node's input/output socket vector
+// we immediately store a pointer in parent Node's input/output Port vector
 // ------------------------------------------------------------------------------------------------
     m_parent      (parent),
     m_name        (name),
     m_polarity    (polarity),
-    m_index       (index),
     m_type        (type),
     m_nchannels   (nchannels),
     m_value       (0)
 {
-    parent->register_socket(*this);
+    parent->register_port(*this);
 }
 
 // ------------------------------------------------------------------------------------------------
 void
-Socket::assign(QVariant variant)
+Port::assign(Port* p)
 // ------------------------------------------------------------------------------------------------
 {
-    if (variant.canConvert<qreal>())
-        set_value(variant.value<qreal>());
-
-    else if (variant.canConvert<Socket*>())
-    {
-        Socket* s = variant.value<Socket*>();
-
-        switch(s->polarity()) {
-        case INPUT: Graph::connect(*this, *s); break;
-        case OUTPUT: Graph::connect(*s, *this);
-        }
+    switch(p->polarity()) {
+    case Polarity::Input: Graph::connect(*this, *p); break;
+    case Polarity::Output: Graph::connect(*p, *this);
     }
-
-    else if (variant.canConvert<Connection>()) {
-        auto connection = variant.value<Connection>();
-        Graph::add_connection(connection);
-    }
-
-    else if (variant.canConvert<QVariantList>())
-        for (auto& v : variant.value<QVariantList>())
-             assign(v);
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_TODO void
-Socket::set_nchannels(nchannels_t nchannels)
+Port::set_nchannels(nchannels_t nchannels)
 // todo: async call when graph is running
 // ------------------------------------------------------------------------------------------------
 {
@@ -92,8 +74,8 @@ Socket::set_nchannels(nchannels_t nchannels)
 
 // ------------------------------------------------------------------------------------------------
 WPN_OK void
-Socket::set_mul(qreal mul)
-// this overrides the mul for all connections based on this socket
+Port::set_mul(qreal mul)
+// this overrides the mul for all connections based on this Port
 // ------------------------------------------------------------------------------------------------
 {
     m_mul = mul;
@@ -103,8 +85,8 @@ Socket::set_mul(qreal mul)
 
 // ------------------------------------------------------------------------------------------------
 WPN_OK void
-Socket::set_add(qreal add)
-// this overrides the add for all connections based on this socket
+Port::set_add(qreal add)
+// this overrides the add for all connections based on this Port
 // ------------------------------------------------------------------------------------------------
 {
     m_add = add;
@@ -114,21 +96,21 @@ Socket::set_add(qreal add)
 
 // ------------------------------------------------------------------------------------------------
 WPN_EXAMINE QVariantList
-Socket::routing() const noexcept
+Port::routing() const noexcept
 {
     return m_routing;
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_EXAMINE void
-Socket::set_routing(QVariantList r) noexcept
+Port::set_routing(QVariantList r) noexcept
 {
     m_routing = r;
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_OK void
-Socket::set_muted(bool muted)
+Port::set_muted(bool muted)
 // mutes all connections, zero output
 // ------------------------------------------------------------------------------------------------
 {
@@ -138,15 +120,15 @@ Socket::set_muted(bool muted)
 
 // ------------------------------------------------------------------------------------------------
 WPN_CLEANUP bool
-Socket::connected(Socket const& s) const noexcept
+Port::connected(Port const& s) const noexcept
 // ------------------------------------------------------------------------------------------------
 {
     for (const auto& connection : m_connections)
     {
-         if (m_polarity == INPUT &&
+         if (m_polarity == Polarity::Input &&
              connection->source() == &s)
              return true;
-         else if (m_polarity == OUTPUT &&
+         else if (m_polarity == Polarity::Output &&
               connection->dest() == &s)
              return true;
     }
@@ -156,16 +138,16 @@ Socket::connected(Socket const& s) const noexcept
 
 // ------------------------------------------------------------------------------------------------
 WPN_CLEANUP bool
-Socket::connected(Node const& n) const noexcept
+Port::connected(Node const& n) const noexcept
 // ------------------------------------------------------------------------------------------------
 {
     for (const auto& connection: m_connections)
     {
-        if (m_polarity == INPUT &&
+        if (m_polarity == Polarity::Input &&
             &connection->source()->parent_node() == &n)
             return true;
 
-        else if (m_polarity == OUTPUT &&
+        else if (m_polarity == Polarity::Output &&
             &connection->dest()->parent_node() == &n)
             return true;
     }
@@ -188,19 +170,16 @@ Graph::register_node(Node& node) noexcept
 
 // ------------------------------------------------------------------------------------------------
 WPN_INCOMPLETE Connection&
-Graph::connect(Socket& source, Socket& dest, Routing matrix)
+Graph::connect(Port& source, Port& dest, Routing matrix)
 // there's still the Audio/Midi Type to check,
 // the multichannel expansion allocation
 // & debug the connection with a pretty message
 // ------------------------------------------------------------------------------------------------
 {
-    assert(source.polarity() == OUTPUT && dest.polarity() == INPUT);
+    assert(source.polarity() == Polarity::Output && dest.polarity() == Polarity::Input);
     assert(source.type() == dest.type());
 
     auto con = Connection(source, dest, matrix);
-
-    if (dest.parent_node().connected(source.parent_node()))
-        con.set_feedback(true);
 
     s_connections.push_back(con);   
     Connection& connection = s_connections.back();
@@ -209,9 +188,9 @@ Graph::connect(Socket& source, Socket& dest, Routing matrix)
     dest.add_connection(connection);
 
     qDebug() << "[GRAPH] connected Node" << source.parent_node().name()
-             << "(socket:" << source.name().append(")")
+             << "(Port:" << source.name().append(")")
              << "with Node" << dest.parent_node().name()
-             << "(socket:" << dest.name().append(")");
+             << "(Port:" << dest.name().append(")");
 
     for (nchannels_t n = 0; n < matrix.ncables(); ++n) {
         qDebug() << "[GRAPH] ---- routing: channel" << QString::number(matrix[n][0])
@@ -227,31 +206,31 @@ Graph::connect(Node& source, Node& dest, Routing matrix)
 // might be midi and not audio...
 // ------------------------------------------------------------------------------------------------
 {
-    return connect(*source.default_socket(OUTPUT),
-                   *dest.default_socket(INPUT), matrix);
+    return connect(*source.default_port(Polarity::Output),
+                   *dest.default_port(Polarity::Input), matrix);
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_INCOMPLETE Connection&
-Graph::connect(Node& source, Socket& dest, Routing matrix)
+Graph::connect(Node& source, Port& dest, Routing matrix)
 // ------------------------------------------------------------------------------------------------
 {
-    return connect(*source.default_socket(dest.type(), OUTPUT), dest, matrix);
+    return connect(*source.default_port(dest.type(), Polarity::Output), dest, matrix);
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_INCOMPLETE Connection&
-Graph::connect(Socket& source, Node& dest, Routing matrix)
+Graph::connect(Port& source, Node& dest, Routing matrix)
 // ------------------------------------------------------------------------------------------------
 {
-    return connect(source, *dest.default_socket(INPUT), matrix);
+    return connect(source, *dest.default_port(Polarity::Input), matrix);
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_EXAMINE void
 Graph::componentComplete()
 // Graph is complete, all connections have been set-up
-// we send signal to all registered Nodes to proceed to socket/pool allocation
+// we send signal to all registered Nodes to proceed to Port/pool allocation
 // ------------------------------------------------------------------------------------------------
 {
     Graph::debug("component complete, allocating nodes i/o");
@@ -287,7 +266,7 @@ Graph::run(Node& target) noexcept
 // CONNECTION
 //-------------------------------------------------------------------------------------------------
 WPN_INCOMPLETE
-Connection::Connection(Socket& source, Socket& dest, Routing matrix) :
+Connection::Connection(Port& source, Port& dest, Routing matrix) :
     m_source   (&source)
   , m_dest     (&dest)
   , m_routing  (matrix)
@@ -303,23 +282,23 @@ Connection::Connection(Socket& source, Socket& dest, Routing matrix) :
 WPN_EXAMINE void
 Connection::setTarget(const QQmlProperty& target)
 // qml property binding, e. g.:
-// Connection on 'socket' { level: db(-12); routing: [0, 1] }
-// not sure target will give us a Socket pointer though
-// maybe a Socket copy...
+// Connection on 'Port' { level: db(-12); routing: [0, 1] }
+// not sure target will give us a Port pointer though
+// maybe a Port copy...
 // ------------------------------------------------------------------------------------------------
 {
-    auto socket = target.read().value<Socket*>();
+    auto port = target.read().value<Port*>();
 
-    switch(socket->polarity()) {
-        case OUTPUT: m_source = socket; break;
-        case INPUT: m_dest = socket;
+    switch(port->polarity()) {
+        case Polarity::Output: m_source = port; break;
+        case Polarity::Input: m_dest = port;
     }
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_EXAMINE void
 Connection::componentComplete() { Graph::add_connection(*this); }
-// examine: when Connection is explicitely assigned to a Socket
+// examine: when Connection is explicitely assigned to a Port
 
 // ------------------------------------------------------------------------------------------------
 WPN_AUDIOTHREAD void
@@ -347,7 +326,7 @@ Connection::pull(vector_t nframes) noexcept
     {
         for (nchannels_t c = 0; c < m_nchannels; ++c) {
             for (vector_t f = 0; f < nframes; ++f) {
-                if (m_source->type() != Socket::Type::Midi_1_0)
+                if (m_source->type() != Port::Type::Midi_1_0)
                      dbuf[c][f] += sbuf[c][f] * mul + add;
                 else dbuf[c][f] = sbuf[c][f];
             }
@@ -357,7 +336,7 @@ Connection::pull(vector_t nframes) noexcept
     {
         for (nchannels_t c = 0; c < routing.ncables(); ++c) {
             for (vector_t f = 0; f < nframes; ++f) {
-                if (m_source->type() != Socket::Type::Midi_1_0)
+                if (m_source->type() != Port::Type::Midi_1_0)
                       dbuf[routing[c][1]][f] += sbuf[routing[c][0]][f] * mul + add;
                  else dbuf[routing[c][1]][f] = sbuf[routing[c][0]][f];
             }
