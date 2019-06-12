@@ -147,8 +147,7 @@ JackExternal::register_ports(
         sprintf(index, "_%d", n);
         strcat(name, index);
 
-        qDebug() << "[JACK] registering jack port:"
-                 << name;
+        qDebug() << "[JACK] registering jack port:" << name;
 
         auto port = jack_port_register(m_client, name, type, polarity, 0);
         target.push_back(port);

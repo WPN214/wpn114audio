@@ -42,16 +42,8 @@ class Sinetest : public Node
 
 public:
     //-------------------------------------------------------------------------------------------------
-    Sinetest()
+    Sinetest() {}
     // ctor, do what you want here
-    //-------------------------------------------------------------------------------------------------
-    {
-        m_env   = new sample_t[esz];
-        m_rate  = Graph::rate();
-
-        for (size_t n = 0; n < esz; ++n)
-            m_env[n] = sin(M_PI*2*static_cast<sample_t>(n)/esz);
-    }
 
     //-------------------------------------------------------------------------------------------------
     virtual
@@ -63,12 +55,20 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     virtual void
-    initialize(const Graph::properties& properties) override { m_rate = properties.rate; }
+    initialize(const Graph::properties& properties) override
+    //-------------------------------------------------------------------------------------------------
+    {
+        m_rate = properties.rate;
+        m_env = new sample_t[esz];
+
+        for (size_t n = 0; n < esz; ++n)
+            m_env[n] = sin(M_PI*2*static_cast<sample_t>(n)/esz);
+    }
 
     //-------------------------------------------------------------------------------------------------
     virtual void
     on_rate_changed(sample_t rate) override { m_rate = rate; }
-    // this is called whenever Graph's sample rate changes
+    // this is called whenever Graph's sample rate changes  
 
     //-------------------------------------------------------------------------------------------------
     virtual void
@@ -76,16 +76,12 @@ public:
     // the main processing function
     //-------------------------------------------------------------------------------------------------
     {        
-        sample_t
-        *frequency  = inputs[Inputs::frequency][0],
-        *midi_in    = inputs[Inputs::midiInput][0],
-        *out        = outputs[Outputs::audioOutput][0];
+        auto frequency  = inputs[Inputs::frequency][0];
+        auto midi_in    = inputs[Inputs::midiInput][0];
+        auto out        = outputs[Outputs::audioOutput][0];
 
-        size_t
-        phs = m_phs;
-
-        const sample_t
-        rate = m_rate;
+        size_t phs = m_phs;
+        sample_t const rate = m_rate;
 
         for (vector_t f = 0; f < nframes; ++f) {
             phs += static_cast<size_t>(frequency[f]/rate * esz);

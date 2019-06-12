@@ -114,17 +114,14 @@ Socket::set_add(qreal add)
 WPN_EXAMINE QVariantList
 Socket::routing() const noexcept
 {
-    if (!m_connections.empty())
-        return m_connections[0]->routing();
-    return QVariantList();
+    return m_routing;
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_EXAMINE void
 Socket::set_routing(QVariantList r) noexcept
 {
-    if (!m_connections.empty())
-         m_connections[0]->set_routing(r);
+    m_routing = r;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -165,6 +162,7 @@ Socket::connected(Node const& n) const noexcept
         if (m_polarity == INPUT &&
             &connection->source()->parent_node() == &n)
             return true;
+
         else if (m_polarity == OUTPUT &&
             &connection->dest()->parent_node() == &n)
             return true;
@@ -214,7 +212,7 @@ Graph::connect(Socket& source, Socket& dest, Routing matrix)
              << "(socket:" << dest.name().append(")");
 
     for (nchannels_t n = 0; n < matrix.ncables(); ++n) {
-        qDebug() << "routing: channel" << QString::number(matrix[n][0])
+        qDebug() << "[GRAPH] ---- routing: channel" << QString::number(matrix[n][0])
                  << ">> channel" << QString::number(matrix[n][1]);
     }
 
@@ -234,7 +232,6 @@ Graph::connect(Node& source, Node& dest, Routing matrix)
 // ------------------------------------------------------------------------------------------------
 WPN_INCOMPLETE Connection&
 Graph::connect(Node& source, Socket& dest, Routing matrix)
-// might be midi bis
 // ------------------------------------------------------------------------------------------------
 {
     return connect(*source.default_socket(dest.type(), OUTPUT), dest, matrix);
@@ -243,7 +240,6 @@ Graph::connect(Node& source, Socket& dest, Routing matrix)
 // ------------------------------------------------------------------------------------------------
 WPN_INCOMPLETE Connection&
 Graph::connect(Socket& source, Node& dest, Routing matrix)
-// midi...
 // ------------------------------------------------------------------------------------------------
 {
     return connect(source, *dest.default_socket(INPUT), matrix);
@@ -253,7 +249,7 @@ Graph::connect(Socket& source, Node& dest, Routing matrix)
 WPN_EXAMINE void
 Graph::componentComplete()
 // Graph is complete, all connections have been set-up
-// we send signal to all registered Nodes to proceed to socket allocation
+// we send signal to all registered Nodes to proceed to socket/pool allocation
 // ------------------------------------------------------------------------------------------------
 {
     Graph::debug("component complete, allocating nodes i/o");
@@ -321,7 +317,7 @@ Connection::componentComplete() { Graph::add_connection(*this); }
 // examine: when Connection is explicitely assigned to a Socket
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE WPN_AUDIOTHREAD void
+WPN_AUDIOTHREAD void
 Connection::pull(vector_t nframes) noexcept
 // ------------------------------------------------------------------------------------------------
 {    
@@ -330,36 +326,35 @@ Connection::pull(vector_t nframes) noexcept
     if (!source.processed())
         source.process(nframes);
 
-    sample_t
-    **sbuf = m_source->buffer(),
-    **dbuf = m_dest->buffer(),
-      mul  = m_mul,
-      add  = m_add;
+    sample_t** sbuf = m_source->buffer();
+    sample_t** dbuf = m_dest->buffer();
 
-    if (m_muted) {
+    sample_t  mul  = m_mul, add  = m_add;
+    Routing routing = m_routing;
+
+    if (m_muted.load()) {
         for (nchannels_t c = 0; c < m_dest->nchannels(); ++c)
              memset(dbuf, 0, sizeof(sample_t)*nframes);
         return;
     }
 
-    if (m_routing.null())
-        for (nchannels_t c = 0; c < m_nchannels; ++c)
+    if (routing.null())
+    {
+        for (nchannels_t c = 0; c < m_nchannels; ++c) {
             for (vector_t f = 0; f < nframes; ++f) {
-                if (m_source->type() != Socket::Type::Midi_1_0) {
-                    auto v = sbuf[c][f] * mul + add;
-                     dbuf[c][f] += v;
-                }
+                if (m_source->type() != Socket::Type::Midi_1_0)
+                     dbuf[c][f] += sbuf[c][f] * mul + add;
                 else dbuf[c][f] = sbuf[c][f];
             }
-    else
+        }
+    }
+    else // routing non null
     {
-        for (nchannels_t r = 0; r < m_routing.ncables(); ++r) {
+        for (nchannels_t c = 0; c < routing.ncables(); ++c) {
             for (vector_t f = 0; f < nframes; ++f) {
-                if (m_source->type() != Socket::Type::Midi_1_0)  {
-                    dbuf[m_routing[r][0]][f] += sbuf[m_routing[r][1]][f] * m_mul + m_add;
-                } else {
-                    dbuf[m_routing[r][0]][f] = sbuf[m_routing[r][1]][f];
-                }
+                if (m_source->type() != Socket::Type::Midi_1_0)
+                      dbuf[routing[c][1]][f] += sbuf[routing[c][0]][f] * mul + add;
+                 else dbuf[routing[c][1]][f] = sbuf[routing[c][0]][f];
             }
         }
     }

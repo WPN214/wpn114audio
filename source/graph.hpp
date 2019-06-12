@@ -659,7 +659,6 @@ private:
     // --------------------------------------------------------------------------------------------
     {
         m_buffer = wpn114::allocate_buffer(m_nchannels, nframes);
-        assert(m_buffer);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -672,8 +671,14 @@ private:
     }
 
     // --------------------------------------------------------------------------------------------
-    void
-    add_connection(Connection& con) { m_connections.push_back(&con); }
+    WPN_INCOMPLETE void
+    add_connection(Connection& con)
+    // note: we have to clearly separate the default connection from the other ones
+    // the default connection is set from the parent-child structure within QML
+    // --------------------------------------------------------------------------------------------
+    {
+        m_connections.push_back(&con);
+    }
 
     // --------------------------------------------------------------------------------------------
     void
@@ -727,6 +732,10 @@ private:
     // --------------------------------------------------------------------------------------------
     std::atomic<qreal>
     m_value;
+
+    // --------------------------------------------------------------------------------------------
+    Routing
+    m_routing;
 };
 
 Q_DECLARE_METATYPE(Socket)
@@ -1153,7 +1162,6 @@ public:
     {
         allocate_sockets(properties.vector);
         allocate_pools(properties.vector);
-
         initialize(properties);
     }
 
