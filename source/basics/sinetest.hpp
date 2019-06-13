@@ -15,6 +15,11 @@ class Sinetest : public Node
     WPN_PORT (Port::Midi_1_0, Polarity::Input, midi_in, false, 1)
     WPN_PORT (Port::Audio, Polarity::Output, audio_out, true, 1)
 
+    static constexpr int
+    frequency = 0,
+    midi_in = 1,
+    audio_out = 0;
+
 
     //-------------------------------------------------------------------------------------------------
     static constexpr size_t
@@ -57,9 +62,9 @@ public:
     // the main processing function
     //-------------------------------------------------------------------------------------------------
     {        
-        auto frequency = inputs[0][0];
-        auto midi = inputs[1][0];
-        auto out = outputs[0][0];
+        auto frequency = inputs[Sinetest::frequency][0];
+        auto midi = inputs[Sinetest::midi_in][0];
+        auto out = outputs[Sinetest::audio_out][0];
 
         size_t phs = m_phs;
         sample_t const rate = m_rate;

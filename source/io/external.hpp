@@ -164,8 +164,10 @@ class External : public Node
 {
     Q_OBJECT
 
-    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_out, Polarity::Input, 0)
-    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_in, Polarity::Output, 0)
+    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_out, Polarity::Output, 0)
+    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_in, Polarity::Input, 0)
+    WPN_DECLARE_DEFAULT_MIDI_PORT   (midi_in, Polarity::Input, 0)
+    WPN_DECLARE_DEFAULT_MIDI_PORT   (midi_out, Polarity::Output, 0)
 
 public:
     //---------------------------------------------------------------------------------------------
@@ -282,6 +284,8 @@ public:
         // note: these are reverted compared to Graph's point of view
         m_audio_in.set_nchannels(m_out_audio_nchannels);
         m_audio_out.set_nchannels(m_in_audio_nchannels);
+        m_midi_in.set_nchannels(m_out_midi_nchannels);
+        m_midi_out.set_nchannels(m_in_midi_nchannels);
 
         Node::componentComplete();
 

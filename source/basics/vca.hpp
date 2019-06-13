@@ -7,6 +7,15 @@ class VCA : public Node
 {
     Q_OBJECT
 
+    WPN_DECLARE_DEFAULT_AUDIO_PORT(audio_in, Polarity::Input, 1)
+    WPN_DECLARE_DEFAULT_AUDIO_PORT(audio_out, Polarity::Output, 1)
+    WPN_DECLARE_AUDIO_PORT(gain, Polarity::Input, 1)
+
+    constexpr static int
+    audio_in    = 0,
+    audio_out   = 0,
+    gain        = 1;
+
 public:
 
     //-------------------------------------------------------------------------------------------------
@@ -22,9 +31,9 @@ public:
     // this Node will benefits from multichannel expansion if needed
     //-------------------------------------------------------------------------------------------------
     {
-        auto in     = inputs[0][0];
-        auto gain   = inputs[1][0];
-        auto out    = outputs[0][0];
+        auto in     = inputs[VCA::audio_in][0];
+        auto gain   = inputs[VCA::gain][0];
+        auto out    = outputs[VCA::audio_out][0];
 
         for (vector_t f = 0; f < nframes; ++f)
             out[f] = in[f] * gain[f];

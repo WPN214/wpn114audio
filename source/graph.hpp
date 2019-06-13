@@ -28,14 +28,14 @@
 #define WPN_DECLARE_DEFAULT_AUDIO_PORT(_name, _polarity, _nchannels) \
     WPN_PORT(Port::Audio, _polarity, _name, true, _nchannels)
 
-#define WPN_DECLARE_AUDIO_PORT(_name, _nchannels) \
-    WPN_PORT(Port::Audio, polarity(), _name, false, _nchannels)
+#define WPN_DECLARE_AUDIO_PORT(_name, _polarity, _nchannels) \
+    WPN_PORT(Port::Audio, _polarity, _name, false, _nchannels)
 
-#define WPN_DECLARE_DEFAULT_MIDI_PORT(_name, _nchannels) \
-    WPN_PORT(Port::Midi_1_0, polarity(), _name, true, _nchannels)
+#define WPN_DECLARE_DEFAULT_MIDI_PORT(_name, _polarity, _nchannels) \
+    WPN_PORT(Port::Midi_1_0, _polarity, _name, true, _nchannels)
 
-#define WPN_DECLARE_MIDI_PORT(_name, _nchannels) \
-    WPN_PORT(Port::Midi_1_0, polarity(), _name, false, _nchannels)
+#define WPN_DECLARE_MIDI_PORT(_name, _polarity, _nchannels) \
+    WPN_PORT(Port::Midi_1_0, _polarity, _name, false, _nchannels)
 
 #define wpnwrap(_v, _limit) if (_v >= _limit) _v -= _limit
 
