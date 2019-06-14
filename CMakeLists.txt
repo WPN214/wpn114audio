@@ -14,6 +14,7 @@ set(WPN114AUDIO_QML_SOURCES
     source/graph.hpp
     source/graph.cpp
     source/spatial.hpp
+    source/spatial.cpp
     source/io/external.hpp
     source/io/external.cpp
     source/basics/listener.hpp

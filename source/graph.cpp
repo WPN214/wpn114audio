@@ -259,6 +259,26 @@ Graph::run(Node& target) noexcept
     return nframes;
 }
 
+#include "spatial.hpp"
+
+// ------------------------------------------------------------------------------------------------
+Spatial*
+Node::spatial()
+// if qml requests access to spatial, we have to create it
+// ------------------------------------------------------------------------------------------------
+{
+    if (!m_spatial) {
+        qDebug() << m_name << "creating spatial attributes";
+
+        m_spatial = new Spatial;
+
+        // we make an implicit connection
+        m_subnodes.push_front(m_spatial);
+    }
+
+    return m_spatial;
+}
+
 // ------------------------------------------------------------------------------------------------
 // CONNECTION
 //-------------------------------------------------------------------------------------------------

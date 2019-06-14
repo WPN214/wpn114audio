@@ -1,5 +1,4 @@
-#ifndef QTWRAPPER2_HPP
-#define QTWRAPPER2_HPP
+#pragma once
 
 #include <QObject>
 #include <QQmlParserStatus>
@@ -13,7 +12,7 @@
 #include <cmath>
 
 #include <QtDebug>
-#include "spatial.hpp"
+//#include "spatial.hpp"
 
 // --------------------------------------------------------------------------------------------------
 // CONVENIENCE MACRO DEFINITIONS
@@ -562,7 +561,7 @@ public:
     pull_value(vector_t nframes) noexcept
     // --------------------------------------------------------------------------------------------
     {
-        sample_t v = m_value.load(std::memory_order_relaxed);
+        sample_t v = m_value;
 
         for (nchannels_t c = 0; c < m_nchannels; ++c)
             for (vector_t f = 0; f < nframes; ++f)
@@ -572,11 +571,13 @@ public:
     // --------------------------------------------------------------------------------------------
     void
     set_value(qreal value)
-    {
-        m_value.store(value, std::memory_order_relaxed);
-    }
     // an asynchronous write (from the Qt/GUI main thread)
     // with an explicit latched value
+    // note: it might be good to use qvariant instead, for lists
+    {
+        m_value = value;
+    }
+
 
     // --------------------------------------------------------------------------------------------
     bool
@@ -1018,6 +1019,8 @@ private:
     m_subnodes;
 };
 
+class Spatial;
+
 //=================================================================================================
 class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
 /*! \class Node
@@ -1043,7 +1046,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     */
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Spatial* space READ spatial)
+    Q_PROPERTY(Spatial* spatial READ spatial)
     /*!
      * \property Node::space
      * \brief unimplemented yet
@@ -1107,7 +1110,7 @@ public:
             return;
 
         for (auto& subnode : m_subnodes)
-             subnode->set_parent(this);
+             subnode->set_parent(this);       
 
         switch(m_dispatch)
         {
@@ -1125,12 +1128,12 @@ public:
         {
             // connect this Node default outputs to first subnode
             auto& front = *m_subnodes.front();
-            Graph::connect(*this, front.chainout());
+            Graph::connect(*this, front);
 
             // chain the following subnodes, until last is reached
             for (int n = 0; n < m_subnodes.count(); ++n) {
                 auto& source = m_subnodes[n]->chainout();
-                auto& dest = m_subnodes[n+1]->chainout();
+                auto& dest = *m_subnodes[n+1];
                 Graph::connect(source, dest);
             }
         }
@@ -1182,8 +1185,7 @@ public:
     set_name(QString name) { m_name = name; }
 
     // --------------------------------------------------------------------------------------------
-    Spatial*
-    spatial() { return &m_spatial; }
+    Spatial* spatial();
 
     // --------------------------------------------------------------------------------------------
     WPN_OK void
@@ -1289,7 +1291,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    Node&
+    virtual Node&
     chainout() noexcept
     // returns the last Node in the parent-children chain
     // this would be the Node producing the chain's final output
@@ -1453,7 +1455,7 @@ protected:
     m_output_pool = nullptr;
 
     // --------------------------------------------------------------------------------------------
-    Spatial
+    Spatial*
     m_spatial;
 
     // --------------------------------------------------------------------------------------------
@@ -1483,5 +1485,3 @@ protected:
     QString
     m_name = "UnnamedNode";
 };
-
-#endif // QTWRAPPER2_HPP

@@ -1,5 +1,6 @@
 #include "qml_plugin.hpp"
 #include <source/graph.hpp>
+#include <source/spatial.hpp>
 #include <source/io/external.hpp>
 #include <source/basics/sinetest.hpp>
 #include <source/basics/vca.hpp>
@@ -16,6 +17,12 @@ void qml_plugin::registerTypes(const char* uri)
 
     qmlRegisterUncreatableType<Node, 1>
     ("WPN114.Audio", 1, 1, "Node", "Uncreatable");
+
+    qmlRegisterUncreatableType<Spatial, 1>
+    ("WPN114.Audio", 1, 1, "Spatial", "Uncreatable");
+
+    qmlRegisterUncreatableType<SpatialProcessor, 1>
+    ("WPN114.Audio", 1, 1, "SpatialProcessor", "Uncreatable");
 
     qmlRegisterUncreatableType<Port, 1>
     ("WPN114.Audio", 1, 1, "Port", "Uncreatable");
@@ -41,6 +48,9 @@ void qml_plugin::registerTypes(const char* uri)
 
     qmlRegisterType<VCA, 1>
     ("WPN114.Audio", 1, 1, "VCA");
+
+    qmlRegisterType<StereoPanner, 1>
+    ("WPN114.Audio", 1, 1, "StereoPanner");
 
 //    qmlRegisterType<MidiTransposer, 1>
 //    ("WPN114.Audio", 1, 1, "MIDITransposer");
