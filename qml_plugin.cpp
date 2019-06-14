@@ -20,9 +20,6 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterUncreatableType<Port, 1>
     ("WPN114.Audio", 1, 1, "Port", "Uncreatable");
 
-    qmlRegisterUncreatableType<PortContainer, 1>
-    ("WPN114.Audio", 1, 1, "PortContainer", "Uncreatable");
-
     qmlRegisterUncreatableType<Routing, 1>
     ("WPN114.Audio", 1, 1, "Routing", "Uncreatable");
 

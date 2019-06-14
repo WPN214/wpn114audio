@@ -23,7 +23,7 @@ public:
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    rwrite(pool& inputs, pool& outputs, vector_t nframes) = 0;
+    rwrite(pool& inputs, pool& outputs, vector_t nframes);
 
     //---------------------------------------------------------------------------------------------
     virtual void
@@ -110,13 +110,19 @@ class JackExternal : public ExternalBase
 
     //---------------------------------------------------------------------------------------------
     void
-    register_ports(nchannels_t nchannels, const char* port_mask, const char* type,
-                   unsigned long polarity, std::vector<jack_port_t*>& target);
+    register_ports(nchannels_t nchannels,
+                   const char* port_mask,
+                   const char* type,
+                   unsigned long polarity,
+                   std::vector<jack_port_t*>& target);
 
     //---------------------------------------------------------------------------------------------
     void
-    connect_ports(std::vector<jack_port_t*>& ports, int target_polarity, const char *type,
-                  QStringList const& targets, Routing routing);
+    connect_ports(std::vector<jack_port_t*>& ports,
+                  unsigned long target_polarity,
+                  const char *type,
+                  QStringList const& targets,
+                  Routing routing);
 
 public:
 
@@ -150,7 +156,7 @@ public:
 
     //---------------------------------------------------------------------------------------------
     virtual void
-    on_name_changed(QString &name) override {}
+    on_name_changed(QString& name) override { Q_UNUSED(name) }
     // TODO: override the other ones...
 
 };
@@ -201,6 +207,9 @@ public:
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (int numMidiInputs READ n_midi_inputs WRITE setn_midi_inputs)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (int numMidiOutputs READ n_midi_outputs WRITE setn_midi_outputs)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariant outAudioTargets READ out_audio_targets WRITE set_out_audio_targets)
@@ -257,17 +266,13 @@ public:
     m_running   = false;
 
     //---------------------------------------------------------------------------------------------
-    QString
-    m_name = "wpn114audio-device";
-
-    //---------------------------------------------------------------------------------------------
     Backend
     m_backend_id = None;
 
 public:
 
     //-------------------------------------------------------------------------------------------------
-    External() {}
+    External() { m_name = "External"; }
 
     //-------------------------------------------------------------------------------------------------
     virtual ~External() override { delete m_backend; }
@@ -505,21 +510,6 @@ public:
     //---------------------------------------------------------------------------------------------
     {
         m_out_midi_routing = variant;
-    }
-
-    //---------------------------------------------------------------------------------------------
-    virtual QString
-    name() const override { return m_name; }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_name(QString name)
-    //---------------------------------------------------------------------------------------------
-    {
-        m_name = name;
-
-        if (m_backend)
-            m_backend->on_name_changed(m_name);
     }
 
     //---------------------------------------------------------------------------------------------

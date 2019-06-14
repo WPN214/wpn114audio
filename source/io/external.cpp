@@ -131,13 +131,10 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 //-------------------------------------------------------------------------------------------------
 void
 JackExternal::register_ports(
-    nchannels_t nchannels,
-    const char* port_mask,
-    const char* type,
-    unsigned long polarity,
-    std::vector<jack_port_t*>& target
-)
-//-------------------------------------------------------------------------------------------------
+        nchannels_t nchannels,
+        const char* port_mask,
+        const char* type, unsigned long polarity,
+        std::vector<jack_port_t*>& target)
 {
     for (nchannels_t n = 0; n < nchannels; ++n)
     {
@@ -153,8 +150,6 @@ JackExternal::register_ports(
         target.push_back(port);
     }
 }
-
-#define CSTR(_qstring) _qstring.toStdString().c_str()
 
 //-------------------------------------------------------------------------------------------------
 JackExternal::JackExternal(External* parent) : m_parent(*parent)
@@ -206,9 +201,10 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
 void
 JackExternal::connect_ports(
         std::vector<jack_port_t*>& ports,
-        int polarity, const char* type,
-        QStringList const& targets, Routing routing)
-//-------------------------------------------------------------------------------------------------
+        unsigned long polarity,
+        const char* type,
+        QStringList const& targets,
+        Routing routing)
 {
     if (targets.empty())
         return;

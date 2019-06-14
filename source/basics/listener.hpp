@@ -7,25 +7,15 @@ class Listener : public Node
 // listens to the audio/midi thread and report events/data to the qml thread
 //-------------------------------------------------------------------------------------------------
 {
-    WPN_ENUM_INPUTS (audioIn, midiIn)
+    Q_OBJECT
 
-    //-------------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE  (audioIn, Socket::Audio, 0)
-
-    //-------------------------------------------------------------------------------------------------
-    WPN_OUTPUT_DECLARE  (midiIn, Socket::Midi_1_0, 1)
-
-    //-------------------------------------------------------------------------------------------------
-    Q_PROPERTY  (qreal rate READ rate WRITE set_rate)
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT(audio_in, 0)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT(midi_in, 0)
 
 public:
 
     //-------------------------------------------------------------------------------------------------
-    Listener() {}
-
-    //-------------------------------------------------------------------------------------------------
-    virtual QString
-    name() const override { return "Listener"; }
+    Listener() { m_name = "Listener"; }
 
     //-------------------------------------------------------------------------------------------------
     Q_SIGNAL void
@@ -66,9 +56,6 @@ private:
 
     size_t
     m_phase = 0;
-
-    std::atomic<size_t>
-    m_n_samples { 2048 };
 
     sample_t
     m_rate = 0;

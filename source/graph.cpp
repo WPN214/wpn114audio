@@ -38,7 +38,7 @@ wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
 
 // ------------------------------------------------------------------------------------------------
 Port::Port(Node* parent, QString name, Type type, Polarity polarity,
-bool is_default, uint8_t nchannels) :
+           bool is_default, uint8_t nchannels) :
 // C++ constructor, called from the macro-declarations
 // we immediately store a pointer in parent Node's input/output Port vector
 // ------------------------------------------------------------------------------------------------
@@ -58,8 +58,8 @@ Port::assign(Port* p)
 // ------------------------------------------------------------------------------------------------
 {
     switch(p->polarity()) {
-    case Polarity::Input: Graph::connect(*this, *p); break;
-    case Polarity::Output: Graph::connect(*p, *this);
+        case Polarity::Input: Graph::connect(*this, *p); break;
+        case Polarity::Output: Graph::connect(*p, *this);
     }
 }
 
@@ -73,7 +73,7 @@ Port::set_nchannels(nchannels_t nchannels)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_OK void
+void
 Port::set_mul(qreal mul)
 // this overrides the mul for all connections based on this Port
 // ------------------------------------------------------------------------------------------------
@@ -84,7 +84,7 @@ Port::set_mul(qreal mul)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_OK void
+void
 Port::set_add(qreal add)
 // this overrides the add for all connections based on this Port
 // ------------------------------------------------------------------------------------------------
@@ -109,7 +109,7 @@ Port::set_routing(QVariantList r) noexcept
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_OK void
+void
 Port::set_muted(bool muted)
 // mutes all connections, zero output
 // ------------------------------------------------------------------------------------------------
@@ -123,8 +123,7 @@ WPN_CLEANUP bool
 Port::connected(Port const& s) const noexcept
 // ------------------------------------------------------------------------------------------------
 {
-    for (const auto& connection : m_connections)
-    {
+    for (const auto& connection : m_connections) {
          if (m_polarity == Polarity::Input &&
              connection->source() == &s)
              return true;
@@ -141,12 +140,10 @@ WPN_CLEANUP bool
 Port::connected(Node const& n) const noexcept
 // ------------------------------------------------------------------------------------------------
 {
-    for (const auto& connection: m_connections)
-    {
+    for (const auto& connection: m_connections) {
         if (m_polarity == Polarity::Input &&
             &connection->source()->parent_node() == &n)
             return true;
-
         else if (m_polarity == Polarity::Output &&
             &connection->dest()->parent_node() == &n)
             return true;
@@ -265,21 +262,16 @@ Graph::run(Node& target) noexcept
 // ------------------------------------------------------------------------------------------------
 // CONNECTION
 //-------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE
 Connection::Connection(Port& source, Port& dest, Routing matrix) :
     m_source   (&source)
   , m_dest     (&dest)
   , m_routing  (matrix)
 {
-    m_nchannels = std::min(source.nchannels(), dest.nchannels());
-
-    m_mul = source.mul() * dest.mul();
-    m_add = source.add() + dest.add();
+    componentComplete();
 }
 
-
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE void
+void
 Connection::setTarget(const QQmlProperty& target)
 // qml property binding, e. g.:
 // Connection on 'Port' { level: db(-12); routing: [0, 1] }
@@ -293,12 +285,21 @@ Connection::setTarget(const QQmlProperty& target)
         case Polarity::Output: m_source = port; break;
         case Polarity::Input: m_dest = port;
     }
+
+    componentComplete();
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE void
-Connection::componentComplete() { Graph::add_connection(*this); }
-// examine: when Connection is explicitely assigned to a Port
+void
+Connection::componentComplete()
+{
+    m_nchannels = std::min(m_source->nchannels(), m_dest->nchannels());
+    m_mul = m_source->mul() * m_dest->mul();
+    m_add = m_source->add() + m_dest->add();
+    m_muted = m_source->muted() || m_dest->muted();
+
+    Graph::add_connection(*this);
+}
 
 // ------------------------------------------------------------------------------------------------
 WPN_AUDIOTHREAD void

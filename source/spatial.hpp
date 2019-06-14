@@ -20,6 +20,17 @@ class Spatial : public QObject
 
 public:
 
+    enum Alignment
+    {
+        Left        = 0,
+        Centered    = 1,
+        Right       = 2,
+        Top         = 3,
+        Bottom      = 4
+    };
+
+    Q_ENUM(Alignment)
+
     Spatial()
     {
 

@@ -5,43 +5,43 @@
 class Sinetest : public Node
 /*!
 * \class Sinetest
-* \brief cheap sinusoidal generator
+* \brief cheap sinusoidal generator (no interpolation)
 */
 //=================================================================================================
 {
     Q_OBJECT
 
-    WPN_PORT (Port::Audio, Polarity::Input, frequency, true, 1)
-    WPN_PORT (Port::Midi_1_0, Polarity::Input, midi_in, false, 1)
-    WPN_PORT (Port::Audio, Polarity::Output, audio_out, true, 1)
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT     (frequency, 1)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT      (midi_in, 1)
+    WPN_DECLARE_DEFAULT_MIDI_OUTPUT     (audio_out, 1)
 
-    static constexpr int
-    frequency = 0,
-    midi_in = 1,
-    audio_out = 0;
+    enum inputs     { frequency = 0, midi_in = 1 };
+    enum outputs    { audio_out = 0 };
 
-
-    //-------------------------------------------------------------------------------------------------
     static constexpr size_t
     esz = 16384;
 
 public:
 
     //-------------------------------------------------------------------------------------------------
-    Sinetest() { m_dispatch = Dispatch::Values::Downwards; }
-    // this would be the default dipsatch behaviour withinin Sinetest QML scope
+    Sinetest()
+    // set default name and dispatch behaviour (if needed)
+    //-------------------------------------------------------------------------------------------------
+    {
+        m_name      = "Sinetest";
+        m_dispatch  = Dispatch::Values::Downwards;
+        // this would be the default dipsatch behaviour withinin Sinetest QML scope
+    }
 
     //-------------------------------------------------------------------------------------------------
     virtual
     ~Sinetest() override { delete[] m_env; }
 
     //-------------------------------------------------------------------------------------------------
-    virtual QString
-    name() const override { return "Sinetest"; }
-
-    //-------------------------------------------------------------------------------------------------
     virtual void
     initialize(const Graph::properties& properties) override
+    // initialization method, all additional allocation should be done here
+    // store sample rate
     //-------------------------------------------------------------------------------------------------
     {
         m_rate = properties.rate;
@@ -62,19 +62,23 @@ public:
     // the main processing function
     //-------------------------------------------------------------------------------------------------
     {        
-        auto frequency = inputs[Sinetest::frequency][0];
-        auto midi = inputs[Sinetest::midi_in][0];
-        auto out = outputs[Sinetest::audio_out][0];
+        // fetch in/out buffers (first channel, as they only have one anyway)
+        auto frequency  = inputs[Sinetest::frequency][0];
+        auto midi       = inputs[Sinetest::midi_in][0]; // todo
+        auto out        = outputs[Sinetest::audio_out][0];
 
+        // put member attributes on the stack
         size_t phs = m_phs;
         sample_t const rate = m_rate;
 
+        // process each frame
         for (vector_t f = 0; f < nframes; ++f) {
             phs += static_cast<size_t>(frequency[f]/rate * esz);
             wpnwrap(phs, esz);
             out[f] = m_env[phs];
         }
 
+        // update member attribute
         m_phs = phs;
     }
 

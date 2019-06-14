@@ -7,23 +7,17 @@ class VCA : public Node
 {
     Q_OBJECT
 
-    WPN_DECLARE_DEFAULT_AUDIO_PORT(audio_in, Polarity::Input, 1)
-    WPN_DECLARE_DEFAULT_AUDIO_PORT(audio_out, Polarity::Output, 1)
-    WPN_DECLARE_AUDIO_PORT(gain, Polarity::Input, 1)
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT     (audio_in, 0)
+    WPN_DECLARE_AUDIO_INPUT             (gain, 1)
+    WPN_DECLARE_DEFAULT_AUDIO_OUTPUT    (audio_out, 0)
 
-    constexpr static int
-    audio_in    = 0,
-    audio_out   = 0,
-    gain        = 1;
+    enum inputs     { audio_in = 0, gain = 1 };
+    enum outputs    { audio_out = 0 };
 
 public:
 
     //-------------------------------------------------------------------------------------------------
-    VCA() {}
-
-    //-------------------------------------------------------------------------------------------------
-    virtual QString
-    name() const override { return "VCA"; }
+    VCA() { m_name = "VCA"; }
 
     //-------------------------------------------------------------------------------------------------
     virtual void
@@ -38,7 +32,4 @@ public:
         for (vector_t f = 0; f < nframes; ++f)
             out[f] = in[f] * gain[f];
     }
-
-private:
-
 };

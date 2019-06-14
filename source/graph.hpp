@@ -13,7 +13,7 @@
 #include <cmath>
 
 #include <QtDebug>
-#include <source/spatial.hpp>
+#include "spatial.hpp"
 
 // --------------------------------------------------------------------------------------------------
 // CONVENIENCE MACRO DEFINITIONS
@@ -25,20 +25,46 @@
     public: Port* get_##_name() { return &m_##_name; } \
     void set_##_name(Port* p) { m_##_name.assign(p); }
 
+// ------------------------------------------------------------------------------------------------
 #define WPN_DECLARE_DEFAULT_AUDIO_PORT(_name, _polarity, _nchannels) \
     WPN_PORT(Port::Audio, _polarity, _name, true, _nchannels)
 
 #define WPN_DECLARE_AUDIO_PORT(_name, _polarity, _nchannels) \
     WPN_PORT(Port::Audio, _polarity, _name, false, _nchannels)
 
+// ------------------------------------------------------------------------------------------------
 #define WPN_DECLARE_DEFAULT_MIDI_PORT(_name, _polarity, _nchannels) \
     WPN_PORT(Port::Midi_1_0, _polarity, _name, true, _nchannels)
 
 #define WPN_DECLARE_MIDI_PORT(_name, _polarity, _nchannels) \
     WPN_PORT(Port::Midi_1_0, _polarity, _name, false, _nchannels)
 
-#define wpnwrap(_v, _limit) if (_v >= _limit) _v -= _limit
+// ------------------------------------------------------------------------------------------------
+#define WPN_DECLARE_DEFAULT_AUDIO_INPUT(_name, _nchannels) \
+    WPN_DECLARE_DEFAULT_AUDIO_PORT(_name, Polarity::Input, _nchannels)
 
+#define WPN_DECLARE_DEFAULT_AUDIO_OUTPUT(_name, _nchannels) \
+    WPN_DECLARE_DEFAULT_AUDIO_PORT(_name, Polarity::Output, _nchannels)
+
+// ------------------------------------------------------------------------------------------------
+#define WPN_DECLARE_DEFAULT_MIDI_INPUT(_name, _nchannels) \
+    WPN_DECLARE_DEFAULT_MIDI_PORT(_name, Polarity::Input, _nchannels)
+
+#define WPN_DECLARE_DEFAULT_MIDI_OUTPUT(_name, _nchannels) \
+    WPN_DECLARE_DEFAULT_MIDI_PORT(_name, Polarity::Output, _nchannels)
+
+// ------------------------------------------------------------------------------------------------
+#define WPN_DECLARE_AUDIO_INPUT(_name, _nchannels) \
+    WPN_DECLARE_AUDIO_PORT(_name, Polarity::Input, _nchannels)
+
+#define WPN_DECLARE_AUDIO_OUTPUT(_name, _nchannels) \
+    WPN_DECLARE_AUDIO_PORT(_name, Polarity::Output, _nchannels)
+
+// ------------------------------------------------------------------------------------------------
+#define wpnwrap(_v, _limit) if (_v >= _limit) _v -= _limit
+#define CSTR(_qstring) _qstring.toStdString().c_str()
+
+// ------------------------------------------------------------------------------------------------
 #define WPN_TODO
 #define WPN_EXAMINE
 #define WPN_OK
@@ -83,13 +109,6 @@ cpsmidi(sample_t f);
 
 //-------------------------------------------------------------------------------------------------
 class Port;
-
-class PortContainer : public QObject
-{
-    Q_OBJECT
-
-};
-
 //=================================================================================================
 class Dispatch : public QObject
 //=================================================================================================
@@ -1007,6 +1026,8 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
 {
     Q_OBJECT
 
+    Q_PROPERTY(QString name READ name WRITE set_name)
+
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY(bool muted MEMBER m_muted WRITE set_muted)
     /*!
@@ -1022,7 +1043,7 @@ class Node : public QObject, public QQmlParserStatus, public QQmlPropertyValueSo
     */
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY(Spatial space MEMBER m_spatial)
+    Q_PROPERTY(Spatial* space READ spatial)
     /*!
      * \property Node::space
      * \brief unimplemented yet
@@ -1074,6 +1095,7 @@ public:
     classBegin() override {}
     // unused interface override
 
+    // --------------------------------------------------------------------------------------------
     virtual void
     componentComplete() override
     // parses the local graph and builds appropriate connections between this Node
@@ -1140,7 +1162,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     virtual void
-    initialize(Graph::properties const& ) {}
+    initialize(Graph::properties const& properties ) { Q_UNUSED(properties) }
     // this is called when the graph and allocation are complete
 
     virtual void
@@ -1153,8 +1175,15 @@ public:
     // this can be overriden and will be called each time the sample rate changes
 
     // --------------------------------------------------------------------------------------------
-    virtual QString
-    name() const { return "UnnamedNode"; }
+    QString
+    name() const { return m_name; }
+
+    void
+    set_name(QString name) { m_name = name; }
+
+    // --------------------------------------------------------------------------------------------
+    Spatial*
+    spatial() { return &m_spatial; }
 
     // --------------------------------------------------------------------------------------------
     WPN_OK void
@@ -1383,17 +1412,11 @@ protected:
         m_input_pool   = new sample_t**[m_input_ports.size()];
         m_output_pool  = new sample_t**[m_output_ports.size()];
 
-        nchannels_t n = 0;
-        for (auto& port : m_input_ports) {
-            m_input_pool[n] = port->buffer();
-            n++;
-        }
+        for (nchannels_t n = 0; n < m_input_ports.size(); ++n)
+             m_input_pool[n] = m_input_ports[n]->buffer();
 
-        n = 0;
-        for (auto& port : m_output_ports) {
-            m_output_pool[n] = port->buffer();
-            n++;
-        }
+        for (nchannels_t n = 0; n < m_output_ports.size(); ++n)
+             m_output_pool[n] = m_output_ports[n]->buffer();
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1455,6 +1478,10 @@ protected:
     // --------------------------------------------------------------------------------------------
     Node*
     m_parent = nullptr;
+
+    // --------------------------------------------------------------------------------------------
+    QString
+    m_name = "UnnamedNode";
 };
 
 #endif // QTWRAPPER2_HPP

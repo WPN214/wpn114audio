@@ -14,7 +14,6 @@ set(WPN114AUDIO_QML_SOURCES
     source/graph.hpp
     source/graph.cpp
     source/spatial.hpp
-    source/rbuffer.hpp
     source/io/external.hpp
     source/io/external.cpp
     source/basics/listener.hpp
@@ -37,4 +36,4 @@ endif()
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${WPN114AUDIO_QML_INSTALL_PATH})
 install(FILES qml/audio.qmltypes qml/qmldir DESTINATION ${WPN114AUDIO_QML_INSTALL_PATH})
-install(FILES source/graph.hpp DESTINATION ${WPN114AUDIO_QML_INSTALL_PATH}/include)
+install(FILES source/graph.hpp source/spatial.hpp DESTINATION ${WPN114AUDIO_QML_INSTALL_PATH}/include/wpn114audio)
