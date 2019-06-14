@@ -1,0 +1,528 @@
+#pragma once
+
+#include <source/graph.hpp>
+#include <jack/jack.h>
+
+//---------------------------------------------------------------------------------------------
+class ExternalBase
+//---------------------------------------------------------------------------------------------
+{
+
+public:
+    //---------------------------------------------------------------------------------------------
+    virtual
+    ~ExternalBase() {}
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    run() = 0;
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    stop() = 0;
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes);
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_audio_inputs_changed(uint8_t n_inputs) { Q_UNUSED(n_inputs) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_audio_outputs_changed(uint8_t n_outputs) { Q_UNUSED(n_outputs) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_midi_inputs_changed(uint8_t n_inputs) { Q_UNUSED(n_inputs) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_midi_outputs_changed(uint8_t n_outputs) { Q_UNUSED(n_outputs) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_name_changed(QString& name) { Q_UNUSED(name) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_input_midi_targets_changed(QStringList& targets, Routing routing)
+    { Q_UNUSED(targets) Q_UNUSED(routing) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_output_midi_targets_changed(QStringList& targets, Routing routing)
+    { Q_UNUSED(targets) Q_UNUSED(routing) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_input_audio_targets_changed(QStringList& targets, Routing routing)
+    { Q_UNUSED(targets) Q_UNUSED(routing) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_output_audio_targets_changed(QStringList& targets, Routing routing)
+    { Q_UNUSED(targets) Q_UNUSED(routing) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_sample_rate_changed(sample_t rate) { Q_UNUSED(rate) }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_io_vector_changed(uint16_t nframes) { Q_UNUSED(nframes) }
+};
+
+
+class External;
+
+//---------------------------------------------------------------------------------------------
+class JackExternal : public ExternalBase
+//---------------------------------------------------------------------------------------------
+{
+    //---------------------------------------------------------------------------------------------
+    External&
+    m_parent;
+
+    //---------------------------------------------------------------------------------------------
+    jack_client_t*
+    m_client = nullptr;
+
+    //---------------------------------------------------------------------------------------------
+    std::vector<jack_port_t*>
+    m_audio_inputs,
+    m_audio_outputs,
+    m_midi_inputs,
+    m_midi_outputs;
+
+    //---------------------------------------------------------------------------------------------
+    static int
+    on_jack_sample_rate_changed(jack_nframes_t nframes, void* udata);
+
+    //---------------------------------------------------------------------------------------------
+    static int
+    on_jack_buffer_size_changed(jack_nframes_t nframes, void* udata);
+
+    //---------------------------------------------------------------------------------------------
+    static int
+    jack_process_callback(jack_nframes_t nframes, void* udata);
+
+    //---------------------------------------------------------------------------------------------
+    void
+    register_ports(nchannels_t nchannels,
+                   const char* port_mask,
+                   const char* type,
+                   unsigned long polarity,
+                   std::vector<jack_port_t*>& target);
+
+    //---------------------------------------------------------------------------------------------
+    void
+    connect_ports(std::vector<jack_port_t*>& ports,
+                  unsigned long target_polarity,
+                  const char *type,
+                  QStringList const& targets,
+                  Routing routing);
+
+public:
+
+    //---------------------------------------------------------------------------------------------
+    JackExternal(External* parent);
+
+    //---------------------------------------------------------------------------------------------
+    virtual ~JackExternal() override
+    //---------------------------------------------------------------------------------------------
+    {
+        jack_deactivate(m_client);
+        jack_client_close(m_client);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    External&
+    parent() { return m_parent; }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    run() override;
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    stop() override { jack_deactivate(m_client); }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool&, pool&, vector_t) override {}
+    // nothing to be done here
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_name_changed(QString& name) override { Q_UNUSED(name) }
+    // TODO: override the other ones...
+
+};
+
+//=================================================================================================
+class External : public Node
+// this is a generic Node wrapper for the external backends
+// it embeds an AbstrackBackend object
+// and will send it commands and notifications whenever a property changes
+//=================================================================================================
+{
+    Q_OBJECT
+
+    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_out, Polarity::Output, 0)
+    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_in, Polarity::Input, 0)
+    WPN_DECLARE_DEFAULT_MIDI_PORT   (midi_in, Polarity::Input, 0)
+    WPN_DECLARE_DEFAULT_MIDI_PORT   (midi_out, Polarity::Output, 0)
+
+public:
+    //---------------------------------------------------------------------------------------------
+    enum Backend
+    //---------------------------------------------------------------------------------------------
+    {
+        None         = 0,
+        Alsa         = 1,
+        Jack         = 2,
+        PulseAudio   = 3,
+        CoreAudio    = 4,
+        VSTHost      = 5
+    };
+
+    Q_ENUM (Backend)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (Backend backend READ backend WRITE set_backend)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QString name READ name WRITE set_name)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (bool running READ running WRITE set_running)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (int numAudioInputs READ n_audio_inputs WRITE setn_audio_inputs)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (int numAudioOutputs READ n_audio_outputs WRITE setn_audio_outputs)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (int numMidiInputs READ n_midi_inputs WRITE setn_midi_inputs)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (int numMidiOutputs READ n_midi_outputs WRITE setn_midi_outputs)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariant outAudioTargets READ out_audio_targets WRITE set_out_audio_targets)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariant inAudioTargets READ in_audio_targets WRITE set_in_audio_targets)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariant outMidiTargets READ out_midi_targets WRITE set_out_midi_targets)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariant inMidiTargets READ in_midi_targets WRITE set_in_midi_targets)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariantList outAudioRouting READ out_audio_routing WRITE set_out_audio_routing)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariantList inAudioRouting READ in_audio_routing WRITE set_in_audio_routing)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariantList outMidiRouting READ out_midi_routing WRITE set_out_midi_routing)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariantList inMidiRouting READ in_midi_routing WRITE set_in_midi_routing)
+
+    //---------------------------------------------------------------------------------------------
+    QStringList
+    m_in_audio_targets,
+    m_out_audio_targets,
+    m_in_midi_targets,
+    m_out_midi_targets;
+
+    //---------------------------------------------------------------------------------------------
+    Routing
+    m_out_audio_routing,
+    m_out_midi_routing,
+    m_in_audio_routing,
+    m_in_midi_routing;
+
+    //---------------------------------------------------------------------------------------------
+    uint8_t
+    m_out_audio_nchannels   = 2,
+    m_out_midi_nchannels    = 0,
+    m_in_audio_nchannels    = 0,
+    m_in_midi_nchannels     = 0;
+
+    //---------------------------------------------------------------------------------------------
+    ExternalBase*
+    m_backend = nullptr;
+
+    //---------------------------------------------------------------------------------------------
+    bool
+    m_complete  = false,
+    m_running   = false;
+
+    //---------------------------------------------------------------------------------------------
+    Backend
+    m_backend_id = None;
+
+public:
+
+    //-------------------------------------------------------------------------------------------------
+    External() { m_name = "External"; }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual ~External() override { delete m_backend; }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    classBegin() override {}
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override
+    //-------------------------------------------------------------------------------------------------
+    {
+        // note: these are reverted compared to Graph's point of view
+        m_audio_in.set_nchannels(m_out_audio_nchannels);
+        m_audio_out.set_nchannels(m_in_audio_nchannels);
+        m_midi_in.set_nchannels(m_out_midi_nchannels);
+        m_midi_out.set_nchannels(m_in_midi_nchannels);
+
+        Node::componentComplete();
+
+        m_complete = true;
+        m_backend = new JackExternal(this);
+
+        if (m_running)
+            m_backend->run();
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    Q_INVOKABLE void
+    run()
+    //-------------------------------------------------------------------------------------------------
+    {
+        if (m_complete)
+            m_backend->run();
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    Q_INVOKABLE void
+    stop()
+    //-------------------------------------------------------------------------------------------------
+    {
+        if (m_running & m_complete)
+            m_backend->stop();
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool&, pool&, vector_t) override {}
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    on_rate_changed(sample_t rate) override { m_backend->on_sample_rate_changed(rate); }
+
+    //-------------------------------------------------------------------------------------------------
+    Backend
+    backend() const { return m_backend_id; }
+
+    //-------------------------------------------------------------------------------------------------
+    void
+    set_backend(Backend backend)
+    //-------------------------------------------------------------------------------------------------
+    {
+        if (!m_complete)
+            return;
+
+        if (m_backend)
+            delete m_backend;
+
+        switch(backend)
+        {
+        case Jack:
+        {
+            m_backend = new JackExternal(this);
+
+            if (m_running)
+                m_backend->run();
+        }
+        }
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    uint8_t
+    n_audio_inputs() const { return m_in_audio_nchannels; }
+
+    void
+    setn_audio_inputs(uint8_t nchannels)
+    {
+        m_in_audio_nchannels = nchannels;
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    uint8_t
+    n_audio_outputs() const { return m_out_audio_nchannels; }
+
+    void
+    setn_audio_outputs(uint8_t nchannels)
+    {
+        m_out_audio_nchannels = nchannels;
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    uint8_t
+    n_midi_inputs() const { return m_in_midi_nchannels; }
+
+    void
+    setn_midi_inputs(uint8_t nchannels)
+    {
+        m_in_midi_nchannels = nchannels;
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    uint8_t
+    n_midi_outputs() const { return m_out_midi_nchannels; }
+
+    void
+    setn_midi_outputs(uint8_t nchannels)
+    {
+        m_out_midi_nchannels = nchannels;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    QVariant
+    in_audio_targets() const { return m_in_audio_targets; }
+
+    QStringList const&
+    in_audio_targets_list() const { return m_in_audio_targets; }
+    // TODO:
+    // not sure q_properties accept template functions as READ/WRITE targets
+    // this is really annoying...
+
+    //---------------------------------------------------------------------------------------------
+    QVariant
+    out_audio_targets() const { return m_out_audio_targets; }
+
+    QStringList const&
+    out_audio_targets_list() const { return m_out_audio_targets; }
+
+    //---------------------------------------------------------------------------------------------
+    QVariant
+    in_midi_targets() const { return m_in_midi_targets; }
+
+    QStringList const&
+    in_midi_targets_list() const { return m_in_midi_targets; }
+
+    //---------------------------------------------------------------------------------------------
+    QVariant
+    out_midi_targets() const { return m_out_midi_targets; }
+
+    QStringList const&
+    out_midi_targets_list() const { return m_out_midi_targets; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_in_audio_targets(QVariant variant)
+    //---------------------------------------------------------------------------------------------
+    {
+        auto list = variant.value<QStringList>();
+
+        if (m_in_audio_targets != list) {
+            m_in_audio_targets = list;
+        }
+
+        if (m_complete)
+            m_backend->on_input_audio_targets_changed(m_in_audio_targets, {});
+    }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_out_audio_targets(QVariant variant)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_out_audio_targets = variant.value<QStringList>();
+    }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_in_midi_targets(QVariant variant)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_in_midi_targets = variant.value<QStringList>();
+    }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_out_midi_targets(QVariant variant)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_out_midi_targets = variant.value<QStringList>();
+    }
+
+    //---------------------------------------------------------------------------------------------
+    QVariantList
+    in_audio_routing() const    { return m_in_audio_routing; }
+
+    //---------------------------------------------------------------------------------------------
+    QVariantList
+    out_audio_routing() const   { return m_out_audio_routing; }
+
+    //---------------------------------------------------------------------------------------------
+    QVariantList
+    in_midi_routing() const     { return m_in_midi_routing; }
+
+    //---------------------------------------------------------------------------------------------
+    QVariantList
+    out_midi_routing() const    { return m_out_midi_routing; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_in_audio_routing(QVariantList variant)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_in_audio_routing = variant;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_out_audio_routing(QVariantList variant)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_out_audio_routing = variant;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_in_midi_routing(QVariantList variant)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_in_midi_routing = variant;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_out_midi_routing(QVariantList variant)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_out_midi_routing = variant;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    bool
+    running() const { return m_running; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_running(bool running)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_running = running;
+    }
+};
+
+
