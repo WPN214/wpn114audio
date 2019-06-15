@@ -47,7 +47,8 @@ Port::Port(Node* parent, QString name, Type type, Polarity polarity,
     m_polarity    (polarity),
     m_type        (type),
     m_nchannels   (nchannels),
-    m_value       (0)
+    m_value       (0),
+    m_default     (is_default)
 {
     parent->register_port(*this);
 }
@@ -331,11 +332,22 @@ Connection::pull(vector_t nframes) noexcept
     if (!source.processed())
         source.process(nframes);
 
-    sample_t** sbuf = m_source->buffer();
-    sample_t** dbuf = m_dest->buffer();
+    if (m_source->type() == Port::Midi_1_0)
+    {
+        if(m_muted.load())
+           return;
 
-    sample_t  mul  = m_mul, add  = m_add;
-    Routing routing = m_routing;
+        auto sbuf = m_source->buffer<midibuffer_t>();
+        auto dbuf = m_dest->buffer<midibuffer_t>();
+
+        // move events to dest buffer
+        // TODO: forbid reallocation
+        dbuf.insert(dbuf.end(), sbuf.begin(), sbuf.end());
+        sbuf.clear();
+        return;
+    }
+
+    auto dbuf = m_dest->buffer<sample_t**>();
 
     if (m_muted.load()) {
         for (nchannels_t c = 0; c < m_dest->nchannels(); ++c)
@@ -343,24 +355,16 @@ Connection::pull(vector_t nframes) noexcept
         return;
     }
 
+    auto sbuf = m_source->buffer<sample_t**>();
+    sample_t mul = m_mul, add = m_add;
+    Routing routing = m_routing;
+
     if (routing.null())
-    {
-        for (nchannels_t c = 0; c < m_nchannels; ++c) {
-            for (vector_t f = 0; f < nframes; ++f) {
-                if (m_source->type() != Port::Type::Midi_1_0)
-                     dbuf[c][f] += sbuf[c][f] * mul + add;
-                else dbuf[c][f] = sbuf[c][f];
-            }
-        }
-    }
-    else // routing non null
-    {
-        for (nchannels_t c = 0; c < routing.ncables(); ++c) {
-            for (vector_t f = 0; f < nframes; ++f) {
-                if (m_source->type() != Port::Type::Midi_1_0)
-                      dbuf[routing[c][1]][f] += sbuf[routing[c][0]][f] * mul + add;
-                 else dbuf[routing[c][1]][f] = sbuf[routing[c][0]][f];
-            }
-        }
-    }
+        for (nchannels_t c = 0; c < m_nchannels; ++c)
+            for (vector_t f = 0; f < nframes; ++f)
+                dbuf[c][f] += sbuf[c][f] * mul + add;
+    else
+        for (nchannels_t c = 0; c < routing.ncables(); ++c)
+            for (vector_t f = 0; f < nframes; ++f)
+                dbuf[routing[c][1]][f] += sbuf[routing[c][0]][f] * mul + add;
 }

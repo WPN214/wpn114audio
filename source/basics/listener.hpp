@@ -9,8 +9,8 @@ class Listener : public Node
 {
     Q_OBJECT
 
-    WPN_DECLARE_DEFAULT_AUDIO_INPUT(audio_in, 0)
-    WPN_DECLARE_DEFAULT_MIDI_INPUT(midi_in, 0)
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT     (audio_in, 0)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT      (midi_in, 0)
 
 public:
 
@@ -47,10 +47,7 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     virtual void
-    on_rate_changed(sample_t rate) override
-    {
-        m_rate = rate;
-    }
+    on_rate_changed(sample_t rate) override { m_rate = rate; }
 
 private:
 

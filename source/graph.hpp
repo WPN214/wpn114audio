@@ -78,11 +78,33 @@
 enum class Polarity { Output = 0, Input = 1 };
 
 using sample_t      = qreal;
-using pool          = sample_t***;
 using nchannels_t   = uint8_t;
 using byte_t        = uint8_t;
 using vector_t      = uint16_t;
 using nframes_t     = uint32_t;
+
+//=================================================================================================
+WPN_INCOMPLETE
+struct midi_t
+// TODO: properly
+//=================================================================================================
+{
+    byte_t frame = 0;
+    byte_t status = 0x0;
+    byte_t b1 = 0x0;
+    byte_t b2 = 0x0;
+};
+
+using midibuffer_t = std::vector<midi_t>;
+using audiobuffer_t = sample_t**;
+
+//=================================================================================================
+struct pool
+//=================================================================================================
+{
+    std::vector<audiobuffer_t> audio;
+    std::vector<midibuffer_t> midi;
+};
 
 class Connection;
 class Node;
@@ -194,31 +216,7 @@ private:
 
 Q_DECLARE_METATYPE(Routing)
 
-//=================================================================================================
-WPN_INCOMPLETE
-struct midi_t
-// TODO: properly
-//=================================================================================================
-{
-    // we pad the last 3/4 bytes with zeroes
-    // except if we're processing floats
-    byte_t status = 0x0;
-    byte_t b1 = 0x0;
-    byte_t b2 = 0x0;
 
-    midi_t(sample_t sample)
-    {
-        memcpy(this, &sample, 3);
-    }
-
-    operator
-    sample_t() const
-    {
-        sample_t sample = 0;
-        memcpy(&sample, this, 3);
-        return sample;
-    }
-};
 
 //=================================================================================================
 class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
@@ -491,20 +489,20 @@ public:
         Midi_1_0,
         // status byte + 2 other index/value bytes
 
-        Integer,
-        // a control integer value
+//        Integer,
+//        // a control integer value
 
-        FloatingPoint,
-        // a control floating point value
+//        FloatingPoint,
+//        // a control floating point value
 
-        Cv,
-        // -5.0 to 5.0 control voltage values
+//        Cv,
+//        // -5.0 to 5.0 control voltage values
 
-        Gate,
-        // a 0-1 latched value
+//        Gate,
+//        // a 0-1 latched value
 
-        Trigger
-        // a single pulse (1.f)
+//        Trigger
+//        // a single pulse (1.f)
     };
 
     Q_ENUM (Type)
@@ -526,7 +524,8 @@ public:
       , m_nchannels (cp.m_nchannels)
       , m_type      (cp.m_type)
       , m_name      (cp.m_name)
-      , m_parent    (cp.m_parent) {}
+      , m_parent    (cp.m_parent)
+      , m_default   (cp.m_default) {}
 
     // --------------------------------------------------------------------------------------------
     Port&
@@ -540,12 +539,17 @@ public:
         m_parent     = cp.m_parent;
         m_type       = cp.m_type;
         m_name       = cp.m_name;
+        m_default    = cp.m_default;
 
         return *this;
     }
 
     // --------------------------------------------------------------------------------------------
-    ~Port() { free(m_buffer); }
+    ~Port()
+    {
+        if (m_type == Port::Audio)
+            delete[] m_buffer.audio;
+    }
 
     // --------------------------------------------------------------------------------------------
     void
@@ -565,7 +569,7 @@ public:
 
         for (nchannels_t c = 0; c < m_nchannels; ++c)
             for (vector_t f = 0; f < nframes; ++f)
-                 m_buffer[c][f] = v;
+                 m_buffer.audio[c][f] = v;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -624,11 +628,19 @@ public:
 
     Node&
     parent_node() noexcept { return *m_parent; }
-    // returns Port's parent Node
+
+    bool
+    is_default() const noexcept { return m_default; }
 
     // --------------------------------------------------------------------------------------------
-    sample_t**
-    buffer() noexcept { return m_buffer; }
+    template<typename T> T
+    buffer() noexcept;
+
+    template<> audiobuffer_t
+    buffer() noexcept { return m_buffer.audio; }
+
+    template<> midibuffer_t
+    buffer() noexcept { return m_buffer.midi; }
 
     // --------------------------------------------------------------------------------------------
     std::vector<Connection*>&
@@ -663,7 +675,9 @@ private:
     allocate(vector_t nframes)
     // --------------------------------------------------------------------------------------------
     {
-        m_buffer = wpn114::allocate_buffer(m_nchannels, nframes);
+        if  (m_type == Port::Midi_1_0)
+             m_buffer.midi.reserve(nframes);
+        else m_buffer.audio = wpn114::allocate_buffer(m_nchannels, nframes);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -672,7 +686,7 @@ private:
     // note: this one is actually never called at the moment
     // --------------------------------------------------------------------------------------------
     {
-        memset(m_buffer, 0, sizeof(sample_t)*m_nchannels*nframes);
+
     }
 
     // --------------------------------------------------------------------------------------------
@@ -721,13 +735,24 @@ private:
     Node*
     m_parent = nullptr;
 
-    // --------------------------------------------------------------------------------------------
-    sample_t**
-    m_buffer = nullptr;
+    // --------------------------------------------------------------------------------------------    
+    union buffer
+    {
+        buffer() {}
+        ~buffer() {}
+
+        audiobuffer_t
+        audio;
+
+        midibuffer_t
+        midi;
+
+    }   m_buffer;
 
     // --------------------------------------------------------------------------------------------
     bool
-    m_muted = false;
+    m_muted = false,
+    m_default = false;
 
     // --------------------------------------------------------------------------------------------
     qreal
@@ -1088,9 +1113,6 @@ public:
     virtual ~Node() override
     {
         Graph::unregister_node(*this);
-
-        delete[] m_input_pool;
-        delete[] m_output_pool;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1188,7 +1210,7 @@ public:
     Spatial* spatial();
 
     // --------------------------------------------------------------------------------------------
-    WPN_OK void
+    void
     set_muted(bool muted) noexcept
     // mute/unmute all output Ports
     // --------------------------------------------------------------------------------------------
@@ -1198,7 +1220,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    WPN_OK void
+    void
     set_active(bool active) noexcept
     // activate/deactivate all output Port connections
     // --------------------------------------------------------------------------------------------
@@ -1252,7 +1274,7 @@ public:
     // --------------------------------------------------------------------------------------------
     {
         for (auto& port : ports(polarity))
-            if (port->type() == type)
+            if (port->type() == type && port->is_default())
                 return port;
         return nullptr;
     }
@@ -1407,18 +1429,19 @@ protected:
     }
 
     // --------------------------------------------------------------------------------------------
-    void
+    WPN_CLEANUP void
     allocate_pools()
     // --------------------------------------------------------------------------------------------
     {
-        m_input_pool   = new sample_t**[m_input_ports.size()];
-        m_output_pool  = new sample_t**[m_output_ports.size()];
+        for (auto& port : m_input_ports)
+            if (port->type() == Port::Audio)
+                 m_input_pool.audio.push_back(port->buffer<audiobuffer_t>());
+            else m_input_pool.midi.push_back(port->buffer<midibuffer_t>());
 
-        for (nchannels_t n = 0; n < m_input_ports.size(); ++n)
-             m_input_pool[n] = m_input_ports[n]->buffer();
-
-        for (nchannels_t n = 0; n < m_output_ports.size(); ++n)
-             m_output_pool[n] = m_output_ports[n]->buffer();
+        for (auto& port : m_output_ports)
+            if (port->type() == Port::Audio)
+                 m_output_pool.audio.push_back(port->buffer<audiobuffer_t>());
+            else m_output_pool.midi.push_back(port->buffer<midibuffer_t>());
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1428,9 +1451,10 @@ protected:
     // --------------------------------------------------------------------------------------------
     {
         for (auto& port : m_input_ports) {
-            // we start by pulling the input Port value
-            // that has been (or not) set asynchronously from the user thread
-            port->pull_value(nframes);
+            // we start by pulling the input Port value (if Audio)
+            // that has been (or not) set asynchronously from the user thread            
+            if (port->type() == Port::Audio)
+                port->pull_value(nframes);
             // then, we pull all Port connections (we'll see later for multithreading)
             for (auto& connection : port->connections())
                 if (connection->active())
@@ -1451,8 +1475,8 @@ protected:
 
     // --------------------------------------------------------------------------------------------
     pool
-    m_input_pool  = nullptr,
-    m_output_pool = nullptr;
+    m_input_pool,
+    m_output_pool;
 
     // --------------------------------------------------------------------------------------------
     Spatial*

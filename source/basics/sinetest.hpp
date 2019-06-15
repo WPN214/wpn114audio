@@ -63,9 +63,9 @@ public:
     //-------------------------------------------------------------------------------------------------
     {        
         // fetch in/out buffers (first channel, as they only have one anyway)
-        auto frequency  = inputs[Sinetest::frequency][0];
-        auto midi       = inputs[Sinetest::midi_in][0]; // todo
-        auto out        = outputs[Sinetest::audio_out][0];
+        auto freq  = inputs.audio[0][0];
+        auto midi  = inputs.midi[0]; // todo
+        auto out   = outputs.audio[0][0];
 
         // put member attributes on the stack
         size_t phs = m_phs;
@@ -73,7 +73,7 @@ public:
 
         // process each frame
         for (vector_t f = 0; f < nframes; ++f) {
-            phs += static_cast<size_t>(frequency[f]/rate * esz);
+            phs += static_cast<size_t>(freq[f]/rate * esz);
             wpnwrap(phs, esz);
             out[f] = m_env[phs];
         }
