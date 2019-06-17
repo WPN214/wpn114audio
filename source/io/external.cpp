@@ -50,7 +50,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // AUDIO INPUTS ------------------------------------------------------------------------------
     if (extout_a->nchannels())
     {
-        auto extout_a_buffer = extout_a->buffer();
+        auto extout_a_buffer = extout_a->buffer<audiobuffer_t>();
         for (auto& input : jext.m_audio_inputs) {
             float* buf = static_cast<float*>(jack_port_get_buffer(input, nframes));
             // graph is processed in qreal, which usually is double
@@ -66,8 +66,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 
     if (extout_m->nchannels())
     {
-        // start with MIDI
-        auto extout_m_buffer = extout_m->buffer();
+        auto extout_m_buffer = extout_m->buffer<midibuffer_t>();
         jack_midi_event_t ev;
         n = 0;
 
@@ -80,11 +79,11 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
                 {
                     jack_midi_event_get(&ev, buf, e);
                     if (ev.time == f) {
-                        midi_t mt(0);
+                        midi_t mt;
                         mt.status = ev.buffer[0];
                         mt.b1 = ev.buffer[1];
                         mt.b2 = ev.buffer[2];
-                        extout_m_buffer[n][f] = mt;
+                        extout_m_buffer.push_back(mt);
                     }}}
             n++;
         }
@@ -95,7 +94,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // AUDIO OUTPUTS ------------------------------------------------------------------------------
 
     if (extin_a->nchannels()) {
-        auto extin_a_buffer = extin_a->buffer();
+        auto extin_a_buffer = extin_a->buffer<audiobuffer_t>();
         n = 0;
 
         for (auto& output : jext.m_audio_outputs) {
@@ -109,20 +108,18 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // MIDI OUTPUTS ------------------------------------------------------------------------------
 
     if (extin_m->nchannels()) {
-        auto extin_m_buffer = extin_m->buffer();
+        auto extin_m_buffer = extin_m->buffer<midibuffer_t>();
         n = 0;
 
         for (auto& output : jext.m_midi_outputs) {
-            auto buf = jack_port_get_buffer(output, nframes);
-            for (jack_nframes_t f = 0; f < nframes; ++f) {
-                if (extin_m_buffer[n][f] != 0.) {
-                    midi_t mt = extin_m_buffer[n][f];
-                    jack_midi_data_t* ev = jack_midi_event_reserve(buf, n, 3);
-                    ev[0] = mt.status;
-                    ev[1] = mt.b1;
-                    ev[2] = mt.b2;
-                }}
-            n++;
+            auto buf = jack_port_get_buffer(output, nframes);                
+            for (auto& mt : extin_m_buffer)
+            {
+                jack_midi_data_t* ev = jack_midi_event_reserve(buf,mt.frame, 3);
+                ev[0] = mt.status;
+                ev[1] = mt.b1;
+                ev[2] = mt.b2;
+            }
         }}
 
     return 0;

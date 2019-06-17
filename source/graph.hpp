@@ -84,9 +84,7 @@ using vector_t      = uint16_t;
 using nframes_t     = uint32_t;
 
 //=================================================================================================
-WPN_INCOMPLETE
 struct midi_t
-// TODO: properly
 //=================================================================================================
 {
     byte_t frame = 0;
@@ -137,6 +135,7 @@ class Dispatch : public QObject
     Q_OBJECT
 
 public:
+
     enum Values { Upwards = 0, Downwards = 1 };
     Q_ENUM (Values)
 };
@@ -636,12 +635,6 @@ public:
     template<typename T> T
     buffer() noexcept;
 
-    template<> audiobuffer_t
-    buffer() noexcept { return m_buffer.audio; }
-
-    template<> midibuffer_t
-    buffer() noexcept { return m_buffer.midi; }
-
     // --------------------------------------------------------------------------------------------
     std::vector<Connection*>&
     connections() noexcept { return m_connections; }
@@ -675,8 +668,10 @@ private:
     allocate(vector_t nframes)
     // --------------------------------------------------------------------------------------------
     {
-        if  (m_type == Port::Midi_1_0)
-             m_buffer.midi.reserve(nframes);
+        if  (m_type == Port::Midi_1_0) {
+            new(&m_buffer.midi) std::vector<midi_t>;
+            m_buffer.midi.reserve(nframes);
+        }
         else m_buffer.audio = wpn114::allocate_buffer(m_nchannels, nframes);
     }
 
@@ -1044,6 +1039,15 @@ private:
     m_subnodes;
 };
 
+// --------------------------------------------------------------------------------------------
+template<> audiobuffer_t
+Port::buffer() noexcept;
+// here to avoid the explicit specialization error...
+
+template<> midibuffer_t
+Port::buffer() noexcept;
+
+
 class Spatial;
 
 //=================================================================================================
@@ -1140,9 +1144,9 @@ public:
         {
             // subnode's chain out connects to this Node
             for (auto& subnode : m_subnodes) {
-                auto& source = subnode->chainout();
-                auto routing = source.default_port(Polarity::Output)->routing();
-                Graph::connect(source, *this, routing);
+                auto& source = subnode->chainout();                
+                if (auto port = source.default_port(Polarity::Output))
+                    Graph::connect(source, *this, port->routing());
             }
             break;
         }

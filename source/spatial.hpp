@@ -129,9 +129,9 @@ public:
     virtual void WPN_CLEANUP
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     {
-        auto in = inputs[0][0]; // the input buffer (mono)
-        auto out = outputs[0]; // the output buffer (stereo)
-        auto x = m_inputs[0]->m_x.buffer()[0]; // xcoordinate buffer
+        auto in = inputs.audio[0][0]; // the input buffer (mono)
+        auto out = outputs.audio[0]; // the output buffer (stereo)
+        auto x = m_inputs[0]->m_x.buffer<audiobuffer_t>()[0];
 
         for (vector_t f = 0; f < nframes; ++f) {
             out[0][f] = sqrt(in[f]*x[f]);

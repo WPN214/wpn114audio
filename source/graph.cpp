@@ -124,7 +124,8 @@ WPN_CLEANUP bool
 Port::connected(Port const& s) const noexcept
 // ------------------------------------------------------------------------------------------------
 {
-    for (const auto& connection : m_connections) {
+    for (const auto& connection : m_connections)
+    {
          if (m_polarity == Polarity::Input &&
              connection->source() == &s)
              return true;
@@ -141,7 +142,8 @@ WPN_CLEANUP bool
 Port::connected(Node const& n) const noexcept
 // ------------------------------------------------------------------------------------------------
 {
-    for (const auto& connection: m_connections) {
+    for (const auto& connection: m_connections)
+    {
         if (m_polarity == Polarity::Input &&
             &connection->source()->parent_node() == &n)
             return true;
@@ -152,6 +154,13 @@ Port::connected(Node const& n) const noexcept
 
     return false;
 }
+
+
+template<> audiobuffer_t
+Port::buffer() noexcept { return m_buffer.audio; }
+
+template<> midibuffer_t
+Port::buffer() noexcept { return m_buffer.midi; }
 
 // ------------------------------------------------------------------------------------------------
 WPN_EXAMINE void
@@ -347,7 +356,7 @@ Connection::pull(vector_t nframes) noexcept
         return;
     }
 
-    auto dbuf = m_dest->buffer<sample_t**>();
+    auto dbuf = m_dest->buffer<audiobuffer_t>();
 
     if (m_muted.load()) {
         for (nchannels_t c = 0; c < m_dest->nchannels(); ++c)
@@ -355,7 +364,7 @@ Connection::pull(vector_t nframes) noexcept
         return;
     }
 
-    auto sbuf = m_source->buffer<sample_t**>();
+    auto sbuf = m_source->buffer<audiobuffer_t>();
     sample_t mul = m_mul, add = m_add;
     Routing routing = m_routing;
 
