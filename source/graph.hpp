@@ -19,7 +19,8 @@
 // --------------------------------------------------------------------------------------------------
 
 #define WPN_PORT(_type, _polarity, _name, _def, _nchannels) \
-    private: Q_PROPERTY(Port* _name READ get_##_name WRITE set_##_name) \
+    private: Q_PROPERTY(Port* _name READ get_##_name WRITE set_##_name NOTIFY _name##_changed) \
+    public: Q_SIGNAL void _name##_changed(); \
     public: Port m_##_name { this, #_name, _type, _polarity, _def, _nchannels }; \
     public: Port* get_##_name() { return &m_##_name; } \
     void set_##_name(Port* p) { m_##_name.assign(p); }
@@ -101,7 +102,7 @@ struct pool
 //=================================================================================================
 {
     std::vector<audiobuffer_t> audio;
-    std::vector<midibuffer_t> midi;
+    std::vector<midibuffer_t*> midi;
 };
 
 class Connection;
@@ -239,22 +240,22 @@ class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyV
     // TODO: [[0,1],[1,0]] format as well
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal mul MEMBER m_mul)
+    Q_PROPERTY (qreal mul READ mul WRITE set_mul)
     // Connection's amplitude level (linear)
     // scales the amplitude of the input signal to transit to the output
     // this property might be overriden or scaled by Port's or Node's level property
     // TODO: prefader/postfader property
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (qreal add MEMBER m_add)
+    Q_PROPERTY (qreal add READ add WRITE set_add)
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (bool muted MEMBER m_muted)
+    Q_PROPERTY (bool muted READ muted WRITE set_muted)
     // Connection will still process when muted
     // but will output zeros instead of the normal signal
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (bool active MEMBER m_active)
+    Q_PROPERTY (bool active READ active WRITE set_active)
     // if inactive, Connection won't process the upstream part of the Graph
     // to which it is connected
 
@@ -279,6 +280,8 @@ public:
     {
         m_mul = cp.m_mul.load();
         m_add = cp.m_add.load();
+        m_active = cp.m_active;
+        m_muted = cp.m_muted;
     }
     // copy constructor, don't really know in which case it should/will be used
 
@@ -297,6 +300,8 @@ public:
         m_nchannels  = cp.m_nchannels;
         m_mul        = cp.m_mul.load();
         m_add        = cp.m_add.load();
+        m_active     = cp.m_active;
+        m_muted      = cp.m_muted;
 
         return *this;
     }
@@ -400,6 +405,17 @@ private:
     // the main processing function
 
     // --------------------------------------------------------------------------------------------
+    bool
+    m_muted = false;
+    // if Connection is muted, it will still process its inputs
+    // but will output 0 continuously
+
+    bool
+    m_active = true;
+    // if Connection is inactive, it won't process its inputs
+    // and consequently call the upstream graph
+
+    // --------------------------------------------------------------------------------------------
     nchannels_t
     m_nchannels = 0;
 
@@ -413,17 +429,6 @@ private:
     // --------------------------------------------------------------------------------------------
     Routing
     m_routing;
-
-    // --------------------------------------------------------------------------------------------
-    std::atomic<bool>
-    m_muted {false};
-    // if Connection is muted, it will still process its inputs
-    // but will output 0 continuously
-
-    std::atomic<bool>
-    m_active {true};
-    // if Connection is inactive, it won't process its inputs
-    // and consequently call the upstream graph
 
     // --------------------------------------------------------------------------------------------
     std::atomic<qreal>
@@ -681,18 +686,19 @@ private:
     // note: this one is actually never called at the moment
     // --------------------------------------------------------------------------------------------
     {
-
+        for (nchannels_t n = 0; n < m_nchannels; ++n)
+            memset(m_buffer.audio[n], 0, sizeof(sample_t*)*nframes);
     }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    reset();
 
     // --------------------------------------------------------------------------------------------
     WPN_INCOMPLETE void
-    add_connection(Connection& con)
+    add_connection(Connection* con);
     // note: we have to clearly separate the default connection from the other ones
     // the default connection is set from the parent-child structure within QML
-    // --------------------------------------------------------------------------------------------
-    {
-        m_connections.push_back(&con);
-    }
 
     // --------------------------------------------------------------------------------------------
     void
@@ -732,6 +738,7 @@ private:
 
     // --------------------------------------------------------------------------------------------    
     union buffer
+    // --------------------------------------------------------------------------------------------
     {
         buffer() {}
         ~buffer() {}
@@ -830,29 +837,29 @@ public:
     complete();
 
     // --------------------------------------------------------------------------------------------
-    static void
+    void
     debug(QString str)  { qDebug() << "[GRAPH]" << str; }
 
     // --------------------------------------------------------------------------------------------
-    static Connection&
+    Connection&
     connect(Port& source, Port& dest, Routing matrix = {});
     // connects two Ports together
     // returns a reference to the newly created Connection object for further manipulation
 
-    static Connection&
+    Connection&
     connect(Node& source, Node& dest, Routing matrix = {});
     // connects source Node's default outputs to dest Node's default inputs
 
-    static Connection&
+    Connection&
     connect(Node& source, Port& dest, Routing matrix = {});
     // connects source Node's default outputs to dest Port
 
-    static Connection&
+    Connection&
     connect(Port& source, Node& dest, Routing matrix = {});
     // connects Port source to dest Node's default inputs
 
     // --------------------------------------------------------------------------------------------
-    static void
+    void
     reconnect(Port& source, Port& dest, Routing matrix)
     // --------------------------------------------------------------------------------------------
     // reconnects the two Ports with a new routing
@@ -862,7 +869,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    static void
+    void
     disconnect(Port& source, Port& dest)
     // disconnects the two Ports
     // --------------------------------------------------------------------------------------------
@@ -871,41 +878,41 @@ public:
             source.remove_connection(*con);
             dest.remove_connection(*con);
 
-            s_connections.erase(std::remove(s_connections.begin(),
-                s_connections.end(), *con), s_connections.end());
+            m_connections.erase(std::remove(m_connections.begin(),
+                m_connections.end(), *con), m_connections.end());
         }
     }
 
     // --------------------------------------------------------------------------------------------
-    static void
+    void
     register_node(Node& node) noexcept;
     // if this happens while graph is running, we have to set a Queued request
     // Graph will take a little amount of time to process it in between two runs
 
     // --------------------------------------------------------------------------------------------
-    static void
+    void
     unregister_node(Node& node) noexcept
     // if this happens while graph is running, we have to set a Queued request
     // Graph will take a little amount of time to process it in between two runs
     {
-        s_nodes.erase(std::remove(s_nodes.begin(),
-            s_nodes.end(), &node), s_nodes.end());
+        m_nodes.erase(std::remove(m_nodes.begin(),
+            m_nodes.end(), &node), m_nodes.end());
     }  
 
     // --------------------------------------------------------------------------------------------
-    WPN_EXAMINE static void
-    add_connection(Connection& con) noexcept { s_connections.push_back(con); }
+    WPN_EXAMINE void
+    add_connection(Connection& con) noexcept { m_connections.push_back(con); }
     // this is called when Connection has been explicitely
     // instantiated from a QML context
 
     // --------------------------------------------------------------------------------------------
-    static Connection*
+    Connection*
     get_connection(Port& source, Port& dest)
     // returns the Connection object linking the two Ports
     // if Connection cannot be found, returns nullptr
     // --------------------------------------------------------------------------------------------
     {
-        for (auto& con : s_connections)
+        for (auto& con : m_connections)
             if (con.source() == &source &&
                 con.dest() == &dest)
                 return &con;
@@ -914,35 +921,35 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    static vector_t
+    vector_t
     run(Node& target) noexcept;
     // the main processing function
 
     // --------------------------------------------------------------------------------------------
-    static uint16_t
-    vector() noexcept { return s_properties.vector; }
+    uint16_t
+    vector() noexcept { return m_properties.vector; }
     // returns graph vector size
 
     // --------------------------------------------------------------------------------------------
-    static void
-    set_vector(uint16_t vector) { s_properties.vector = vector; }
+    void
+    set_vector(uint16_t vector) { m_properties.vector = vector; }
 
     // --------------------------------------------------------------------------------------------
     Q_SIGNAL void
     vectorChanged(vector_t);
 
     // --------------------------------------------------------------------------------------------
-    static sample_t
-    rate() noexcept { return s_properties.rate; }
+    sample_t
+    rate() noexcept { return m_properties.rate; }
     // returns graph sample rate
 
     // --------------------------------------------------------------------------------------------
-    static void
+    void
     set_rate(sample_t rate)
     // --------------------------------------------------------------------------------------------
-    {
-        if (rate != s_properties.rate) {
-            s_properties.rate = rate;
+    {        
+        if (rate != m_properties.rate) {
+            m_properties.rate = rate;
             emit s_instance->rateChanged(rate);
         }
     }
@@ -1023,31 +1030,23 @@ private:
     s_instance;
 
     // --------------------------------------------------------------------------------------------
-    static std::vector<Connection>
-    s_connections;
+    std::vector<Connection>
+    m_connections;
 
     // --------------------------------------------------------------------------------------------
-    static std::vector<Node*>
-    s_nodes;
+    std::vector<Node*>
+    m_nodes;
 
     // --------------------------------------------------------------------------------------------
-    static Graph::properties
-    s_properties;
+    Graph::properties
+    m_properties;
 
     // --------------------------------------------------------------------------------------------
-    static QVector<Node*>
+    QVector<Node*>
     m_subnodes;
 };
 
 // --------------------------------------------------------------------------------------------
-template<> audiobuffer_t
-Port::buffer() noexcept;
-// here to avoid the explicit specialization error...
-
-template<> midibuffer_t
-Port::buffer() noexcept;
-
-
 class Spatial;
 
 //=================================================================================================
@@ -1114,10 +1113,9 @@ public:
     // --------------------------------------------------------------------------------------------
     Node() {}
 
-    virtual ~Node() override
-    {
-        Graph::unregister_node(*this);
-    }
+    // --------------------------------------------------------------------------------------------
+    virtual
+    ~Node() override;
 
     // --------------------------------------------------------------------------------------------
     virtual void
@@ -1130,7 +1128,7 @@ public:
     // parses the local graph and builds appropriate connections between this Node
     // and its subnodes, given the selected dispatch mode
     {
-        Graph::register_node(*this);
+        Graph::instance().register_node(*this);
 
         if (m_subnodes.empty())
             return;
@@ -1146,7 +1144,7 @@ public:
             for (auto& subnode : m_subnodes) {
                 auto& source = subnode->chainout();                
                 if (auto port = source.default_port(Polarity::Output))
-                    Graph::connect(source, *this, port->routing());
+                    Graph::instance().connect(source, *this, port->routing());
             }
             break;
         }
@@ -1154,13 +1152,13 @@ public:
         {
             // connect this Node default outputs to first subnode
             auto& front = *m_subnodes.front();
-            Graph::connect(*this, front);
+            Graph::instance().connect(*this, front);
 
             // chain the following subnodes, until last is reached
             for (int n = 0; n < m_subnodes.count(); ++n) {
                 auto& source = m_subnodes[n]->chainout();
                 auto& dest = *m_subnodes[n+1];
-                Graph::connect(source, dest);
+                Graph::instance().connect(source, dest);
             }
         }
         }
@@ -1175,8 +1173,8 @@ public:
         auto port = target.read().value<Port*>();
 
         switch (port->polarity()) {
-            case Polarity::Input: Graph::connect(*this, *port); break;
-            case Polarity::Output: Graph::connect(*port, *this);
+            case Polarity::Input: Graph::instance().connect(*this, *port); break;
+            case Polarity::Output: Graph::instance().connect(*port, *this);
         }
     }
 
@@ -1414,7 +1412,16 @@ public:
 
     // --------------------------------------------------------------------------------------------
     void
-    set_processed(bool processed) { m_processed = processed; }
+    set_processed(bool processed)
+    {
+        m_processed = processed;
+
+        // if process is reset, clear midi outputs
+        if (!processed)
+            for (auto& output : m_output_ports)
+                if (output->type() == Port::Midi_1_0)
+                    output->reset();
+    }
 
 protected:
 
@@ -1434,19 +1441,8 @@ protected:
 
     // --------------------------------------------------------------------------------------------
     WPN_CLEANUP void
-    allocate_pools()
-    // --------------------------------------------------------------------------------------------
-    {
-        for (auto& port : m_input_ports)
-            if (port->type() == Port::Audio)
-                 m_input_pool.audio.push_back(port->buffer<audiobuffer_t>());
-            else m_input_pool.midi.push_back(port->buffer<midibuffer_t>());
-
-        for (auto& port : m_output_ports)
-            if (port->type() == Port::Audio)
-                 m_output_pool.audio.push_back(port->buffer<audiobuffer_t>());
-            else m_output_pool.midi.push_back(port->buffer<midibuffer_t>());
-    }
+    allocate_pools();
+    // defined in .cpp as not to break the ODR
 
     // --------------------------------------------------------------------------------------------
     WPN_AUDIOTHREAD void
@@ -1454,19 +1450,23 @@ protected:
     // pre-processing main function
     // --------------------------------------------------------------------------------------------
     {
+        m_processed = true;
+
         for (auto& port : m_input_ports) {
             // we start by pulling the input Port value (if Audio)
             // that has been (or not) set asynchronously from the user thread            
-            if (port->type() == Port::Audio)
-                port->pull_value(nframes);
+            if  (port->type() == Port::Audio)
+                 port->pull_value(nframes);
+            else port->reset();
             // then, we pull all Port connections (we'll see later for multithreading)
-            for (auto& connection : port->connections())
+
+            for (auto& connection : port->connections()) {
                 if (connection->active())
                     connection->pull(nframes);
+            }
         }
 
         rwrite(m_input_pool, m_output_pool, nframes);
-        m_processed = true;
     }
 
     // --------------------------------------------------------------------------------------------

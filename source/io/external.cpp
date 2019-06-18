@@ -8,7 +8,7 @@ JackExternal::on_jack_sample_rate_changed(jack_nframes_t rate, void* udata)
 // we update the graph, which will in turn notify registered Nodes of this change
 //-------------------------------------------------------------------------------------------------
 {
-    Graph::set_rate(rate);
+    Graph::instance().set_rate(rate);
     return 0;
 }
 
@@ -19,7 +19,7 @@ JackExternal::on_jack_buffer_size_changed(jack_nframes_t nframes, void* udata)
 // we update the graph, which will in turn notify registered Nodes of this change
 //-------------------------------------------------------------------------------------------------
 {
-    Graph::set_vector(nframes);
+    Graph::instance().set_vector(nframes);
     return 0;
 }
 
@@ -66,7 +66,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 
     if (extout_m->nchannels())
     {
-        auto extout_m_buffer = extout_m->buffer<midibuffer_t>();
+        auto& extout_m_buffer = *extout_m->buffer<midibuffer_t*>();
         jack_midi_event_t ev;
         n = 0;
 
@@ -74,12 +74,16 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
             auto buf = jack_port_get_buffer(input, nframes);
             auto nev = jack_midi_get_event_count(buf);
 
+            if (nev)
+                qDebug() << "in midi events:" << QString::number(nev);
+
             for (jack_nframes_t f = 0; f < nframes; ++f) {
                 for (jack_nframes_t e = 0; e < nev; ++e)
                 {
                     jack_midi_event_get(&ev, buf, e);
                     if (ev.time == f) {
                         midi_t mt;
+                        mt.frame = ev.time;
                         mt.status = ev.buffer[0];
                         mt.b1 = ev.buffer[1];
                         mt.b2 = ev.buffer[2];
@@ -89,7 +93,9 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         }
     }
 
-    Graph::run(ext);   
+    //---------------------------------------------------------------------------------------------
+    // process the internal graph
+    Graph::instance().run(ext);
 
     // AUDIO OUTPUTS ------------------------------------------------------------------------------
 
@@ -108,7 +114,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // MIDI OUTPUTS ------------------------------------------------------------------------------
 
     if (extin_m->nchannels()) {
-        auto extin_m_buffer = extin_m->buffer<midibuffer_t>();
+        auto& extin_m_buffer = *extin_m->buffer<midibuffer_t*>();
         n = 0;
 
         for (auto& output : jext.m_midi_outputs) {
@@ -168,8 +174,8 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
     qDebug() << "[JACK] samplerate:" << QString::number(srate)
              << "buffer size:" << QString::number(bsize);
 
-    Graph::set_rate    (srate);
-    Graph::set_vector  (bsize);
+    Graph::instance().set_rate    (srate);
+    Graph::instance().set_vector  (bsize);
 
     // set callbacks
     jack_set_sample_rate_callback(m_client, on_jack_sample_rate_changed, this);
@@ -208,6 +214,11 @@ JackExternal::connect_ports(
 
     for (auto& target : targets) {
         auto ctarget = jack_get_ports(m_client, CSTR(target), type, polarity);
+
+        if (!ctarget) {
+            qDebug() << "[JACK] error, could not connect to target" << target;
+            continue;
+        }
 
         if (routing.null()) {
             for (nchannels_t n = 0; n < ports.size(); ++n) {

@@ -8,18 +8,6 @@ using namespace wpn114;
 Graph*
 Graph::s_instance;
 
-std::vector<Connection>
-Graph::s_connections;
-
-Graph::properties
-Graph::s_properties;
-
-QVector<Node*>
-Graph::m_subnodes;
-
-std::vector<Node*>
-Graph::s_nodes;
-
 using namespace wpn114;
 
 // ------------------------------------------------------------------------------------------------
@@ -59,8 +47,8 @@ Port::assign(Port* p)
 // ------------------------------------------------------------------------------------------------
 {
     switch(p->polarity()) {
-        case Polarity::Input: Graph::connect(*this, *p); break;
-        case Polarity::Output: Graph::connect(*p, *this);
+        case Polarity::Input: Graph::instance().connect(*this, *p); break;
+        case Polarity::Output: Graph::instance().connect(*p, *this);
     }
 }
 
@@ -155,44 +143,45 @@ Port::connected(Node const& n) const noexcept
     return false;
 }
 
+// ------------------------------------------------------------------------------------------------
+// these are implemented here as not to break ODR
 
 template<> audiobuffer_t
 Port::buffer() noexcept { return m_buffer.audio; }
 
-template<> midibuffer_t
-Port::buffer() noexcept { return m_buffer.midi; }
+template<> midibuffer_t*
+Port::buffer() noexcept { return &m_buffer.midi; }
+
+void
+Port::reset() { m_buffer.midi.clear(); }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE void
+void
 Graph::register_node(Node& node) noexcept
 // we should maybe add a vectorChanged signal-slot connection to this
-// we also might not need to store pointers...
-// ------------------------------------------------------------------------------------------------
 {
     qDebug() << "[GRAPH] registering node:" << node.name();
 
     QObject::connect(s_instance, &Graph::rateChanged, &node, &Node::on_rate_changed);
-    s_nodes.push_back(&node);
+    m_nodes.push_back(&node);
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE Connection&
+void
+Port::add_connection(Connection* con)
+{
+    m_connections.push_back(con);
+}
+
+// ------------------------------------------------------------------------------------------------
+Connection&
 Graph::connect(Port& source, Port& dest, Routing matrix)
-// there's still the Audio/Midi Type to check,
-// the multichannel expansion allocation
-// & debug the connection with a pretty message
 // ------------------------------------------------------------------------------------------------
 {
     assert(source.polarity() == Polarity::Output && dest.polarity() == Polarity::Input);
     assert(source.type() == dest.type());
 
-    auto con = Connection(source, dest, matrix);
-
-    s_connections.push_back(con);   
-    Connection& connection = s_connections.back();
-
-    source.add_connection(connection);
-    dest.add_connection(connection);
+    m_connections.emplace_back(source, dest, matrix);
 
     qDebug() << "[GRAPH] connected Node" << source.parent_node().name()
              << "(Port:" << source.name().append(")")
@@ -204,7 +193,7 @@ Graph::connect(Port& source, Port& dest, Routing matrix)
                  << ">> channel" << QString::number(matrix[n][1]);
     }
 
-    return connection;
+    return m_connections.back();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -213,8 +202,9 @@ Graph::connect(Node& source, Node& dest, Routing matrix)
 // might be midi and not audio...
 // ------------------------------------------------------------------------------------------------
 {
-    return connect(*source.default_port(Polarity::Output),
-                   *dest.default_port(Polarity::Input), matrix);
+    auto& s_port = *source.default_port(Polarity::Output);
+    auto& d_port = *dest.default_port(s_port.type(), Polarity::Input);
+    return connect(s_port, d_port, matrix);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -230,7 +220,7 @@ WPN_INCOMPLETE Connection&
 Graph::connect(Port& source, Node& dest, Routing matrix)
 // ------------------------------------------------------------------------------------------------
 {
-    return connect(source, *dest.default_port(Polarity::Input), matrix);
+    return connect(source, *dest.default_port(source.type(), Polarity::Input), matrix);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -239,11 +229,18 @@ Graph::componentComplete()
 // Graph is complete, all connections have been set-up
 // we send signal to all registered Nodes to proceed to Port/pool allocation
 // ------------------------------------------------------------------------------------------------
-{
+{   
+    for (auto& connection : m_connections) {
+        // when pushing in Graph::connect, wild undefined behaviour bugs appear..
+        // better to do it in one run here
+        connection.source()->add_connection(&connection);
+        connection.dest()->add_connection(&connection);
+    }
+
     Graph::debug("component complete, allocating nodes i/o");
 
-    for (auto& node : s_nodes)
-        node->on_graph_complete(s_properties);
+    for (auto& node : m_nodes)
+        node->on_graph_complete(m_properties);
 
     Graph::debug("i/o allocation complete");
     emit complete();
@@ -260,16 +257,23 @@ Graph::run(Node& target) noexcept
     WPN_TODO
 
     // process target, return outputs            
-    vector_t nframes = s_properties.vector;
+    vector_t nframes = m_properties.vector;
     target.process(nframes);
 
-    for (auto& node : s_nodes)
+    for (auto& node : m_nodes)
          node->set_processed(false);
 
     return nframes;
 }
 
 #include "spatial.hpp"
+
+// ------------------------------------------------------------------------------------------------
+Node::~Node()
+{
+    if (m_spatial) delete m_spatial;
+    Graph::instance().unregister_node(*this);
+}
 
 // ------------------------------------------------------------------------------------------------
 Spatial*
@@ -281,7 +285,6 @@ Node::spatial()
         qDebug() << m_name << "creating spatial attributes";
 
         m_spatial = new Spatial;
-
         // we make an implicit connection
         m_subnodes.push_front(m_spatial);
     }
@@ -290,12 +293,28 @@ Node::spatial()
 }
 
 // ------------------------------------------------------------------------------------------------
+void
+Node::allocate_pools()
+// ------------------------------------------------------------------------------------------------
+{
+    for (auto& port : m_input_ports)
+        if (port->type() == Port::Audio)
+             m_input_pool.audio.push_back(port->buffer<audiobuffer_t>());
+        else m_input_pool.midi.push_back(port->buffer<midibuffer_t*>());
+
+    for (auto& port : m_output_ports)
+        if (port->type() == Port::Audio)
+             m_output_pool.audio.push_back(port->buffer<audiobuffer_t>());
+        else m_output_pool.midi.push_back(port->buffer<midibuffer_t*>());
+}
+
+// ------------------------------------------------------------------------------------------------
 // CONNECTION
 //-------------------------------------------------------------------------------------------------
 Connection::Connection(Port& source, Port& dest, Routing matrix) :
-    m_source   (&source)
-  , m_dest     (&dest)
-  , m_routing  (matrix)
+    m_source   (&source),
+    m_dest     (&dest),
+    m_routing  (matrix)
 {
     componentComplete();
 }
@@ -305,8 +324,6 @@ void
 Connection::setTarget(const QQmlProperty& target)
 // qml property binding, e. g.:
 // Connection on 'Port' { level: db(-12); routing: [0, 1] }
-// not sure target will give us a Port pointer though
-// maybe a Port copy...
 // ------------------------------------------------------------------------------------------------
 {
     auto port = target.read().value<Port*>();
@@ -317,6 +334,7 @@ Connection::setTarget(const QQmlProperty& target)
     }
 
     componentComplete();
+    Graph::instance().add_connection(*this);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -327,15 +345,13 @@ Connection::componentComplete()
     m_mul = m_source->mul() * m_dest->mul();
     m_add = m_source->add() + m_dest->add();
     m_muted = m_source->muted() || m_dest->muted();
-
-    Graph::add_connection(*this);
 }
 
 // ------------------------------------------------------------------------------------------------
 WPN_AUDIOTHREAD void
 Connection::pull(vector_t nframes) noexcept
 // ------------------------------------------------------------------------------------------------
-{    
+{       
     auto& source = m_source->parent_node();
 
     if (!source.processed())
@@ -343,11 +359,14 @@ Connection::pull(vector_t nframes) noexcept
 
     if (m_source->type() == Port::Midi_1_0)
     {
-        if(m_muted.load())
+        if(m_muted)
            return;
 
-        auto sbuf = m_source->buffer<midibuffer_t>();
-        auto dbuf = m_dest->buffer<midibuffer_t>();
+        auto& sbuf = *m_source->buffer<midibuffer_t*>();
+        auto& dbuf = *m_dest->buffer<midibuffer_t*>();
+
+        if (sbuf.size())
+            qDebug() << "sbuf nevents:" << QString::number(sbuf.size());
 
         // move events to dest buffer
         // TODO: forbid reallocation
@@ -358,7 +377,7 @@ Connection::pull(vector_t nframes) noexcept
 
     auto dbuf = m_dest->buffer<audiobuffer_t>();
 
-    if (m_muted.load()) {
+    if (m_muted) {
         for (nchannels_t c = 0; c < m_dest->nchannels(); ++c)
              memset(dbuf, 0, sizeof(sample_t)*nframes);
         return;

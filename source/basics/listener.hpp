@@ -10,7 +10,8 @@ class Listener : public Node
     Q_OBJECT
 
     WPN_DECLARE_DEFAULT_AUDIO_INPUT     (audio_in, 0)
-    WPN_DECLARE_DEFAULT_MIDI_INPUT      (midi_in, 0)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT      (midi_in, 1)
+    WPN_DECLARE_DEFAULT_MIDI_OUTPUT     (midi_out, 1)
 
 public:
 
@@ -41,10 +42,11 @@ public:
     virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     {
-        auto midi_events = inputs.midi[0];
+        auto& midi_events = *inputs.midi[0];
 
         for (auto& event : midi_events)
         {
+            qDebug() << "Listener midi event";
             if (event.status < 0x90)
                 // this is thread safe, it will pass the signal on to the main gui/qml thread
                 QMetaObject::invokeMethod(this, "noteOff", Qt::QueuedConnection,
