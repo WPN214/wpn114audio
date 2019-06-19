@@ -6,6 +6,7 @@
 #include <source/basics/vca.hpp>
 #include <source/basics/midi-transpose.hpp>
 #include <source/basics/listener.hpp>
+#include <source/basics/midi/rwriter.hpp>
 #include <QQmlEngine>
 #include <qqml.h>
 
@@ -53,8 +54,8 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterType<StereoPanner, 1>
     ("WPN114.Audio", 1, 1, "StereoPanner");
 
-    qmlRegisterType<Listener, 1>
-    ("WPN114.Audio", 1, 1, "Listener");
+    qmlRegisterType<Gateway, 1>
+    ("WPN114.Audio", 1, 1, "MidiRw");
 
 
 //    qmlRegisterType<MidiTransposer, 1>

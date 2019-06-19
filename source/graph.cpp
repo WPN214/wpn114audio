@@ -8,7 +8,25 @@ using namespace wpn114;
 Graph*
 Graph::s_instance;
 
-using namespace wpn114;
+extern "C"
+{
+// ------------------------------------------------------------------------------------------------
+midi_t*
+wpn114_midi_from_raw(byte_t** buffer, size_t* count)
+// get a midi event from raw buffer, advance buffer and count pointers
+// an example can be found in the rwrite override method of source/midi/rwriter.hpp
+// ------------------------------------------------------------------------------------------------
+{
+    byte_t* buf = *buffer;
+    midi_t* mt = (midi_t*) buf;
+
+    buf += 3;
+    buf += *buf+1;
+
+    count += mt->nbytes+4;
+    return mt;
+}
+}
 
 // ------------------------------------------------------------------------------------------------
 sample_t**
@@ -44,6 +62,8 @@ Port::Port(Node* parent, QString name, Type type, Polarity polarity,
 // ------------------------------------------------------------------------------------------------
 void
 Port::assign(Port* p)
+// this is called from QML when another port is explicitely assigned to this one
+// we make an implicit connection between the two
 // ------------------------------------------------------------------------------------------------
 {
     switch(p->polarity()) {
@@ -84,14 +104,11 @@ Port::set_add(qreal add)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE QVariantList
-Port::routing() const noexcept
-{
-    return m_routing;
-}
+QVariantList
+Port::routing() const noexcept { return m_routing; }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE void
+WPN_INCOMPLETE void
 Port::set_routing(QVariantList r) noexcept
 {
     m_routing = r;
@@ -110,6 +127,7 @@ Port::set_muted(bool muted)
 // ------------------------------------------------------------------------------------------------
 WPN_CLEANUP bool
 Port::connected(Port const& s) const noexcept
+// returns true if Port is connected to target Port p
 // ------------------------------------------------------------------------------------------------
 {
     for (const auto& connection : m_connections)
@@ -128,6 +146,8 @@ Port::connected(Port const& s) const noexcept
 // ------------------------------------------------------------------------------------------------
 WPN_CLEANUP bool
 Port::connected(Node const& n) const noexcept
+// returns true if this Port is connected to any Port in Node n
+// returns false otherwise
 // ------------------------------------------------------------------------------------------------
 {
     for (const auto& connection: m_connections)
@@ -153,7 +173,8 @@ template<> midibuffer_t*
 Port::buffer() noexcept { return &m_buffer.midi; }
 
 void
-Port::reset() { m_buffer.midi.clear(); }
+Port::reset() { }
+// might not be needing this actually...
 
 // ------------------------------------------------------------------------------------------------
 void
@@ -244,6 +265,22 @@ Graph::componentComplete()
 
     Graph::debug("i/o allocation complete");
     emit complete();
+}
+
+// ------------------------------------------------------------------------------------------------
+WPN_AUDIOTHREAD vector_t
+Graph::run() noexcept
+// ------------------------------------------------------------------------------------------------
+{
+    vector_t nframes = m_properties.vector;
+
+    for (auto& subnode : m_subnodes)
+        subnode->process(nframes);
+
+    for (auto& node : m_nodes)
+        node->set_processed(false);
+
+    return nframes;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -354,39 +391,36 @@ Connection::pull(vector_t nframes) noexcept
 {       
     auto& source = m_source->parent_node();
 
+    // if source hasn't been processed yet in the current Graph run
+    // process it
     if (!source.processed())
         source.process(nframes);
 
+    // if connection is muted return
+    if (m_muted.load())
+        return;
+
+    // in the case of a MIDI connection
     if (m_source->type() == Port::Midi_1_0)
     {
-        if(m_muted)
-           return;
-
         auto& sbuf = *m_source->buffer<midibuffer_t*>();
         auto& dbuf = *m_dest->buffer<midibuffer_t*>();
 
-        if (sbuf.size())
-            qDebug() << "sbuf nevents:" << QString::number(sbuf.size());
-
-        // move events to dest buffer
-        // TODO: forbid reallocation
-        dbuf.insert(dbuf.end(), sbuf.begin(), sbuf.end());
-        sbuf.clear();
+        // append midi events to dest ringbuffer
+        // (without intermediate copy)
+        byte_t* buf = nullptr;
+        sbuf.write(buf, sbuf.read(buf, 0));
         return;
     }
 
+    // else Audio connection
     auto dbuf = m_dest->buffer<audiobuffer_t>();
-
-    if (m_muted) {
-        for (nchannels_t c = 0; c < m_dest->nchannels(); ++c)
-             memset(dbuf, 0, sizeof(sample_t)*nframes);
-        return;
-    }
-
     auto sbuf = m_source->buffer<audiobuffer_t>();
+
     sample_t mul = m_mul, add = m_add;
     Routing routing = m_routing;
 
+    // if routing hasn't been explicitely set
     if (routing.null())
         for (nchannels_t c = 0; c < m_nchannels; ++c)
             for (vector_t f = 0; f < nframes; ++f)

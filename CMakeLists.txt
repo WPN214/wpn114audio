@@ -17,7 +17,8 @@ set(WPN114AUDIO_QML_SOURCES
     source/spatial.cpp
     source/io/external.hpp
     source/io/external.cpp
-    source/basics/listener.hpp
+    source/rbuffer.hpp
+    source/basics/midi/rwriter.hpp
     source/basics/sinetest.hpp
     source/basics/vca.hpp
     source/basics/midi-transpose.hpp

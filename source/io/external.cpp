@@ -95,7 +95,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 
     //---------------------------------------------------------------------------------------------
     // process the internal graph
-    Graph::instance().run(ext);
+    Graph::instance().run();
 
     // AUDIO OUTPUTS ------------------------------------------------------------------------------
 

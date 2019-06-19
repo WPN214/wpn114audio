@@ -65,6 +65,8 @@
 #define CSTR(_qstring) _qstring.toStdString().c_str()
 
 // ------------------------------------------------------------------------------------------------
+// empty annotations
+
 #define WPN_TODO
 #define WPN_EXAMINE
 #define WPN_OK
@@ -84,21 +86,33 @@ using byte_t        = uint8_t;
 using vector_t      = uint16_t;
 using nframes_t     = uint32_t;
 
-//=================================================================================================
+
+extern "C" {
+
+// taking advantage of C99 flexible array members here
+
 struct midi_t
-//=================================================================================================
 {
-    byte_t frame = 0;
-    byte_t status = 0x0;
-    byte_t b1 = 0x0;
-    byte_t b2 = 0x0;
+    vector_t frame;
+    byte_t status;
+    byte_t nbytes;
+    byte_t data[];
 };
 
-using midibuffer_t = std::vector<midi_t>;
+
+midi_t*
+wpn114_midi_from_raw(byte_t** buffer, size_t* count);
+
+}
+
+#include <source/rbuffer.hpp>
+
+using midibuffer_t = wpn114::rbuffer;
 using audiobuffer_t = sample_t**;
 
 //=================================================================================================
 struct pool
+// this is what is passed as inputs/outputs to the user processing functions
 //=================================================================================================
 {
     std::vector<audiobuffer_t> audio;
@@ -208,15 +222,12 @@ public:
     }
 
 private:
-
     // --------------------------------------------------------------------------------------------
     std::vector<cable>
     m_routing;
 };
 
 Q_DECLARE_METATYPE(Routing)
-
-
 
 //=================================================================================================
 class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
@@ -273,16 +284,14 @@ public:
 
     // --------------------------------------------------------------------------------------------
     Connection(Connection const& cp) :
-        m_nchannels(cp.m_nchannels),
-        m_source(cp.m_source),
-        m_dest(cp.m_dest),
-        m_routing(cp.m_routing)
-    {
-        m_mul = cp.m_mul.load();
-        m_add = cp.m_add.load();
-        m_active = cp.m_active;
-        m_muted = cp.m_muted;
-    }
+        m_nchannels (cp.m_nchannels),
+        m_source    (cp.m_source),
+        m_dest      (cp.m_dest),
+        m_routing   (cp.m_routing),
+        m_active    (cp.m_active.load()),
+        m_muted     (cp.m_muted.load()),
+        m_mul       (cp.m_mul.load()),
+        m_add       (cp.m_add.load()) {}
     // copy constructor, don't really know in which case it should/will be used
 
     // --------------------------------------------------------------------------------------------
@@ -300,15 +309,16 @@ public:
         m_nchannels  = cp.m_nchannels;
         m_mul        = cp.m_mul.load();
         m_add        = cp.m_add.load();
-        m_active     = cp.m_active;
-        m_muted      = cp.m_muted;
+        m_active     = cp.m_active.load();
+        m_muted      = cp.m_muted.load();
 
         return *this;
     }
 
     // --------------------------------------------------------------------------------------------
     bool
-    operator==(Connection const& rhs) noexcept {
+    operator==(Connection const& rhs) noexcept
+    {
         return m_source == rhs.m_source && m_dest == rhs.m_dest;
     }
 
@@ -400,18 +410,18 @@ public:
 private:
 
     // --------------------------------------------------------------------------------------------
-    void
+    WPN_AUDIOTHREAD void
     pull(vector_t nframes) noexcept;
     // the main processing function
 
     // --------------------------------------------------------------------------------------------
-    bool
-    m_muted = false;
+    std::atomic<bool>
+    m_muted {false};
     // if Connection is muted, it will still process its inputs
     // but will output 0 continuously
 
-    bool
-    m_active = true;
+    std::atomic<bool>
+    m_active {true};
     // if Connection is inactive, it won't process its inputs
     // and consequently call the upstream graph
 
@@ -674,8 +684,8 @@ private:
     // --------------------------------------------------------------------------------------------
     {
         if  (m_type == Port::Midi_1_0) {
-            new(&m_buffer.midi) std::vector<midi_t>;
-            m_buffer.midi.reserve(nframes);
+            // we allocate the same buffer size for the midi ringbuffer
+            m_buffer.midi.allocate(sizeof(sample_t)*nframes);
         }
         else m_buffer.audio = wpn114::allocate_buffer(m_nchannels, nframes);
     }
@@ -819,11 +829,8 @@ public:
     // returns the singleton instance of the Graph
 
     // --------------------------------------------------------------------------------------------
-    virtual ~Graph() override
+    virtual ~Graph() override {}
     // there might be something to be done later on
-    {
-
-    }
 
     // --------------------------------------------------------------------------------------------
     virtual void
@@ -861,8 +868,8 @@ public:
     // --------------------------------------------------------------------------------------------
     void
     reconnect(Port& source, Port& dest, Routing matrix)
-    // --------------------------------------------------------------------------------------------
     // reconnects the two Ports with a new routing
+    // --------------------------------------------------------------------------------------------
     {
         if (auto con = get_connection(source, dest))
             con->set_routing(matrix);
@@ -920,10 +927,14 @@ public:
         return nullptr;
     }
 
-    // --------------------------------------------------------------------------------------------
+    // --------------------------------------------------------------------------------------------    
+    vector_t
+    run() noexcept;
+    // processes the graph from all of its direct subnodes
+
     vector_t
     run(Node& target) noexcept;
-    // the main processing function
+    // processes the graph from a specific node
 
     // --------------------------------------------------------------------------------------------
     uint16_t
@@ -1412,16 +1423,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     void
-    set_processed(bool processed)
-    {
-        m_processed = processed;
-
-        // if process is reset, clear midi outputs
-        if (!processed)
-            for (auto& output : m_output_ports)
-                if (output->type() == Port::Midi_1_0)
-                    output->reset();
-    }
+    set_processed(bool processed) { m_processed = processed; }
 
 protected:
 
