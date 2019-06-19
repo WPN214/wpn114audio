@@ -186,8 +186,7 @@ public:
         m_frame.store(0);
 
         // write output data
-        for (vector_t n = 0; n < m_outbuffer->nelem; ++n)
-        {
+        for (vector_t n = 0; n < m_outbuffer->nelem; ++n) {
             midi_t* mt = wpn_midibuffer_at(m_outbuffer, n);
             wpn_midibuffer_push(midi_out, mt);
         }

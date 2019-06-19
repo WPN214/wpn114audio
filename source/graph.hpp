@@ -86,9 +86,151 @@ using byte_t        = uint8_t;
 using vector_t      = uint16_t;
 using nframes_t     = uint32_t;
 
-#include <source/mbuffer.h>
-
 using audiobuffer_t = sample_t**;
+
+//-------------------------------------------------------------------------------------------------
+struct midi_t
+//-------------------------------------------------------------------------------------------------
+{
+    vector_t frame;
+    byte_t status;
+    byte_t nbytes;
+    byte_t* data;
+
+    bool
+    is_basic() const { return status <= 0xf0 && nbytes <= 2; }
+};
+
+//-------------------------------------------------------------------------------------------------
+struct basic_midi_t
+// this is used in order to avoid allocation
+// for basic midi messages (meaning other than sysex)
+// we reinterpret data pointer as the two value bytes
+//-------------------------------------------------------------------------------------------------
+{
+    vector_t frame;
+    byte_t status;
+    byte_t data[2];
+
+    basic_midi_t(midi_t& mt) :
+        frame(mt.frame),
+        status(mt.status)
+    {
+        assert(mt.is_basic());
+        data[0] = reinterpret_cast<unsigned long>(mt.data) << 7;
+        data[1] = reinterpret_cast<unsigned long>(mt.data) & data[0];
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    operator midi_t()
+    //-------------------------------------------------------------------------------------------------
+    {
+        midi_t mt;
+        mt.frame = frame;
+        mt.status = status;
+        mt.data = reinterpret_cast<byte_t*>(data[0] | data[1]);
+        return mt;
+    }
+
+};
+
+//-------------------------------------------------------------------------------------------------
+class midibuffer_t
+//-------------------------------------------------------------------------------------------------
+{
+
+public:
+    //---------------------------------------------------------------------------------------------
+    midibuffer_t() {}
+
+    //---------------------------------------------------------------------------------------------
+    ~midibuffer_t()
+    {
+        delete[] m_data;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    class iterator : public std::iterator<std::input_iterator_tag, midi_t>
+    //---------------------------------------------------------------------------------------------
+    {
+    public:
+        //-----------------------------------------------------------------------------------------
+        iterator(midi_t* data) : m_data(data) {}
+
+        //-----------------------------------------------------------------------------------------
+        iterator&
+        operator++() { m_data++; return *this; }
+
+        //-----------------------------------------------------------------------------------------
+        midi_t&
+        operator*() { return *m_data; }
+
+        //-----------------------------------------------------------------------------------------
+        bool
+        operator==(iterator const& rhs) { return m_data == rhs.m_data; }
+
+        //-----------------------------------------------------------------------------------------
+        bool
+        operator !=(iterator const& rhs) { return !operator==(rhs); }
+
+    private:
+        midi_t*
+        m_data = nullptr;
+    };
+
+    //---------------------------------------------------------------------------------------------
+    iterator
+    begin() { return iterator(m_data); }
+
+    //---------------------------------------------------------------------------------------------
+    iterator
+    end() { return iterator(&(m_data[m_nelem.load()])); }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    allocate(vector_t capacity)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_data = new midi_t[capacity]();
+        m_capacity.store(capacity);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    vector_t
+    count() const { return m_nelem.load(); }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    clear() { m_nelem.store(0); }
+
+    //---------------------------------------------------------------------------------------------
+    bool push(midi_t const& event)
+    //---------------------------------------------------------------------------------------------
+    {
+        vector_t
+        capacity = m_capacity.load(),
+        nelem = m_nelem.load();
+
+        if (nelem == capacity)
+            return false;
+
+        memcpy(m_data, &event, sizeof(midi_t));
+        return true;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    midi_t& operator[](vector_t index) { return m_data[index]; }
+
+private:
+    //---------------------------------------------------------------------------------------------
+    std::atomic<uint16_t>
+    m_nelem {0}, m_capacity{0};
+
+    //---------------------------------------------------------------------------------------------
+    midi_t*
+    m_data = nullptr;
+};
+
 
 //=================================================================================================
 struct pool
@@ -179,7 +321,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     nchannels_t
-    ncables() const { return m_routing.size(); }
+    ncables() const { return static_cast<nchannels_t>(m_routing.size()); }
 
     // --------------------------------------------------------------------------------------------
     bool
@@ -665,7 +807,7 @@ private:
     {
         if  (m_type == Port::Midi_1_0)
             // we allocate the same buffer size (in bytes) for the midibuffer
-             m_buffer.midi = wpn_midibuffer_alloc(nframes/2);
+             m_buffer.midi.allocate(nframes/2);
         else m_buffer.audio = wpn114::allocate_buffer(m_nchannels, nframes);
     }
 
@@ -735,7 +877,7 @@ private:
         audiobuffer_t
         audio;
 
-        midibuffer_t*
+        midibuffer_t
         midi;
 
     }   m_buffer;

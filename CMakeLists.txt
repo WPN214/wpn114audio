@@ -18,8 +18,6 @@ set(WPN114AUDIO_QML_SOURCES
     source/io/external.hpp
     source/io/external.cpp
     source/rbuffer.hpp
-    source/mbuffer.h
-    source/mbuffer.c
     source/basics/midi/rwriter.hpp
     source/basics/sinetest.hpp
     source/basics/vca.hpp

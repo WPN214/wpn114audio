@@ -150,7 +150,7 @@ template<> audiobuffer_t
 Port::buffer() noexcept { return m_buffer.audio; }
 
 template<> midibuffer_t*
-Port::buffer() noexcept { return m_buffer.midi; }
+Port::buffer() noexcept { return &m_buffer.midi; }
 
 // ------------------------------------------------------------------------------------------------
 void
@@ -158,7 +158,7 @@ Port::reset()
 // ------------------------------------------------------------------------------------------------
 {
     if (m_type == Port::Midi_1_0)
-        wpn_midibuffer_clear(m_buffer.midi);
+        m_buffer.midi.clear();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -393,12 +393,9 @@ Connection::pull(vector_t nframes) noexcept
         auto dbuf = m_dest->buffer<midibuffer_t*>();
 
         // append midi events to dest ringbuffer
-        // (without intermediate copy)
-        for (vector_t n = 0; n < sbuf->nelem; ++n)
-        {
-            auto mt = wpn_midibuffer_at(sbuf, n);
-            wpn_midibuffer_push(dbuf, mt);
-        }
+        // (without intermediate copy)        
+        for (auto& mt : *sbuf)
+            dbuf->push(mt);
 
         return;
     }
