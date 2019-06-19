@@ -8,26 +8,6 @@ using namespace wpn114;
 Graph*
 Graph::s_instance;
 
-extern "C"
-{
-// ------------------------------------------------------------------------------------------------
-midi_t*
-wpn114_midi_from_raw(byte_t** buffer, size_t* count)
-// get a midi event from raw buffer, advance buffer and count pointers
-// an example can be found in the rwrite override method of source/midi/rwriter.hpp
-// ------------------------------------------------------------------------------------------------
-{
-    byte_t* buf = *buffer;
-    midi_t* mt = (midi_t*) buf;
-
-    buf += 3;
-    buf += *buf+1;
-
-    count += mt->nbytes+4;
-    return mt;
-}
-}
-
 // ------------------------------------------------------------------------------------------------
 sample_t**
 wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
@@ -170,16 +150,22 @@ template<> audiobuffer_t
 Port::buffer() noexcept { return m_buffer.audio; }
 
 template<> midibuffer_t*
-Port::buffer() noexcept { return &m_buffer.midi; }
+Port::buffer() noexcept { return m_buffer.midi; }
 
+// ------------------------------------------------------------------------------------------------
 void
-Port::reset() { }
-// might not be needing this actually...
+Port::reset()
+// ------------------------------------------------------------------------------------------------
+{
+    if (m_type == Port::Midi_1_0)
+        wpn_midibuffer_clear(m_buffer.midi);
+}
 
 // ------------------------------------------------------------------------------------------------
 void
 Graph::register_node(Node& node) noexcept
 // we should maybe add a vectorChanged signal-slot connection to this
+// ------------------------------------------------------------------------------------------------
 {
     qDebug() << "[GRAPH] registering node:" << node.name();
 
@@ -403,13 +389,17 @@ Connection::pull(vector_t nframes) noexcept
     // in the case of a MIDI connection
     if (m_source->type() == Port::Midi_1_0)
     {
-        auto& sbuf = *m_source->buffer<midibuffer_t*>();
-        auto& dbuf = *m_dest->buffer<midibuffer_t*>();
+        auto sbuf = m_source->buffer<midibuffer_t*>();
+        auto dbuf = m_dest->buffer<midibuffer_t*>();
 
         // append midi events to dest ringbuffer
         // (without intermediate copy)
-        byte_t* buf = nullptr;
-        sbuf.write(buf, sbuf.read(buf, 0));
+        for (vector_t n = 0; n < sbuf->nelem; ++n)
+        {
+            auto mt = wpn_midibuffer_at(sbuf, n);
+            wpn_midibuffer_push(dbuf, mt);
+        }
+
         return;
     }
 

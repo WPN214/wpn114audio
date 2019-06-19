@@ -86,28 +86,8 @@ using byte_t        = uint8_t;
 using vector_t      = uint16_t;
 using nframes_t     = uint32_t;
 
+#include <source/mbuffer.h>
 
-extern "C" {
-
-// taking advantage of C99 flexible array members here
-
-struct midi_t
-{
-    vector_t frame;
-    byte_t status;
-    byte_t nbytes;
-    byte_t data[];
-};
-
-
-midi_t*
-wpn114_midi_from_raw(byte_t** buffer, size_t* count);
-
-}
-
-#include <source/rbuffer.hpp>
-
-using midibuffer_t = wpn114::rbuffer;
 using audiobuffer_t = sample_t**;
 
 //=================================================================================================
@@ -683,10 +663,9 @@ private:
     allocate(vector_t nframes)
     // --------------------------------------------------------------------------------------------
     {
-        if  (m_type == Port::Midi_1_0) {
-            // we allocate the same buffer size for the midi ringbuffer
-            m_buffer.midi.allocate(sizeof(sample_t)*nframes);
-        }
+        if  (m_type == Port::Midi_1_0)
+            // we allocate the same buffer size (in bytes) for the midibuffer
+             m_buffer.midi = wpn_midibuffer_alloc(nframes/2);
         else m_buffer.audio = wpn114::allocate_buffer(m_nchannels, nframes);
     }
 
@@ -756,7 +735,7 @@ private:
         audiobuffer_t
         audio;
 
-        midibuffer_t
+        midibuffer_t*
         midi;
 
     }   m_buffer;
@@ -1423,7 +1402,16 @@ public:
 
     // --------------------------------------------------------------------------------------------
     void
-    set_processed(bool processed) { m_processed = processed; }
+    set_processed(bool processed)
+    // --------------------------------------------------------------------------------------------
+    {
+        m_processed = processed;
+        // reset midi outputs
+        if (processed == false)
+            for (auto& output : m_output_ports)
+                if (output->type() == Port::Midi_1_0)
+                    output->reset();
+    }
 
 protected:
 

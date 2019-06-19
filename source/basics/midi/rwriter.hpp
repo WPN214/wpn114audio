@@ -16,23 +16,22 @@ class Gateway : public Node
 public:
 
     //-------------------------------------------------------------------------------------------------
-    Gateway() { m_name = "MidiGateway"; }
+    Gateway() { m_name = "MidiRw"; }
 
     //-------------------------------------------------------------------------------------------------
     Q_INVOKABLE void
     write_note_on(unsigned int channel, unsigned int index, unsigned int velocity)
     //-------------------------------------------------------------------------------------------------
     {
-        // append event to the ringbuffer
-        midi_t* w = nullptr;
-        size_t len = m_rbuffer.reserve(w, sizeof(midi_t)+3);
-        if (len != 5) return;
+        // append event to the buffer
+        midi_t mt;
+        mt.status = 0x90+channel;
+        mt.nbytes = 2;
+        mt.frame = m_frame.load();
+        mt.data[0] = index;
+        mt.data[1] = velocity;
 
-        w->frame   = 0;
-        w->status  = 0x90 + channel;
-        w->nbytes  = 2;
-        w->data[1] = (uint8_t) index;
-        w->data[2] = (uint8_t) velocity;
+        wpn_midibuffer_push(m_outbuffer, &mt);
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -121,7 +120,11 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     virtual void
-    initialize(const Graph::properties& properties) override { m_rate = properties.rate; }
+    initialize(const Graph::properties& properties) override
+    {
+        m_outbuffer = wpn_midibuffer_alloc(properties.vector/2);
+        m_rate = properties.rate;
+    }
 
     //-------------------------------------------------------------------------------------------------
     void
@@ -142,7 +145,6 @@ public:
             Q_ARG(unsigned int, channel), Q_ARG(unsigned int, b1));
     }
 
-
     //-------------------------------------------------------------------------------------------------
     virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
@@ -151,13 +153,11 @@ public:
         auto midi_out = outputs.midi[0];
 
         byte_t* buffer = nullptr;
-        // copy is not necessary here, as it is already done in Connection
-        size_t nbytes = midi_events->read(buffer, 0);
 
-        while (nbytes)
+        for (vector_t n = 0; n < midi_events->nelem; ++n)
         {
             // parse midi event
-            midi_t* mt = wpn114_midi_from_raw(&buffer, &nbytes);
+            midi_t* mt = wpn_midibuffer_at(midi_events, n);
 
             if ((mt->status & 0xf0) == 0x80)
                 invoke_out_signal_3("noteOff", 0, mt->data[0], mt->data[1]);
@@ -179,10 +179,20 @@ public:
 
             else if ((mt->status & 0xf0) == 0xe0)
                 invoke_out_signal_2("bend", 0, mt->data[0]);
+
+            m_frame++;
         }
 
+        m_frame.store(0);
+
         // write output data
-        midi_out->write(buffer, m_rbuffer.read(buffer, 0));
+        for (vector_t n = 0; n < m_outbuffer->nelem; ++n)
+        {
+            midi_t* mt = wpn_midibuffer_at(m_outbuffer, n);
+            wpn_midibuffer_push(midi_out, mt);
+        }
+
+        wpn_midibuffer_clear(m_outbuffer);
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -197,8 +207,8 @@ private:
     sample_t
     m_rate = 0;
 
-    wpn114::rbuffer
-    m_rbuffer;
+    midibuffer_t*
+    m_outbuffer = nullptr;
 
     std::atomic<vector_t>
     m_frame;
