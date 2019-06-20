@@ -29,10 +29,7 @@ public:
     midibuffer_t() {}
 
     //---------------------------------------------------------------------------------------------
-    ~midibuffer_t()
-    {
-        delete[] m_data;
-    }
+    ~midibuffer_t() { delete[] m_data; }
 
     //---------------------------------------------------------------------------------------------
     class iterator : public std::iterator<std::input_iterator_tag, midi_t>

@@ -543,6 +543,7 @@ public:
     {
         if (m_type == Port::Audio)
             delete[] m_buffer.audio;
+        else m_buffer.midi.~midibuffer_t();
     }
 
     // --------------------------------------------------------------------------------------------
