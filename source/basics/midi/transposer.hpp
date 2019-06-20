@@ -1,53 +1,39 @@
-//#pragma once
-//#include <source/graph.hpp>
+#pragma once
+#include <source/graph.hpp>
 
-////---------------------------------------------------------------------------------------------
-//class MidiTransposer : public Node
-////---------------------------------------------------------------------------------------------
-//{
-//    Q_OBJECT
+//---------------------------------------------------------------------------------------------
+class MidiTransposer : public Node
+//---------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
 
-//    //---------------------------------------------------------------------------------------------
-//    WPN_ENUM_INPUTS     (inputs, transpose)
-//    WPN_ENUM_OUTPUTS    (outputs)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT(midi_in, 1)
+    WPN_DECLARE_AUDIO_INPUT(transpose, 1)
+    WPN_DECLARE_DEFAULT_MIDI_OUTPUT(midi_out, 1)
 
-//    //---------------------------------------------------------------------------------------------
-//    WPN_INPUT_DECLARE   (inputs, Socket::Midi_1_0, 0)
+public:
 
-//    //---------------------------------------------------------------------------------------------
-//    WPN_INPUT_DECLARE   (transpose, Socket::Integer, 1)
+    //---------------------------------------------------------------------------------------------
+    MidiTransposer() { m_name = "MidiTransposer"; }
 
-//    //---------------------------------------------------------------------------------------------
-//    WPN_OUTPUT_DECLARE  (outputs, Socket::Midi_1_0, 0)
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    //---------------------------------------------------------------------------------------------
+    {
+        auto in = inputs.midi[0];
+        auto transpose = inputs.audio[0][0];
+        auto out = outputs.midi[0];
 
+        for (auto& event : *in)
+        {
+            switch(event.status & 0xf0) {
+            case 0x80: case 0x90:
+                event.data[0] += static_cast<byte_t>(transpose[event.frame]);
+            break;
+            }
 
-//public:
-
-//    //---------------------------------------------------------------------------------------------
-//    MidiTransposer() {}
-
-//    //---------------------------------------------------------------------------------------------
-//    virtual QString
-//    name() const override { return "MidiTransposer"; }
-
-//    //---------------------------------------------------------------------------------------------
-//    virtual void
-//    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
-//    //---------------------------------------------------------------------------------------------
-//    {
-//        auto in = inputs[Inputs::inputs];
-//        auto transpose = inputs[Inputs::transpose][0];
-//        auto out = outputs[Outputs::outputs];
-
-//        for (vector_t n = 0; n < nframes; ++n)
-//        {
-//            midi_t mt = in[0][n];
-//            uint8_t tp = static_cast<uint8_t>(transpose[n]);
-
-//            if (mt.status == 0x90)
-//                mt.b1 += tp;
-
-//            out[0][n] = mt;
-//        }
-//    };
-//    }
+            out->push(event);
+        }
+    }
+};

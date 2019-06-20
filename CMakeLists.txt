@@ -20,9 +20,9 @@ set(WPN114AUDIO_QML_SOURCES
     source/midi.hpp
     source/rbuffer.hpp
     source/basics/midi/rwriter.hpp
+    source/basics/midi/transposer.hpp
     source/basics/sinetest.hpp
-    source/basics/vca.hpp
-    source/basics/midi-transpose.hpp
+    source/basics/vca.hpp    
     examples/Audio.qml
     )
 
