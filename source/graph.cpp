@@ -260,9 +260,8 @@ Graph::run() noexcept
 {
     vector_t nframes = m_properties.vector;
 
-    for (auto& subnode : m_subnodes) {
+    for (auto& subnode : m_subnodes)
         subnode->process(nframes);
-    }
 
     for (auto& node : m_nodes)
         node->set_processed(false);

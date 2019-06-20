@@ -160,31 +160,20 @@ public:
     virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     {
-        auto midi_events = inputs.midi[0];
-        auto midi_out = outputs.midi[0];
+        auto midi_events  = inputs.midi[0];
+        auto midi_out     = outputs.midi[0];
 
         for (auto& mt : *midi_events)
         {            
-            if ((mt.status & 0xf0) == 0x80)
-                invoke_out_signal_3("noteOff", 0, mt.data[0], mt.data[1]);
-
-            else if ((mt.status & 0xf0) == 0x90)
-                invoke_out_signal_3("noteOn", 0, mt.data[0], mt.data[1]);
-
-            else if ((mt.status & 0xf0) == 0xa0)
-                invoke_out_signal_3("aftertouch", 0, mt.data[0], mt.data[1]);
-
-            else if ((mt.status & 0xf0) == 0xb0)
-                invoke_out_signal_3("control", 0, mt.data[0], mt.data[1]);
-
-            else if ((mt.status & 0xf0) == 0xc0)
-                invoke_out_signal_2("program", 0, mt.data[0]);
-
-            else if ((mt.status & 0xf0) == 0xd0)
-                invoke_out_signal_2("pressure", 0, mt.data[0]);
-
-            else if ((mt.status & 0xf0) == 0xe0)
-                invoke_out_signal_2("bend", 0, mt.data[0]);
+            switch(mt.status & 0xf0) {
+            case 0x80: invoke_out_signal_3("noteOff", 0, mt.data[0], mt.data[1]); break;
+            case 0x90: invoke_out_signal_3("noteOn", 0, mt.data[0], mt.data[1]); break;
+            case 0xa0: invoke_out_signal_3("aftertouch", 0, mt.data[0], mt.data[1]); break;
+            case 0xb0: invoke_out_signal_3("control", 0, mt.data[0], mt.data[1]); break;
+            case 0xc0: invoke_out_signal_2("program", 0, mt.data[0]); break;
+            case 0xd0: invoke_out_signal_2("pressure", 0, mt.data[0]); break;
+            case 0xe0: invoke_out_signal_2("bend", 0, mt.data[0]); break;
+            }
 
             m_frame++;
         }

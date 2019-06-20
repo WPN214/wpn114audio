@@ -123,14 +123,10 @@ public:
     push(midi_t const& event)
     // --------------------------------------------------------------------------------------------
     {
-        midi_t* mt = reserve(event.nbytes);
-
-        if (mt) {
+        if (midi_t* mt = reserve(event.nbytes)) {
             memcpy(mt, &event, sizeof(midi_t)+event.nbytes);
             return true;
-        }
-
-        else return false;
+        }   else return false;
     }
 
     //---------------------------------------------------------------------------------------------
