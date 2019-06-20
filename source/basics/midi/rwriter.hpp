@@ -23,13 +23,11 @@ public:
     enqueue_basic(unsigned int status, unsigned int b1, unsigned int b2 = 0)
     //-------------------------------------------------------------------------------------------------
     {
-        basic_midi_t bmt;
-        bmt.frame = m_frame.load();
-        bmt.status = status;
-        bmt.data[0] = b1;
-        bmt.data[1] = b2;
-
-        m_outbuffer.push(bmt);
+        midi_t* mt = m_outbuffer.reserve(2);
+        mt->frame = m_frame.load();
+        mt->status = status;
+        mt->data[0] = b1;
+        mt->data[1] = b2;
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -95,16 +93,12 @@ public:
     // when do we deallocate it?
     //-------------------------------------------------------------------------------------------------
     {
-        midi_t mt;
-        mt.frame = m_frame.load();
-        mt.status = list[0].toInt();
-        mt.nbytes = list.size()-1;
-        mt.data = new byte_t[mt.nbytes];
+        midi_t* mt = m_outbuffer.reserve(list.size()-1);
+        mt->frame = m_frame.load();
+        mt->status = list[0].toInt();
 
         for (int n = 1; n < list.size(); ++n)
-            mt.data[n-1] = list[n].toInt();
-
-        m_outbuffer.push(mt);
+            mt->data[n-1] = list[n].toInt();
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -199,7 +193,7 @@ public:
 
         // copy-write output data
         for (auto& mt : m_outbuffer)
-            midi_out->push(mt);
+             midi_out->push(mt);
 
         m_outbuffer.clear();
     }

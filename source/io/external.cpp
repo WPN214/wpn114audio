@@ -82,14 +82,10 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
                 {
                     jack_midi_event_get(&ev, buf, e);
                     if (ev.time == f) {
-                        midi_t mt;
-                        mt.frame = ev.time;
-                        mt.status = ev.buffer[0];
-                        mt.nbytes = 2;
-                        mt.data[0] = ev.buffer[1];
-                        mt.data[1] = ev.buffer[2];
-
-                        extout_m_buffer.push(mt);
+                        midi_t* mt = extout_m_buffer.reserve(ev.size-1);
+                        mt->frame = ev.time;
+                        mt->status = ev.buffer[0];
+                        memcpy(mt->data, ev.buffer, ev.size-1);
                     }}}
             n++;
         }
