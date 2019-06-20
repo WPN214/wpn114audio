@@ -88,8 +88,8 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
                         mt.nbytes = 2;
                         mt.data[0] = ev.buffer[1];
                         mt.data[1] = ev.buffer[2];
-                        wpn_midibuffer_push(&extout_m_buffer, &mt);
 
+                        extout_m_buffer.push(mt);
                     }}}
             n++;
         }
@@ -121,13 +121,11 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 
         for (auto& output : jext.m_midi_outputs) {
             auto buf = jack_port_get_buffer(output, nframes);                
-            for (vector_t n = 0; n < extin_m_buffer.nelem; ++n)
+            for (auto& mt : extin_m_buffer)
             {
-                midi_t* mt = wpn_midibuffer_at(&extin_m_buffer, n);
-                jack_midi_data_t* ev = jack_midi_event_reserve(buf, mt->frame, 3);
-                ev[0] = mt->status;
-                ev[1] = mt->data[0];
-                ev[2] = mt->data[1];
+                jack_midi_data_t* ev = jack_midi_event_reserve(buf, mt.frame, mt.nbytes+1);
+                ev[0] = mt.status;
+                memcpy(&(ev[1]), mt.data, mt.nbytes);
             }
         }}
 

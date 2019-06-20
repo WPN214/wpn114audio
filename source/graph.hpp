@@ -112,6 +112,8 @@ struct basic_midi_t
     byte_t status;
     byte_t data[2];
 
+    basic_midi_t() {}
+
     basic_midi_t(midi_t& mt) :
         frame(mt.frame),
         status(mt.status)

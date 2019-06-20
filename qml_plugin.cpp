@@ -5,7 +5,6 @@
 #include <source/basics/sinetest.hpp>
 #include <source/basics/vca.hpp>
 #include <source/basics/midi-transpose.hpp>
-#include <source/basics/listener.hpp>
 #include <source/basics/midi/rwriter.hpp>
 #include <QQmlEngine>
 #include <qqml.h>
