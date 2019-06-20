@@ -663,9 +663,11 @@ private:
     allocate(vector_t nframes)
     // --------------------------------------------------------------------------------------------
     {
-        if  (m_type == Port::Midi_1_0)
+        if  (m_type == Port::Midi_1_0) {
             // we allocate the same buffer size (in bytes) for the midibuffer
-             m_buffer.midi.allocate(nframes/2);
+             new (&m_buffer.midi) midibuffer_t;
+             m_buffer.midi.allocate(sizeof(sample_t)*nframes);
+        }
         else m_buffer.audio = wpn114::allocate_buffer(m_nchannels, nframes);
     }
 

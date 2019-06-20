@@ -111,10 +111,10 @@ public:
         midi_t* mt = reinterpret_cast<midi_t*>(&m_data[idx]);
         memset(mt, 0, sizeof(midi_t)+nbytes);
         mt->nbytes = nbytes;
+        mt->data = &(m_data[idx+sizeof(midi_t)]);
 
         m_index.store(tmp);
         m_count++;
-
         return mt;
     }
 
@@ -129,6 +129,7 @@ public:
             memcpy(mt, &event, sizeof(midi_t)+event.nbytes);
             return true;
         }
+
         else return false;
     }
 

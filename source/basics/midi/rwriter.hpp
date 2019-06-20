@@ -164,7 +164,7 @@ public:
         auto midi_out = outputs.midi[0];
 
         for (auto& mt : *midi_events)
-        {
+        {            
             if ((mt.status & 0xf0) == 0x80)
                 invoke_out_signal_3("noteOff", 0, mt.data[0], mt.data[1]);
 

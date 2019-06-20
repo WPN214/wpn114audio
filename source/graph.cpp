@@ -260,8 +260,9 @@ Graph::run() noexcept
 {
     vector_t nframes = m_properties.vector;
 
-    for (auto& subnode : m_subnodes)
+    for (auto& subnode : m_subnodes) {
         subnode->process(nframes);
+    }
 
     for (auto& node : m_nodes)
         node->set_processed(false);
@@ -376,7 +377,6 @@ Connection::pull(vector_t nframes) noexcept
 // ------------------------------------------------------------------------------------------------
 {       
     auto& source = m_source->parent_node();
-
     // if source hasn't been processed yet in the current Graph run
     // process it
     if (!source.processed())
@@ -392,10 +392,11 @@ Connection::pull(vector_t nframes) noexcept
         auto sbuf = m_source->buffer<midibuffer_t*>();
         auto dbuf = m_dest->buffer<midibuffer_t*>();
 
-        // append midi events to dest ringbuffer
+        // append midi events to dest buffer
         // (without intermediate copy)        
-        for (auto& mt : *sbuf)
+        for (auto& mt : *sbuf) {
             dbuf->push(mt);
+        }
 
         return;
     }

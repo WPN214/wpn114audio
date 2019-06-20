@@ -47,7 +47,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // note: External's outputs become inputs in Graph's point of view
     // and obviously External's inputs are what we will be feeding to jack
 
-    // AUDIO INPUTS ------------------------------------------------------------------------------
+    // FETCH AUDIO INPUTS ------------------------------------------------------------------------------
     if (extout_a->nchannels())
     {
         auto extout_a_buffer = extout_a->buffer<audiobuffer_t>();
@@ -62,7 +62,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         }
     }
 
-    // MIDI INPUTS ------------------------------------------------------------------------------
+    // FETCH MIDI INPUTS ------------------------------------------------------------------------------
 
     if (extout_m->nchannels())
     {
@@ -74,9 +74,6 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
             auto buf = jack_port_get_buffer(input, nframes);
             auto nev = jack_midi_get_event_count(buf);
 
-            if (nev)
-                qDebug() << "in midi events:" << QString::number(nev);
-
             for (jack_nframes_t f = 0; f < nframes; ++f) {
                 for (jack_nframes_t e = 0; e < nev; ++e)
                 {
@@ -85,7 +82,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
                         midi_t* mt = extout_m_buffer.reserve(ev.size-1);
                         mt->frame = ev.time;
                         mt->status = ev.buffer[0];
-                        memcpy(mt->data, ev.buffer, ev.size-1);
+                        memcpy(mt->data, &(ev.buffer[1]), ev.size-1);
                     }}}
             n++;
         }
