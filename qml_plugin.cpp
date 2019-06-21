@@ -44,6 +44,12 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterType<External, 1>
     ("WPN114.Audio", 1, 1, "External");
 
+    qmlRegisterType<Input, 1>
+    ("WPN114.Audio", 1, 1, "Input");
+
+    qmlRegisterType<Output, 1>
+    ("WPN114.Audio", 1, 1, "Output");
+
     qmlRegisterType<Sinetest, 1>
     ("WPN114.Audio", 1, 1, "Sinetest");
 
@@ -56,7 +62,7 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterType<Gateway, 1>
     ("WPN114.Audio", 1, 1, "MIDIGateway");
 
-    qmlRegisterType<MidiTransposer, 1>
+    qmlRegisterType<Transposer, 1>
     ("WPN114.Audio", 1, 1, "MIDITransposer");
 
 }

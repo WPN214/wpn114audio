@@ -84,7 +84,12 @@ public:
 
 private:
 
-    sample_t* m_env = nullptr;
-    sample_t m_rate = 0;
-    size_t m_phs = 0;
+    sample_t*
+    m_env = nullptr;
+
+    sample_t
+    m_rate = 0;
+
+    size_t
+    m_phs = 0;
 };

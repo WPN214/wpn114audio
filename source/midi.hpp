@@ -50,11 +50,7 @@ public:
 
         //-----------------------------------------------------------------------------------------
         midi_t&
-        operator*()
-        {
-            midi_t* mt = reinterpret_cast<midi_t*>(m_data);
-            return *mt;
-        }
+        operator*() { return *reinterpret_cast<midi_t*>(m_data); }
 
         //-----------------------------------------------------------------------------------------
         bool
@@ -99,16 +95,17 @@ public:
     reserve(byte_t nbytes)
     //---------------------------------------------------------------------------------------------
     {
+        byte_t msz = sizeof(midi_t);
         size_t idx = m_index.load();
-        size_t tmp = idx+sizeof(midi_t)+nbytes;
+        size_t tmp = idx+msz+nbytes;
 
         if (tmp > m_capacity.load())
             return nullptr;
 
         midi_t* mt = reinterpret_cast<midi_t*>(&m_data[idx]);
-        memset(mt, 0, sizeof(midi_t)+nbytes);
+        memset(mt, 0, msz+nbytes);
         mt->nbytes = nbytes;
-        mt->data = &(m_data[idx+sizeof(midi_t)]);
+        mt->data = &(m_data[idx+msz]);
 
         m_index.store(tmp);
         m_count++;

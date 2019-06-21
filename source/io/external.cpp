@@ -2,6 +2,28 @@
 #include <jack/midiport.h>
 
 //-------------------------------------------------------------------------------------------------
+void
+External::register_input(Input* input)
+//-------------------------------------------------------------------------------------------------
+{
+    switch(input->type()) {
+        case Input::Type::Audio: m_audio_inputs.push_back(input); break;
+        case Input::Type::Midi: m_midi_inputs.push_back(input); break;
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+void
+External::register_output(Output* output)
+//-------------------------------------------------------------------------------------------------
+{
+    switch(output->type()) {
+        case Output::Type::Audio: m_audio_outputs.push_back(output); break;
+        case Output::Type::Midi: m_midi_outputs.push_back(output); break;
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 int
 JackExternal::on_jack_sample_rate_changed(jack_nframes_t rate, void* udata)
 // static callback, from jack whenever sample rate has changed
@@ -30,56 +52,54 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 // copy the graph's final output into the jack output buffer
 //-------------------------------------------------------------------------------------------------
 {
-    JackExternal&
-    jext = *static_cast<JackExternal*>(udata);
+    auto& j_ext = *static_cast<JackExternal*>(udata);
+    auto& ext = j_ext.parent();
 
-    External&
-    ext = jext.parent();
+    nchannels_t n = 0;
 
-    nchannels_t
-    n = 0;
+    auto audio_inputs   = ext.audio_inputs();
+    auto midi_inputs    = ext.midi_inputs();
 
-    Port
-    *extout_m = ext.default_port(Port::Midi_1_0, Polarity::Output),
-    *extout_a = ext.default_port(Port::Audio, Polarity::Output),
-    *extin_m  = ext.default_port(Port::Midi_1_0, Polarity::Input),
-    *extin_a  = ext.default_port(Port::Audio, Polarity::Input);
-    // note: External's outputs become inputs in Graph's point of view
-    // and obviously External's inputs are what we will be feeding to jack
-
-    // FETCH AUDIO INPUTS ------------------------------------------------------------------------------
-    if (extout_a->nchannels())
+    // AUDIO_INPUTS ------------------------------------------------------------------------------
+    for (auto& input : audio_inputs)
     {
-        auto extout_a_buffer = extout_a->buffer<audiobuffer_t>();
-        for (auto& input : jext.m_audio_inputs) {
-            float* buf = static_cast<float*>(jack_port_get_buffer(input, nframes));
-            // graph is processed in qreal, which usually is double
-            // except is qt is compiled with the qreal=float option
-            // but jack processes in float
+        // directly fetch the output buffer
+        // no need to process the node
+        auto port  = input->default_port(Port::Audio, Polarity::Output);
+        auto bufr  = port->buffer<audiobuffer_t>();
+
+        // todo:
+        for (auto& j_in : j_ext.m_audio_inputs)
+        {
+            float* j_buf = static_cast<float*>(jack_port_get_buffer(j_in, nframes));
+            // TODO: align sample size with jack
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                 extout_a_buffer[n][f] = static_cast<sample_t>(buf[n]);
+                 bufr[n][f] = static_cast<sample_t>(j_buf[n]);
             n++;
         }
     }
 
-    // FETCH MIDI INPUTS ------------------------------------------------------------------------------
+    // MIDI_INPUTS ------------------------------------------------------------------------------
 
-    if (extout_m->nchannels())
+    for (auto& input : midi_inputs)
     {
-        auto& extout_m_buffer = *extout_m->buffer<midibuffer_t*>();
+        auto port = input->default_port(Port::Midi_1_0, Polarity::Output);
+        auto bufr = port->buffer<midibuffer_t*>();
+
         jack_midi_event_t ev;
         n = 0;
 
-        for (auto& input : jext.m_midi_inputs) {
-            auto buf = jack_port_get_buffer(input, nframes);
-            auto nev = jack_midi_get_event_count(buf);
+        for (auto& j_in : j_ext.m_midi_inputs)
+        {
+            auto j_buf = jack_port_get_buffer(j_in, nframes);
+            auto n_evt = jack_midi_get_event_count(j_buf);
 
             for (jack_nframes_t f = 0; f < nframes; ++f) {
-                for (jack_nframes_t e = 0; e < nev; ++e)
+                for (jack_nframes_t e = 0; e < n_evt; ++e)
                 {
-                    jack_midi_event_get(&ev, buf, e);
+                    jack_midi_event_get(&ev, j_buf, e);
                     if (ev.time == f) {
-                        midi_t* mt = extout_m_buffer.reserve(ev.size-1);
+                        midi_t* mt = bufr->reserve(ev.size-1);
                         mt->frame = ev.time;
                         mt->status = ev.buffer[0];
                         memcpy(mt->data, &(ev.buffer[1]), ev.size-1);
@@ -92,35 +112,45 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // process the internal graph
     Graph::instance().run();
 
+    auto audio_outputs  = ext.audio_outputs();
+    auto midi_outputs   = ext.audio_outputs();
+
     // AUDIO OUTPUTS ------------------------------------------------------------------------------
 
-    if (extin_a->nchannels()) {
-        auto extin_a_buffer = extin_a->buffer<audiobuffer_t>();
+    for (auto& audio_out : audio_outputs)
+    {
+        auto port = audio_out->default_port(Port::Audio, Polarity::Input);
+        auto bufr = port->buffer<audiobuffer_t>();
         n = 0;
 
-        for (auto& output : jext.m_audio_outputs) {
-            float* buf = static_cast<float*>(jack_port_get_buffer(output, nframes));
+        for (auto& j_out : j_ext.m_audio_outputs)
+        {
+            float* buf = static_cast<float*>(jack_port_get_buffer(j_out, nframes));
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                buf[f] = static_cast<float>(extin_a_buffer[n][f]);
+                buf[f] = static_cast<float>(bufr[n][f]);
             n++;
         }
     }
 
     // MIDI OUTPUTS ------------------------------------------------------------------------------
 
-    if (extin_m->nchannels()) {
-        auto& extin_m_buffer = *extin_m->buffer<midibuffer_t*>();
+    for (auto& midi_out : midi_outputs)
+    {
+        auto port = midi_out->default_port(Port::Midi_1_0, Polarity::Input);
+        auto bufr = port->buffer<midibuffer_t*>();
         n = 0;
 
-        for (auto& output : jext.m_midi_outputs) {
-            auto buf = jack_port_get_buffer(output, nframes);                
-            for (auto& mt : extin_m_buffer)
-            {
-                jack_midi_data_t* ev = jack_midi_event_reserve(buf, mt.frame, mt.nbytes+1);
-                ev[0] = mt.status;
+        for (auto& j_out : j_ext.m_midi_outputs)
+        {
+            auto j_buf = jack_port_get_buffer(j_out, nframes);
+
+            for (auto& mt : *bufr) {
+                auto ev = jack_midi_event_reserve(j_buf, mt.frame, mt.nbytes+1);
                 memcpy(&(ev[1]), mt.data, mt.nbytes);
+                ev[0] = mt.status;
             }
-        }}
+        }
+    }
 
     return 0;
 }

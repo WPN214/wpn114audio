@@ -2,7 +2,7 @@
 #include <source/graph.hpp>
 
 //---------------------------------------------------------------------------------------------
-class MidiTransposer : public Node
+class Transposer : public Node
 //---------------------------------------------------------------------------------------------
 {
     Q_OBJECT
@@ -14,13 +14,15 @@ class MidiTransposer : public Node
 public:
 
     //---------------------------------------------------------------------------------------------
-    MidiTransposer() { m_name = "MidiTransposer"; }
+    Transposer() { m_name = "MidiTransposer"; }
 
     //---------------------------------------------------------------------------------------------
     virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     //---------------------------------------------------------------------------------------------
     {
+        Q_UNUSED(nframes)
+
         auto in = inputs.midi[0];
         auto transpose = inputs.audio[0][0];
         auto out = outputs.midi[0];

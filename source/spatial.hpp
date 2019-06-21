@@ -71,7 +71,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    virtual void
+    WPN_TODO virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     // update each channel position
     // copy inputs to outputs
@@ -126,8 +126,9 @@ public:
     }
 
     //---------------------------------------------------------------------------------------------
-    virtual void WPN_CLEANUP
+    virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    //---------------------------------------------------------------------------------------------
     {
         auto in = inputs.audio[0][0]; // the input buffer (mono)
         auto out = outputs.audio[0]; // the output buffer (stereo)

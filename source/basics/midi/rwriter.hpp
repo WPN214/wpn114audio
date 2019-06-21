@@ -98,7 +98,7 @@ public:
         mt->status = list[0].toInt();
 
         for (int n = 1; n < list.size(); ++n)
-            mt->data[n-1] = list[n].toInt();
+             mt->data[n-1] = list[n].toInt();
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -133,7 +133,7 @@ public:
     virtual void
     initialize(const Graph::properties& properties) override
     {
-        m_outbuffer.allocate(properties.vector/2);
+        m_outbuffer.allocate(sizeof(sample_t)*properties.vector);
         m_rate = properties.rate;
     }
 
@@ -172,18 +172,17 @@ public:
             case 0xb0: invoke_out_signal_3("control", 0, mt.data[0], mt.data[1]); break;
             case 0xc0: invoke_out_signal_2("program", 0, mt.data[0]); break;
             case 0xd0: invoke_out_signal_2("pressure", 0, mt.data[0]); break;
-            case 0xe0: invoke_out_signal_2("bend", 0, mt.data[0]); break;
+            WPN_TODO case 0xe0: invoke_out_signal_2("bend", 0, mt.data[0]); break;
             }
 
             m_frame++;
         }
 
-        m_frame.store(0);
-
         // copy-write output data
         for (auto& mt : m_outbuffer)
              midi_out->push(mt);
 
+        m_frame.store(0);
         m_outbuffer.clear();
     }
 
@@ -203,6 +202,6 @@ private:
     m_outbuffer;
 
     std::atomic<vector_t>
-    m_frame;
+    m_frame {0};
 
 };

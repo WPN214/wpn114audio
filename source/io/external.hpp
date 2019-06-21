@@ -155,8 +155,11 @@ public:
 
 };
 
+class Input;
+class Output;
+
 //=================================================================================================
-class External : public Node
+class External : public QObject, public QQmlParserStatus
 // this is a generic Node wrapper for the external backends
 // it embeds an AbstrackBackend object
 // and will send it commands and notifications whenever a property changes
@@ -164,25 +167,23 @@ class External : public Node
 {
     Q_OBJECT
 
-    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_out, Polarity::Output, 0)
-    WPN_DECLARE_DEFAULT_AUDIO_PORT  (audio_in, Polarity::Input, 0)
-    WPN_DECLARE_DEFAULT_MIDI_PORT   (midi_in, Polarity::Input, 0)
-    WPN_DECLARE_DEFAULT_MIDI_PORT   (midi_out, Polarity::Output, 0)
-
 public:
     //---------------------------------------------------------------------------------------------
     enum Backend
     //---------------------------------------------------------------------------------------------
     {
         None         = 0,
-        Alsa         = 1,
+//        Alsa         = 1,
         Jack         = 2,
-        PulseAudio   = 3,
-        CoreAudio    = 4,
-        VSTHost      = 5
+//        PulseAudio   = 3,
+//        CoreAudio    = 4,
+//        VSTHost      = 5
     };
 
     Q_ENUM (Backend)
+
+    //---------------------------------------------------------------------------------------------
+    Q_INTERFACES (QQmlParserStatus)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (Backend backend READ backend WRITE set_backend)
@@ -263,10 +264,11 @@ public:
     Backend
     m_backend_id = None;
 
-public:
+    //---------------------------------------------------------------------------------------------
+    QString
+    m_name = "wpn114audio";
 
-    //-------------------------------------------------------------------------------------------------
-    External() { m_name = "External"; }
+public:
 
     //-------------------------------------------------------------------------------------------------
     virtual
@@ -281,14 +283,6 @@ public:
     componentComplete() override
     //-------------------------------------------------------------------------------------------------
     {
-        // note: these are reverted compared to Graph's point of view
-        m_audio_in.set_nchannels(m_out_audio_nchannels);
-        m_audio_out.set_nchannels(m_in_audio_nchannels);
-        m_midi_in.set_nchannels(m_out_midi_nchannels);
-        m_midi_out.set_nchannels(m_in_midi_nchannels);
-
-        Node::componentComplete();
-
         m_complete = true;
         m_backend = new JackExternal(this);
 
@@ -315,12 +309,8 @@ public:
     }
 
     //-------------------------------------------------------------------------------------------------
-    virtual void
-    rwrite(pool&, pool&, vector_t) override {}
-
-    //-------------------------------------------------------------------------------------------------
-    virtual void
-    on_rate_changed(sample_t rate) override { m_backend->on_sample_rate_changed(rate); }
+    void
+    on_rate_changed(sample_t rate) { m_backend->on_sample_rate_changed(rate); }
 
     //-------------------------------------------------------------------------------------------------
     Backend
@@ -518,6 +508,235 @@ public:
     {
         m_running = running;
     }
+
+    //-------------------------------------------------------------------------------------------------
+    QString
+    name() const { return m_name; }
+
+    //-------------------------------------------------------------------------------------------------
+    void
+    set_name(QString name) { m_name = name; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    register_input(Input* input);
+
+    //---------------------------------------------------------------------------------------------
+    void
+    register_output(Output* output);
+
+    //---------------------------------------------------------------------------------------------
+    std::vector<Input*>&
+    midi_inputs() { return m_midi_inputs; }
+
+    //---------------------------------------------------------------------------------------------
+    std::vector<Output*>&
+    midi_outputs() { return m_midi_outputs; }
+
+    //---------------------------------------------------------------------------------------------
+    std::vector<Input*>&
+    audio_inputs() { return m_audio_inputs; }
+
+    //---------------------------------------------------------------------------------------------
+    std::vector<Output*>&
+    audio_outputs() { return m_audio_outputs; }
+
+private:
+
+    std::vector<Input*>
+    m_audio_inputs,
+    m_midi_inputs;
+
+    std::vector<Output*>
+    m_audio_outputs,
+    m_midi_outputs;
+
+};
+
+//---------------------------------------------------------------------------------------------
+class Output : public Node
+//---------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT(audio_in, 0)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT(midi_in, 0)
+
+    //---------------------------------------------------------------------------------------------
+    enum Type { Audio, Midi }; Q_ENUM (Type)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (External* external READ external WRITE set_external)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (Type type READ type WRITE set_type)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariant channels READ channels WRITE set_channels)
+
+    //---------------------------------------------------------------------------------------------
+    External*
+    m_external = nullptr;
+
+    //---------------------------------------------------------------------------------------------
+    Type
+    m_type = Type::Audio;
+
+    //---------------------------------------------------------------------------------------------
+    QVariantList
+    m_channels;
+
+public:
+
+    //---------------------------------------------------------------------------------------------
+    External*
+    external() { return m_external; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_external(External* external)
+    {
+        m_external = external;
+        external->register_output(this);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    Type
+    type() const { return m_type; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_type(Type t) { m_type = t; }
+
+    //---------------------------------------------------------------------------------------------
+    QVariant
+    channels() const { return m_channels; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_channels(QVariant var)
+    {
+
+    }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override
+    //---------------------------------------------------------------------------------------------
+    {
+        if (m_type == Type::Audio)
+            m_audio_in.set_nchannels(m_channels.size());
+        else if (m_type == Type::Midi)
+            m_midi_in.set_nchannels(m_channels.size());
+
+        Node::componentComplete();
+    }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    // nothing to do ?
+    //---------------------------------------------------------------------------------------------
+    {
+
+
+    }
+
+};
+
+//---------------------------------------------------------------------------------------------
+class Input : public Node
+//---------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+    WPN_DECLARE_DEFAULT_AUDIO_OUTPUT(audio_out, 0)
+    WPN_DECLARE_DEFAULT_MIDI_OUTPUT(midi_out, 0)
+
+    //---------------------------------------------------------------------------------------------
+    enum Type { Audio, Midi }; Q_ENUM (Type)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (External* external READ external WRITE set_external)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (Type type READ type WRITE set_type)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariant channels READ channels WRITE set_channels)
+
+    //---------------------------------------------------------------------------------------------
+    External*
+    m_external = nullptr;
+
+    //---------------------------------------------------------------------------------------------
+    Type
+    m_type = Type::Audio;
+
+    //---------------------------------------------------------------------------------------------
+    QVariantList
+    m_channels;
+
+public:
+
+    Input()
+    {
+
+    }
+
+    //---------------------------------------------------------------------------------------------
+    External*
+    external() { return m_external; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_external(External* external)
+    {
+        m_external = external;
+        external->register_input(this);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    Type
+    type() const { return m_type; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_type(Type t) { m_type = t; }
+
+    //---------------------------------------------------------------------------------------------
+    QVariant
+    channels() const { return m_channels; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_channels(QVariant var)
+    {
+
+    }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override
+    //---------------------------------------------------------------------------------------------
+    {
+        if (m_type == Type::Audio)
+            m_audio_out.set_nchannels(m_channels.size());
+        else if (m_type == Type::Midi)
+            m_midi_out.set_nchannels(m_channels.size());
+
+        Node::componentComplete();
+    }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    //---------------------------------------------------------------------------------------------
+    {
+
+
+    }
+
 };
 
 

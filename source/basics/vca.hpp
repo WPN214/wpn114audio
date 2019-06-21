@@ -30,6 +30,6 @@ public:
         auto out    = outputs.audio[VCA::audio_out][0];
 
         for (vector_t f = 0; f < nframes; ++f)
-            out[f] = in[f] * gain[f];
+             out[f] = in[f] * gain[f];
     }
 };
