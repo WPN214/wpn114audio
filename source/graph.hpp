@@ -461,6 +461,9 @@ class Port : public QObject
     Q_PROPERTY (Type type READ type)
 
     // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (QVariant assign WRITE assign)
+
+    // --------------------------------------------------------------------------------------------
     friend class Connection;
     friend class Graph;
     friend class Node;
@@ -550,6 +553,9 @@ public:
     void
     assign(Port* p);
     // explicitely assign another Port to this one in ordre to make a connection
+
+    void
+    assign(QVariant variant);
 
     // --------------------------------------------------------------------------------------------
     qreal

@@ -52,6 +52,38 @@ Port::assign(Port* p)
     }
 }
 
+void
+Port::assign(QVariant v)
+{
+    if (v.canConvert<Node*>())
+    {
+        auto node = v.value<Node*>();
+
+        switch(m_polarity)
+        {
+        case Polarity::Input: {
+            auto target = node->default_port(m_type, Polarity::Output);
+            Graph::instance().connect(*target, *this); break;
+        }
+        case Polarity::Output: {
+            auto target = node->default_port(m_type, Polarity::Input);
+            Graph::instance().connect(*this, *target);
+        }}
+    }
+
+    else if (v.canConvert<Port*>())
+        assign(v.value<Port*>());
+
+    else if (v.canConvert<Connection>())
+    {
+        WPN_TODO
+    }
+
+    else if (v.canConvert<QVariantList>())
+        for (auto& element : v.value<QVariantList>())
+             assign(element);
+}
+
 // ------------------------------------------------------------------------------------------------
 WPN_TODO void
 Port::set_nchannels(nchannels_t nchannels)
