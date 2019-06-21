@@ -9,7 +9,7 @@ Graph*
 Graph::s_instance;
 
 // ------------------------------------------------------------------------------------------------
-sample_t**
+template<> audiobuffer_t
 wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
 // we make no assumption as to how many channels each input/output may have
 // by the time the graph is ready/updated, so we can't really template it upfront
@@ -18,6 +18,19 @@ wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
     sample_t** block = new sample_t*[nchannels];
     for (nchannels_t n = 0; n < nchannels; ++n)
         block[n] = new sample_t[nframes];
+
+    return block;
+}
+
+// ------------------------------------------------------------------------------------------------
+template<> midibuffer_t
+wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
+// ------------------------------------------------------------------------------------------------
+{
+    midibuffer** block = new midibuffer*[nchannels];
+
+    for (nchannels_t n = 0; n < nchannels; ++n)
+         block[n] = new midibuffer(sizeof(sample_t)*nframes);
 
     return block;
 }
@@ -52,8 +65,10 @@ Port::assign(Port* p)
     }
 }
 
+// ------------------------------------------------------------------------------------------------
 void
 Port::assign(QVariant v)
+// ------------------------------------------------------------------------------------------------
 {
     if (v.canConvert<Node*>())
     {
@@ -190,7 +205,8 @@ Port::reset()
 // ------------------------------------------------------------------------------------------------
 {
     if (m_type == Port::Midi_1_0)
-        m_buffer.midi.clear();
+        for (nchannels_t n = 0; n < m_nchannels; ++n)
+             m_buffer.midi[n]->clear();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -210,6 +226,16 @@ void
 Port::add_connection(Connection* con)
 {
     m_connections.push_back(con);
+}
+
+#include <source/io/external.hpp>
+
+// ------------------------------------------------------------------------------------------------
+Graph::Graph()
+// ------------------------------------------------------------------------------------------------
+{
+    s_instance = this;
+    m_external = new External;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -281,7 +307,9 @@ Graph::componentComplete()
     for (auto& node : m_nodes)
         node->on_graph_complete(m_properties);
 
-    Graph::debug("i/o allocation complete");
+    Graph::debug("i/o allocation complete, setting up external configuration");
+    m_external->componentComplete();
+
     emit complete();
 }
 
@@ -355,12 +383,12 @@ Node::allocate_pools()
     for (auto& port : m_input_ports)
         if (port->type() == Port::Audio)
              m_input_pool.audio.push_back(port->buffer<audiobuffer_t>());
-        else m_input_pool.midi.push_back(port->buffer<midibuffer_t*>());
+        else m_input_pool.midi.push_back(port->buffer<midibuffer_t>());
 
     for (auto& port : m_output_ports)
         if (port->type() == Port::Audio)
              m_output_pool.audio.push_back(port->buffer<audiobuffer_t>());
-        else m_output_pool.midi.push_back(port->buffer<midibuffer_t*>());
+        else m_output_pool.midi.push_back(port->buffer<midibuffer_t>());
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -420,15 +448,21 @@ Connection::pull(vector_t nframes) noexcept
     // in the case of a MIDI connection
     if (m_source->type() == Port::Midi_1_0)
     {
-        auto sbuf = m_source->buffer<midibuffer_t*>();
-        auto dbuf = m_dest->buffer<midibuffer_t*>();
+        auto sbuf = m_source->buffer<midibuffer_t>();
+        auto dbuf = m_dest->buffer<midibuffer_t>();
+
+        Routing routing = m_routing;
 
         // append midi events to dest buffer
-        // (without intermediate copy)        
-        for (auto& mt : *sbuf) {
-            dbuf->push(mt);
-        }
-
+        // (without intermediate copy)
+        if (routing.null())
+            for (nchannels_t c = 0; c < m_nchannels; ++c)
+                for (auto& mt : *sbuf[c])
+                     dbuf[c]->push(mt);
+        else
+            for (nchannels_t c = 0; c < routing.ncables(); ++c)
+                for (auto& mt : *sbuf[routing[c][0]])
+                     dbuf[routing[c][1]]->push(mt);
         return;
     }
 

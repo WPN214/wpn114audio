@@ -271,6 +271,9 @@ public:
 public:
 
     //-------------------------------------------------------------------------------------------------
+    External() {}
+
+    //-------------------------------------------------------------------------------------------------
     virtual
     ~External() override { delete m_backend; }
 
@@ -286,9 +289,15 @@ public:
         m_complete = true;
         m_backend = new JackExternal(this);
 
+        qDebug() << "[GRAPH] external configuration complete";
+
         if (m_running)
             m_backend->run();
     }
+
+    //-------------------------------------------------------------------------------------------------
+    Q_SIGNAL void
+    connected();
 
     //-------------------------------------------------------------------------------------------------
     Q_INVOKABLE void
@@ -566,39 +575,23 @@ class Output : public Node
     enum Type { Audio, Midi }; Q_ENUM (Type)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (External* external READ external WRITE set_external)
-
-    //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (Type type READ type WRITE set_type)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariant channels READ channels WRITE set_channels)
 
     //---------------------------------------------------------------------------------------------
-    External*
-    m_external = nullptr;
-
-    //---------------------------------------------------------------------------------------------
     Type
     m_type = Type::Audio;
 
     //---------------------------------------------------------------------------------------------
-    QVariantList
+    QVector<int>
     m_channels;
 
 public:
 
     //---------------------------------------------------------------------------------------------
-    External*
-    external() { return m_external; }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_external(External* external)
-    {
-        m_external = external;
-        external->register_output(this);
-    }
+    Output() { m_name = "Output"; }
 
     //---------------------------------------------------------------------------------------------
     Type
@@ -610,13 +603,21 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QVariant
-    channels() const { return m_channels; }
+    channels() const { return QVariant::fromValue(m_channels); }
+
+    QVector<int>&
+    channels_vec() { return m_channels; }
 
     //---------------------------------------------------------------------------------------------
     void
     set_channels(QVariant var)
     {
+        if (var.canConvert<int>())
+            m_channels.push_back(var.value<int>());
 
+        else if (var.canConvert<QVariantList>())
+            for (auto& channel : var.value<QVariantList>())
+                set_channels(channel);
     }
 
     //---------------------------------------------------------------------------------------------
@@ -624,24 +625,37 @@ public:
     componentComplete() override
     //---------------------------------------------------------------------------------------------
     {
-        if (m_type == Type::Audio)
-            m_audio_in.set_nchannels(m_channels.size());
-        else if (m_type == Type::Midi)
-            m_midi_in.set_nchannels(m_channels.size());
+        Graph::instance().external()->register_output(this);
+
+        if (m_channels.isEmpty())
+        {
+            if (m_type == Type::Audio)
+            {
+                auto nchannels = Graph::instance().external()->n_audio_outputs();
+                for (int n = 0; n < nchannels; ++n)
+                     m_channels.push_back(n);
+
+                m_audio_in.set_nchannels(nchannels);
+            }
+            else
+            {
+                auto nchannels = Graph::instance().external()->n_midi_outputs();
+                for (int n = 0; n < nchannels; ++n)
+                     m_channels.push_back(n);
+
+                m_midi_in.set_nchannels(nchannels);
+            }
+        }
+        else
+        {
+            if (m_type == Type::Audio)
+                 m_audio_in.set_nchannels(m_channels.count());
+            else m_midi_in.set_nchannels(m_channels.count());
+
+        }
 
         Node::componentComplete();
     }
-
-    //---------------------------------------------------------------------------------------------
-    virtual void
-    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
-    // nothing to do ?
-    //---------------------------------------------------------------------------------------------
-    {
-
-
-    }
-
 };
 
 //---------------------------------------------------------------------------------------------
@@ -657,44 +671,23 @@ class Input : public Node
     enum Type { Audio, Midi }; Q_ENUM (Type)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (External* external READ external WRITE set_external)
-
-    //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (Type type READ type WRITE set_type)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariant channels READ channels WRITE set_channels)
 
     //---------------------------------------------------------------------------------------------
-    External*
-    m_external = nullptr;
-
-    //---------------------------------------------------------------------------------------------
     Type
     m_type = Type::Audio;
 
     //---------------------------------------------------------------------------------------------
-    QVariantList
+    QVector<int>
     m_channels;
 
 public:
 
-    Input()
-    {
-
-    }
-
     //---------------------------------------------------------------------------------------------
-    External*
-    external() { return m_external; }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_external(External* external)
-    {
-        m_external = external;
-        external->register_input(this);
-    }
+    Input() { m_name = "Input"; }
 
     //---------------------------------------------------------------------------------------------
     Type
@@ -706,13 +699,21 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QVariant
-    channels() const { return m_channels; }
+    channels() const { return QVariant::fromValue(m_channels); }
+
+    QVector<int>&
+    channels_vec() { return m_channels; }
 
     //---------------------------------------------------------------------------------------------
     void
     set_channels(QVariant var)
     {
+        if (var.canConvert<int>())
+            m_channels.push_back(var.value<int>());
 
+        else if (var.canConvert<QVariantList>())
+            for (auto& channel : var.value<QVariantList>())
+                set_channels(channel);
     }
 
     //---------------------------------------------------------------------------------------------
@@ -720,23 +721,35 @@ public:
     componentComplete() override
     //---------------------------------------------------------------------------------------------
     {
-        if (m_type == Type::Audio)
-            m_audio_out.set_nchannels(m_channels.size());
-        else if (m_type == Type::Midi)
-            m_midi_out.set_nchannels(m_channels.size());
+        Graph::instance().external()->register_input(this);
+
+        if (m_channels.isEmpty())
+        {
+            if (m_type == Type::Audio)
+            {
+                auto nchannels = Graph::instance().external()->n_audio_inputs();
+                for (int n = 0; n < nchannels; ++n)
+                     m_channels.push_back(n);
+
+                m_audio_out.set_nchannels(nchannels);
+            }
+            else
+            {
+                auto nchannels = Graph::instance().external()->n_midi_inputs();
+                for (int n = 0; n < nchannels; ++n)
+                     m_channels.push_back(n);
+
+                m_midi_out.set_nchannels(nchannels);
+            }
+        }
+        else
+        {
+            if (m_type == Type::Audio)
+                 m_audio_out.set_nchannels(m_channels.count());
+            else m_midi_out.set_nchannels(m_channels.count());
+
+        }
 
         Node::componentComplete();
     }
-
-    //---------------------------------------------------------------------------------------------
-    virtual void
-    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
-    //---------------------------------------------------------------------------------------------
-    {
-
-
-    }
-
 };
-
-

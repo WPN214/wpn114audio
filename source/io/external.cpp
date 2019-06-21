@@ -68,13 +68,15 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         auto port  = input->default_port(Port::Audio, Polarity::Output);
         auto bufr  = port->buffer<audiobuffer_t>();
 
-        // todo:
-        for (auto& j_in : j_ext.m_audio_inputs)
+        auto channels = input->channels_vec();
+
+        for (auto& channel : input->channels_vec())
         {
-            float* j_buf = static_cast<float*>(jack_port_get_buffer(j_in, nframes));
-            // TODO: align sample size with jack
+            auto j_in = j_ext.m_audio_inputs[channel];
+            auto j_buf = static_cast<float*>(jack_port_get_buffer(j_in, nframes));
+
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                 bufr[n][f] = static_cast<sample_t>(j_buf[n]);
+                 bufr[0][f] = static_cast<sample_t>(j_buf[f]);
             n++;
         }
     }
@@ -84,22 +86,25 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     for (auto& input : midi_inputs)
     {
         auto port = input->default_port(Port::Midi_1_0, Polarity::Output);
-        auto bufr = port->buffer<midibuffer_t*>();
+        auto bufr = port->buffer<midibuffer_t>();
+
+        auto channels = input->channels_vec();
 
         jack_midi_event_t ev;
         n = 0;
 
-        for (auto& j_in : j_ext.m_midi_inputs)
+        for (auto& channel : channels)
         {
-            auto j_buf = jack_port_get_buffer(j_in, nframes);
-            auto n_evt = jack_midi_get_event_count(j_buf);
+            auto j_in   = j_ext.m_midi_inputs[channel];
+            auto j_buf  = jack_port_get_buffer(j_in, nframes);
+            auto n_evt  = jack_midi_get_event_count(j_buf);
 
             for (jack_nframes_t f = 0; f < nframes; ++f) {
                 for (jack_nframes_t e = 0; e < n_evt; ++e)
                 {
                     jack_midi_event_get(&ev, j_buf, e);
                     if (ev.time == f) {
-                        midi_t* mt = bufr->reserve(ev.size-1);
+                        midi_t* mt = bufr[n]->reserve(ev.size-1);
                         mt->frame = ev.time;
                         mt->status = ev.buffer[0];
                         memcpy(mt->data, &(ev.buffer[1]), ev.size-1);
@@ -121,13 +126,18 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     {
         auto port = audio_out->default_port(Port::Audio, Polarity::Input);
         auto bufr = port->buffer<audiobuffer_t>();
+
+        auto channels = audio_out->channels_vec();
+
         n = 0;
 
-        for (auto& j_out : j_ext.m_audio_outputs)
+        for (auto& channel : channels)
         {
-            float* buf = static_cast<float*>(jack_port_get_buffer(j_out, nframes));
+            auto j_out = j_ext.m_audio_outputs[channel];
+            auto j_buf = static_cast<float*>(jack_port_get_buffer(j_out, nframes));
+
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                buf[f] = static_cast<float>(bufr[n][f]);
+                j_buf[f] = static_cast<float>(bufr[n][f]);
             n++;
         }
     }
@@ -137,18 +147,23 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     for (auto& midi_out : midi_outputs)
     {
         auto port = midi_out->default_port(Port::Midi_1_0, Polarity::Input);
-        auto bufr = port->buffer<midibuffer_t*>();
+        auto bufr = port->buffer<midibuffer_t>();
+        auto channels = midi_out->channels_vec();
         n = 0;
 
-        for (auto& j_out : j_ext.m_midi_outputs)
+        for (auto channel : channels)
         {
+            auto j_out = j_ext.m_midi_outputs[channel];
             auto j_buf = jack_port_get_buffer(j_out, nframes);
 
-            for (auto& mt : *bufr) {
+            for (auto& mt : *bufr[n])
+            {
                 auto ev = jack_midi_event_reserve(j_buf, mt.frame, mt.nbytes+1);
                 memcpy(&(ev[1]), mt.data, mt.nbytes);
                 ev[0] = mt.status;
             }
+
+            n++;
         }
     }
 
@@ -237,6 +252,7 @@ JackExternal::connect_ports(
         return;
 
     for (auto& target : targets) {
+
         auto ctarget = jack_get_ports(m_client, CSTR(target), type, polarity);
 
         if (!ctarget) {
@@ -301,5 +317,6 @@ JackExternal::run()
                   m_parent.out_midi_targets_list(),
                   m_parent.out_midi_routing());
 
+    m_parent.connected();
     qDebug() << "[JACK] running";
 }

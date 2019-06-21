@@ -86,9 +86,11 @@ using byte_t        = uint8_t;
 using vector_t      = uint16_t;
 using nframes_t     = uint32_t;
 
-using audiobuffer_t = sample_t**;
 
 #include <source/midi.hpp>
+
+using audiobuffer_t = sample_t**;
+using midibuffer_t  = midibuffer**;
 
 //=================================================================================================
 struct pool
@@ -96,7 +98,7 @@ struct pool
 //=================================================================================================
 {
     std::vector<audiobuffer_t> audio;
-    std::vector<midibuffer_t*> midi;
+    std::vector<midibuffer_t> midi;
 };
 
 class Connection;
@@ -106,7 +108,7 @@ class Node;
 namespace wpn114
 {
 //-------------------------------------------------------------------------------------------------
-sample_t**
+template<typename T> T
 allocate_buffer(nchannels_t nchannels, vector_t nframes);
 
 //-------------------------------------------------------------------------------------------------
@@ -461,7 +463,7 @@ class Port : public QObject
     Q_PROPERTY (Type type READ type)
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (QVariant assign WRITE assign)
+    Q_PROPERTY (QVariant assign READ get_assign WRITE assign)
 
     // --------------------------------------------------------------------------------------------
     friend class Connection;
@@ -556,6 +558,10 @@ public:
 
     void
     assign(QVariant variant);
+
+    // --------------------------------------------------------------------------------------------
+    QVariant
+    get_assign() const { return QVariant(); }
 
     // --------------------------------------------------------------------------------------------
     qreal
@@ -670,12 +676,11 @@ private:
     allocate(vector_t nframes)
     // --------------------------------------------------------------------------------------------
     {
-        if  (m_type == Port::Midi_1_0) {
+        if   (m_type == Port::Midi_1_0)
             // we allocate the same buffer size (in bytes) for the midibuffer
-             new (&m_buffer.midi) midibuffer_t;
-             m_buffer.midi.allocate(sizeof(sample_t)*nframes);
-        }
-        else m_buffer.audio = wpn114::allocate_buffer(m_nchannels, nframes);
+             m_buffer.midi = wpn114::allocate_buffer<midibuffer_t>(m_nchannels, nframes);
+
+        else m_buffer.audio = wpn114::allocate_buffer<audiobuffer_t>(m_nchannels, nframes);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -770,12 +775,17 @@ private:
 
 Q_DECLARE_METATYPE(Port)
 
+class External;
+
 //=================================================================================================
 class Graph : public QObject, public QQmlParserStatus
 // embeds all connections between instantiated nodes
 //=================================================================================================
 {
     Q_OBJECT
+
+    // --------------------------------------------------------------------------------------------
+    Q_PROPERTY (External* extern READ external)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (int vector READ vector WRITE set_vector)
@@ -809,7 +819,7 @@ public:
     };
 
     // --------------------------------------------------------------------------------------------
-    Graph() { s_instance = this; }
+    Graph();
 
     // --------------------------------------------------------------------------------------------
     static Graph&
@@ -954,6 +964,10 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
+    External*
+    external() { return m_external; }
+
+    // --------------------------------------------------------------------------------------------
     Q_SIGNAL void
     rateChanged(sample_t);
 
@@ -1043,6 +1057,10 @@ private:
     // --------------------------------------------------------------------------------------------
     QVector<Node*>
     m_subnodes;
+
+    // --------------------------------------------------------------------------------------------
+    External*
+    m_external = nullptr;
 };
 
 // --------------------------------------------------------------------------------------------
