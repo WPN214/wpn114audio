@@ -176,7 +176,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
     cable&
-    operator[](uint8_t index) { return m_routing[index]; }
+    operator[](nchannels_t index) { return m_routing[index]; }
     // returns routing matrix 'cable' at index
 
     // --------------------------------------------------------------------------------------------
@@ -317,6 +317,11 @@ public:
     setTarget(const QQmlProperty& target) override;
     // qml property binding, e. g.:
     // Connection on 'Port' { level: db(-12); routing: [0, 1] }
+
+    // --------------------------------------------------------------------------------------------
+    void
+    update();
+    // this might be temporary, this is called when source or dest's number of channels changes
 
     // --------------------------------------------------------------------------------------------
     Q_INVOKABLE void
@@ -673,15 +678,7 @@ private:
 
     // --------------------------------------------------------------------------------------------
     void
-    allocate(vector_t nframes)
-    // --------------------------------------------------------------------------------------------
-    {
-        if   (m_type == Port::Midi_1_0)
-            // we allocate the same buffer size (in bytes) for the midibuffer
-             m_buffer.midi = wpn114::allocate_buffer<midibuffer_t>(m_nchannels, nframes);
-
-        else m_buffer.audio = wpn114::allocate_buffer<audiobuffer_t>(m_nchannels, nframes);
-    }
+    allocate(vector_t nframes);
 
     // --------------------------------------------------------------------------------------------
     void
@@ -1440,6 +1437,30 @@ public:
                     output->reset();
     }
 
+    // --------------------------------------------------------------------------------------------
+    WPN_AUDIOTHREAD void
+    process(vector_t nframes) noexcept
+    // pre-processing main function
+    // --------------------------------------------------------------------------------------------
+    {
+        m_processed = true;
+
+        for (auto& port : m_input_ports) {
+            // we start by pulling the input Port value (if Audio)
+            // that has been (or not) set asynchronously from the user thread
+            if  (port->type() == Port::Audio)
+                 port->pull_value(nframes);
+            else port->reset();
+            // then, we pull all Port connections (we'll see later for multithreading)
+
+            for (auto& connection : port->connections())
+                if (connection->active())
+                    connection->pull(nframes);
+        }
+
+        rwrite(m_input_pool, m_output_pool, nframes);
+    }
+
 protected:
 
     // --------------------------------------------------------------------------------------------
@@ -1460,31 +1481,6 @@ protected:
     WPN_CLEANUP void
     allocate_pools();
     // defined in .cpp as not to break the ODR
-
-    // --------------------------------------------------------------------------------------------
-    WPN_AUDIOTHREAD void
-    process(vector_t nframes) noexcept
-    // pre-processing main function
-    // --------------------------------------------------------------------------------------------
-    {
-        m_processed = true;
-
-        for (auto& port : m_input_ports) {
-            // we start by pulling the input Port value (if Audio)
-            // that has been (or not) set asynchronously from the user thread            
-            if  (port->type() == Port::Audio)
-                 port->pull_value(nframes);
-            else port->reset();
-            // then, we pull all Port connections (we'll see later for multithreading)
-
-            for (auto& connection : port->connections()) {
-                if (connection->active())
-                    connection->pull(nframes);
-            }
-        }
-
-        rwrite(m_input_pool, m_output_pool, nframes);
-    }
 
     // --------------------------------------------------------------------------------------------
     pool&

@@ -23,16 +23,16 @@ public:
     {
         Q_UNUSED(nframes)
 
-        auto in = inputs.midi[0];
+        auto in = inputs.midi[0][0];
         auto transpose = inputs.audio[0][0];
-        auto out = outputs.midi[0];
+        auto out = outputs.midi[0][0];
 
         for (auto& event : *in)
         {
             switch(event.status & 0xf0) {
             case 0x80: case 0x90:
                 event.data[0] += static_cast<byte_t>(transpose[event.frame]);
-            break;
+                break;
             }
 
             out->push(event);

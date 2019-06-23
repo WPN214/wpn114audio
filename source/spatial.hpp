@@ -121,8 +121,8 @@ public:
     StereoPanner()
     {
         m_name = "StereoPanner";
-        default_port(Polarity::Input)->set_nchannels(1);
-        default_port(Polarity::Output)->set_nchannels(2);
+        m_audio_in.set_nchannels(1);
+        m_audio_out.set_nchannels(2);
     }
 
     //---------------------------------------------------------------------------------------------

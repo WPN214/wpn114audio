@@ -54,6 +54,18 @@ Port::Port(Node* parent, QString name, Type type, Polarity polarity,
 
 // ------------------------------------------------------------------------------------------------
 void
+Port::allocate(vector_t nframes)
+// ------------------------------------------------------------------------------------------------
+{
+    if   (m_type == Port::Midi_1_0)
+        // we allocate the same buffer size (in bytes) for the midibuffer
+         m_buffer.midi = wpn114::allocate_buffer<midibuffer_t>(m_nchannels, nframes);
+
+    else m_buffer.audio = wpn114::allocate_buffer<audiobuffer_t>(m_nchannels, nframes);
+}
+
+// ------------------------------------------------------------------------------------------------
+void
 Port::assign(Port* p)
 // this is called from QML when another port is explicitely assigned to this one
 // we make an implicit connection between the two
@@ -69,7 +81,7 @@ Port::assign(Port* p)
 void
 Port::assign(QVariant v)
 // ------------------------------------------------------------------------------------------------
-{
+{    
     if (v.canConvert<Node*>())
     {
         auto node = v.value<Node*>();
@@ -106,6 +118,8 @@ Port::set_nchannels(nchannels_t nchannels)
 // ------------------------------------------------------------------------------------------------
 {
     m_nchannels = nchannels;
+    for (auto& connection : m_connections)
+         connection->update();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -196,8 +210,8 @@ Port::connected(Node const& n) const noexcept
 template<> audiobuffer_t
 Port::buffer() noexcept { return m_buffer.audio; }
 
-template<> midibuffer_t*
-Port::buffer() noexcept { return &m_buffer.midi; }
+template<> midibuffer_t
+Port::buffer() noexcept { return m_buffer.midi; }
 
 // ------------------------------------------------------------------------------------------------
 void
@@ -225,6 +239,7 @@ Graph::register_node(Node& node) noexcept
 void
 Port::add_connection(Connection* con)
 {
+    con->update();
     m_connections.push_back(con);
 }
 
@@ -323,8 +338,14 @@ Graph::run() noexcept
     for (auto& subnode : m_subnodes)
         subnode->process(nframes);
 
-    for (auto& node : m_nodes)
+    for (auto& node : m_nodes) {
+        // a temporary fix for nodes that have no direct outputs linked to the graph
+        // this is the case for Output Node for example
+        if (!node->processed())
+            node->process(nframes);
+
         node->set_processed(false);
+    }
 
     return nframes;
 }
@@ -428,6 +449,14 @@ Connection::componentComplete()
     m_mul = m_source->mul() * m_dest->mul();
     m_add = m_source->add() + m_dest->add();
     m_muted = m_source->muted() || m_dest->muted();
+}
+
+// ------------------------------------------------------------------------------------------------
+void
+Connection::update()
+// ------------------------------------------------------------------------------------------------
+{
+    m_nchannels = std::min(m_source->nchannels(), m_dest->nchannels());
 }
 
 // ------------------------------------------------------------------------------------------------

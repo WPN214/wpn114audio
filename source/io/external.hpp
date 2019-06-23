@@ -107,6 +107,10 @@ class JackExternal : public ExternalBase
     jack_process_callback(jack_nframes_t nframes, void* udata);
 
     //---------------------------------------------------------------------------------------------
+    static void
+    on_jack_client_registration(const char* name, int reg, void* udata);
+
+    //---------------------------------------------------------------------------------------------
     void
     register_ports(nchannels_t nchannels,
                    const char* port_mask,
@@ -629,29 +633,24 @@ public:
 
         if (m_channels.isEmpty())
         {
-            if (m_type == Type::Audio)
-            {
+            if (m_type == Type::Audio) {
                 auto nchannels = Graph::instance().external()->n_audio_outputs();
                 for (int n = 0; n < nchannels; ++n)
                      m_channels.push_back(n);
-
                 m_audio_in.set_nchannels(nchannels);
             }
-            else
-            {
+            else {
                 auto nchannels = Graph::instance().external()->n_midi_outputs();
                 for (int n = 0; n < nchannels; ++n)
                      m_channels.push_back(n);
-
                 m_midi_in.set_nchannels(nchannels);
             }
         }
         else
         {
-            if (m_type == Type::Audio)
+            if  (m_type == Type::Audio)
                  m_audio_in.set_nchannels(m_channels.count());
             else m_midi_in.set_nchannels(m_channels.count());
-
         }
 
         Node::componentComplete();
@@ -725,29 +724,24 @@ public:
 
         if (m_channels.isEmpty())
         {
-            if (m_type == Type::Audio)
-            {
+            if (m_type == Type::Audio) {
                 auto nchannels = Graph::instance().external()->n_audio_inputs();
                 for (int n = 0; n < nchannels; ++n)
                      m_channels.push_back(n);
-
                 m_audio_out.set_nchannels(nchannels);
             }
-            else
-            {
+            else {
                 auto nchannels = Graph::instance().external()->n_midi_inputs();
                 for (int n = 0; n < nchannels; ++n)
                      m_channels.push_back(n);
-
                 m_midi_out.set_nchannels(nchannels);
             }
         }
         else
         {
-            if (m_type == Type::Audio)
+            if  (m_type == Type::Audio)
                  m_audio_out.set_nchannels(m_channels.count());
             else m_midi_out.set_nchannels(m_channels.count());
-
         }
 
         Node::componentComplete();

@@ -59,7 +59,7 @@ public:
 
         //-----------------------------------------------------------------------------------------
         bool
-        operator !=(iterator const& rhs) { return !operator==(rhs); }
+        operator!=(iterator const& rhs) { return !operator==(rhs); }
 
     private:
         byte_t*

@@ -94,11 +94,11 @@ public:
     //-------------------------------------------------------------------------------------------------
     {
         midi_t* mt = m_outbuffer.reserve(list.size()-1);
-        mt->frame = m_frame.load();
-        mt->status = list[0].toInt();
+        mt->frame = m_frame;
+        mt->status = list[0].value<byte_t>();
 
         for (int n = 1; n < list.size(); ++n)
-             mt->data[n-1] = list[n].toInt();
+             mt->data[n-1] = list[n].value<byte_t>();
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -160,8 +160,8 @@ public:
     virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     {
-        auto midi_events  = inputs.midi[0];
-        auto midi_out     = outputs.midi[0];
+        auto midi_events  = inputs.midi[0][0];
+        auto midi_out     = outputs.midi[0][0];
 
         for (auto& mt : *midi_events)
         {            
@@ -182,7 +182,7 @@ public:
         for (auto& mt : m_outbuffer)
              midi_out->push(mt);
 
-        m_frame.store(0);
+        m_frame = 0;
         m_outbuffer.clear();
     }
 
@@ -198,7 +198,7 @@ private:
     sample_t
     m_rate = 0;
 
-    midibuffer_t
+    midibuffer
     m_outbuffer;
 
     std::atomic<vector_t>

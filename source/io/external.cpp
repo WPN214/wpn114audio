@@ -8,7 +8,7 @@ External::register_input(Input* input)
 {
     switch(input->type()) {
         case Input::Type::Audio: m_audio_inputs.push_back(input); break;
-        case Input::Type::Midi: m_midi_inputs.push_back(input); break;
+        case Input::Type::Midi: m_midi_inputs.push_back(input);
     }
 }
 
@@ -19,7 +19,7 @@ External::register_output(Output* output)
 {
     switch(output->type()) {
         case Output::Type::Audio: m_audio_outputs.push_back(output); break;
-        case Output::Type::Midi: m_midi_outputs.push_back(output); break;
+        case Output::Type::Midi: m_midi_outputs.push_back(output);
     }
 }
 
@@ -43,6 +43,15 @@ JackExternal::on_jack_buffer_size_changed(jack_nframes_t nframes, void* udata)
 {
     Graph::instance().set_vector(nframes);
     return 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+void
+JackExternal::on_jack_client_registration(const char* name, int reg, void* udata)
+// static callback, will be used to monitor client targets disconnections/reconnections
+//-------------------------------------------------------------------------------------------------
+{
+    qDebug() << QString(name);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -87,9 +96,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     {
         auto port = input->default_port(Port::Midi_1_0, Polarity::Output);
         auto bufr = port->buffer<midibuffer_t>();
-
         auto channels = input->channels_vec();
-
         jack_midi_event_t ev;
         n = 0;
 
@@ -117,8 +124,9 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // process the internal graph
     Graph::instance().run();
 
+    // fill outputs
     auto audio_outputs  = ext.audio_outputs();
-    auto midi_outputs   = ext.audio_outputs();
+    auto midi_outputs   = ext.midi_outputs();
 
     // AUDIO OUTPUTS ------------------------------------------------------------------------------
 
@@ -126,9 +134,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     {
         auto port = audio_out->default_port(Port::Audio, Polarity::Input);
         auto bufr = port->buffer<audiobuffer_t>();
-
         auto channels = audio_out->channels_vec();
-
         n = 0;
 
         for (auto& channel : channels)
@@ -145,7 +151,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // MIDI OUTPUTS ------------------------------------------------------------------------------
 
     for (auto& midi_out : midi_outputs)
-    {
+    {        
         auto port = midi_out->default_port(Port::Midi_1_0, Polarity::Input);
         auto bufr = port->buffer<midibuffer_t>();
         auto channels = midi_out->channels_vec();
@@ -220,6 +226,7 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
     jack_set_sample_rate_callback(m_client, on_jack_sample_rate_changed, this);
     jack_set_buffer_size_callback(m_client, on_jack_buffer_size_changed, this);
     jack_set_process_callback(m_client, jack_process_callback, this);
+    jack_set_client_registration_callback(m_client, on_jack_client_registration, this);
 
     // register input/output ports
     register_ports(parent->n_audio_inputs(), "audio_in",
@@ -295,7 +302,7 @@ JackExternal::run()
     jack_activate(m_client);
 
     // if there are input/output targets
-    // make the connections
+    // make the appropriate connections
     qDebug() << "[JACK] connecting ports";
     connect_ports(m_audio_inputs, JackPortIsOutput,
                   JACK_DEFAULT_AUDIO_TYPE,
