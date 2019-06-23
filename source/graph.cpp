@@ -320,7 +320,16 @@ Graph::componentComplete()
     Graph::debug("component complete, allocating nodes i/o");
 
     for (auto& node : m_nodes)
+    {
         node->on_graph_complete(m_properties);
+        // at this point, all io should have been done
+        // we register all Nodes that do not have any output
+        // to the list of direct subnodes
+        // they won't be processed by the Graph otherwise
+        if (!node->m_output_ports.size() &&
+                !m_subnodes.contains(node))
+            m_subnodes.push_back(node);
+    }
 
     Graph::debug("i/o allocation complete, setting up external configuration");
     m_external->componentComplete();
@@ -338,14 +347,8 @@ Graph::run() noexcept
     for (auto& subnode : m_subnodes)
         subnode->process(nframes);
 
-    for (auto& node : m_nodes) {
-        // a temporary fix for nodes that have no direct outputs linked to the graph
-        // this is the case for Output Node for example
-        if (!node->processed())
-            node->process(nframes);
-
+    for (auto& node : m_nodes)
         node->set_processed(false);
-    }
 
     return nframes;
 }

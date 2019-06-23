@@ -161,6 +161,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         {
             auto j_out = j_ext.m_midi_outputs[channel];
             auto j_buf = jack_port_get_buffer(j_out, nframes);
+            jack_midi_clear_buffer(j_buf);
 
             for (auto& mt : *bufr[n])
             {

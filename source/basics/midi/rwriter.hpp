@@ -93,12 +93,23 @@ public:
     // when do we deallocate it?
     //-------------------------------------------------------------------------------------------------
     {
+        QByteArray arr8;
+
         midi_t* mt = m_outbuffer.reserve(list.size()-1);
         mt->frame = m_frame;
         mt->status = list[0].value<byte_t>();
 
         for (int n = 1; n < list.size(); ++n)
-             mt->data[n-1] = list[n].value<byte_t>();
+        {
+            QVariant v = list[n];
+            if (v.type() == QMetaType::QString)
+                for (const auto& u8 : v.toString())
+                    arr8.append(u8.toLatin1());
+            else arr8.append(v.toInt());
+        }
+
+        for (int n = 0; n < arr8.size(); ++n)
+            mt->data[n] = arr8[n];
     }
 
     //-------------------------------------------------------------------------------------------------
