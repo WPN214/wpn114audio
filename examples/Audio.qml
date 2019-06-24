@@ -8,25 +8,22 @@ Item
         // these are the default graph property values
         rate: 44100; vector: 512
 
-        // when the graph is complete, start audio processing
-        Component.onCompleted:
-            io.running = true;
+        // this will expose
+        name: "wpn114audio-test-device"
+        extern.backend: WPN114.External.Jack
+        extern.outAudioTargets: "REAPER"
+        extern.outAudioRouting: [0, 1, 1, 0]
 
-        WPN114.External
+        network.exposed: true
+        network.tcp: 5678
+        network.udp: 1234
+
+        WPN114.Sinetest
         {
-            id: io
-            // the name of the audio device
-            // for jack clients etc.
-            name: "wpn114audio-test-device"
-            backend: WPN114.External.Jack
-            outAudioTargets: "REAPER"
-            outAudioRouting: [0, 1, 1, 0]
-
-            WPN114.Sinetest {
-                id: sinetest
-                frequency.value: 440.0
-                routing: [0, 0, 0, 1]
-            }
+            id: sinetest
+            name: "sinetest"
+            frequency.value: 440.0
+            audio_out.routing: [0, 0, 0, 1]
         }
     }
 }
