@@ -112,7 +112,7 @@ Port::assign(QVariant v)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_TODO void
+void
 Port::set_nchannels(nchannels_t nchannels)
 // todo: async call when graph is running
 // ------------------------------------------------------------------------------------------------
@@ -277,9 +277,8 @@ Graph::connect(Port& source, Port& dest, Routing matrix)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE Connection&
+Connection&
 Graph::connect(Node& source, Node& dest, Routing matrix)
-// might be midi and not audio...
 // ------------------------------------------------------------------------------------------------
 {
     auto& s_port = *source.default_port(Polarity::Output);
@@ -288,7 +287,7 @@ Graph::connect(Node& source, Node& dest, Routing matrix)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE Connection&
+Connection&
 Graph::connect(Node& source, Port& dest, Routing matrix)
 // ------------------------------------------------------------------------------------------------
 {
@@ -296,7 +295,7 @@ Graph::connect(Node& source, Port& dest, Routing matrix)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE Connection&
+Connection&
 Graph::connect(Port& source, Node& dest, Routing matrix)
 // ------------------------------------------------------------------------------------------------
 {
@@ -354,7 +353,7 @@ Graph::run() noexcept
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE WPN_AUDIOTHREAD vector_t
+WPN_AUDIOTHREAD vector_t
 Graph::run(Node& target) noexcept
 // the main processing function
 // Graph will process itself from target Node and upstream recursively

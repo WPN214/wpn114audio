@@ -84,7 +84,7 @@ public:
     // 14bits TODO
     //-------------------------------------------------------------------------------------------------
     {
-        enqueue_basic(0xe0+channel, value);
+        enqueue_basic(0xe0+channel, value & 0x7f, value >> 7);
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -95,21 +95,21 @@ public:
     {
         QByteArray arr8;
 
-        midi_t* mt = m_outbuffer.reserve(list.size()-1);
-        mt->frame = m_frame;
-        mt->status = list[0].value<byte_t>();
-
         for (int n = 1; n < list.size(); ++n)
         {
             QVariant v = list[n];
             if (v.type() == QMetaType::QString)
                 for (const auto& u8 : v.toString())
-                    arr8.append(u8.toLatin1());
+                     arr8.append(u8.toLatin1());
             else arr8.append(v.toInt());
         }
 
-        for (int n = 0; n < arr8.size(); ++n)
-            mt->data[n] = arr8[n];
+        midi_t* mt = m_outbuffer.reserve(arr8.count());
+        mt->frame = m_frame;
+        mt->status = list[0].value<byte_t>();
+
+        for (int n = 0; n < arr8.count(); ++n)
+             mt->data[n] = arr8[n];
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -160,7 +160,7 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     void
-    invoke_out_signal_2(const char* signal, byte_t channel, byte_t b1)
+    invoke_out_signal_2(const char* signal, byte_t channel, unsigned int b1)
     //-------------------------------------------------------------------------------------------------
     {
         QMetaObject::invokeMethod(this, signal, Qt::QueuedConnection,
@@ -176,14 +176,16 @@ public:
 
         for (auto& mt : *midi_events)
         {            
+            byte_t channel = mt.status & 0x0f;
+
             switch(mt.status & 0xf0) {
-            case 0x80: invoke_out_signal_3("noteOff", 0, mt.data[0], mt.data[1]); break;
-            case 0x90: invoke_out_signal_3("noteOn", 0, mt.data[0], mt.data[1]); break;
-            case 0xa0: invoke_out_signal_3("aftertouch", 0, mt.data[0], mt.data[1]); break;
-            case 0xb0: invoke_out_signal_3("control", 0, mt.data[0], mt.data[1]); break;
-            case 0xc0: invoke_out_signal_2("program", 0, mt.data[0]); break;
-            case 0xd0: invoke_out_signal_2("pressure", 0, mt.data[0]); break;
-            WPN_TODO case 0xe0: invoke_out_signal_2("bend", 0, mt.data[0]); break;
+            case 0x80: invoke_out_signal_3("noteOff", channel, mt.data[0], mt.data[1]); break;
+            case 0x90: invoke_out_signal_3("noteOn", channel, mt.data[0], mt.data[1]); break;
+            case 0xa0: invoke_out_signal_3("aftertouch", channel, mt.data[0], mt.data[1]); break;
+            case 0xb0: invoke_out_signal_3("control", channel, mt.data[0], mt.data[1]); break;
+            case 0xc0: invoke_out_signal_2("program", channel, mt.data[0]); break;
+            case 0xd0: invoke_out_signal_2("pressure", channel, mt.data[0]); break;
+            case 0xe0: invoke_out_signal_2("bend", channel, (mt.data[0] & 0x7f) | (mt.data[1] << 7)); break;
             }
 
             m_frame++;

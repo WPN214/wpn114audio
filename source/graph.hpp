@@ -632,15 +632,19 @@ public:
     polarity() const noexcept { return m_polarity; }
     // returns Port polarity (INPUT/OUTPUT)
 
+    // --------------------------------------------------------------------------------------------
     Type
     type() const noexcept { return m_type; }
 
+    // --------------------------------------------------------------------------------------------
     QString
     name() const noexcept { return m_name; }
 
+    // --------------------------------------------------------------------------------------------
     Node&
     parent_node() noexcept { return *m_parent; }
 
+    // --------------------------------------------------------------------------------------------
     bool
     is_default() const noexcept { return m_default; }
 
