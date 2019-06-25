@@ -1,7 +1,6 @@
 #pragma once
 
-#include <source/graph.hpp>
-#include <source/rbuffer.hpp>
+#include <wpn114audio/graph.hpp>
 
 //-------------------------------------------------------------------------------------------------
 class Gateway : public Node
@@ -80,7 +79,7 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     Q_INVOKABLE void
-    write_bend(unsigned int channel, unsigned int value)
+    write_pitchbend(unsigned int channel, unsigned int value)
     // 14bits TODO
     //-------------------------------------------------------------------------------------------------
     {
@@ -138,7 +137,7 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     Q_SIGNAL void
-    bend(unsigned int channel, unsigned int value);
+    pitchbend(unsigned int channel, unsigned int value);
 
     //-------------------------------------------------------------------------------------------------
     virtual void
@@ -185,7 +184,7 @@ public:
             case 0xb0: invoke_out_signal_3("control", channel, mt.data[0], mt.data[1]); break;
             case 0xc0: invoke_out_signal_2("program", channel, mt.data[0]); break;
             case 0xd0: invoke_out_signal_2("pressure", channel, mt.data[0]); break;
-            case 0xe0: invoke_out_signal_2("bend", channel, (mt.data[0] & 0x7f) | (mt.data[1] << 7)); break;
+            case 0xe0: invoke_out_signal_2("pitchbend", channel, (mt.data[0] & 0x7f) | (mt.data[1] << 7)); break;
             }
 
             m_frame++;

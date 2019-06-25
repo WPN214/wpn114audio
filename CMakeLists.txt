@@ -11,24 +11,21 @@ find_package(Qt5 REQUIRED COMPONENTS Quick Core Qml)
 
 set(WPN114AUDIO_QML_SOURCES
     qml_plugin.cpp
-    source/graph.hpp
     source/graph.cpp
-    source/spatial.hpp
     source/spatial.cpp
     source/io/external.hpp
     source/io/external.cpp
-    source/midi.hpp
-    source/rbuffer.hpp
     source/basics/midi/rwriter.hpp
     source/basics/midi/transposer.hpp
     source/basics/sinetest.hpp
     source/basics/vca.hpp    
-    source/network/tree/node.hpp
+#    source/network/tree/node.hpp
     examples/Audio.qml
     )
 
 add_library(${PROJECT_NAME} SHARED ${WPN114AUDIO_QML_SOURCES})
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Qml)
+target_include_directories(${PROJECT_NAME} PUBLIC include)
 
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} -framework CoreFoundation -framework CoreAudio)
@@ -40,4 +37,4 @@ endif()
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${WPN114AUDIO_QML_INSTALL_PATH})
 install(FILES qml/audio.qmltypes qml/qmldir DESTINATION ${WPN114AUDIO_QML_INSTALL_PATH})
-install(FILES source/graph.hpp source/spatial.hpp DESTINATION ${WPN114AUDIO_QML_INSTALL_PATH}/include/wpn114audio)
+install(DIRECTORY include DESTINATION ${WPN114AUDIO_QML_INSTALL_PATH})

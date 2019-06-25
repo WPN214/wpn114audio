@@ -338,6 +338,7 @@ struct OSCMessage
     //---------------------------------------------------------------------------------------------
     static void
     append(QByteArray& data, QVariant const& argument)
+    // parse an OSC argument, integrate it with a byte array
     //---------------------------------------------------------------------------------------------
     {
         QDataStream stream(&data, QIODevice::ReadWrite);

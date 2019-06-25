@@ -1,7 +1,8 @@
-#include "graph.hpp"
 #include <QtDebug>
 #include <vector>
 #include <cmath>
+
+#include <wpn114audio/graph.hpp>
 
 using namespace wpn114;
 
@@ -58,9 +59,8 @@ Port::allocate(vector_t nframes)
 // ------------------------------------------------------------------------------------------------
 {
     if   (m_type == Port::Midi_1_0)
-        // we allocate the same buffer size (in bytes) for the midibuffer
          m_buffer.midi = wpn114::allocate_buffer<midibuffer_t>(m_nchannels, nframes);
-
+    // we allocate the same buffer size (in bytes) for the midibuffer
     else m_buffer.audio = wpn114::allocate_buffer<audiobuffer_t>(m_nchannels, nframes);
 }
 
@@ -372,7 +372,7 @@ Graph::run(Node& target) noexcept
     return nframes;
 }
 
-#include "spatial.hpp"
+#include <wpn114audio/spatial.hpp>
 
 // ------------------------------------------------------------------------------------------------
 Node::~Node()

@@ -1,6 +1,6 @@
 #include "qml_plugin.hpp"
-#include <source/graph.hpp>
-#include <source/spatial.hpp>
+#include <wpn114audio/graph.hpp>
+#include <wpn114audio/spatial.hpp>
 #include <source/io/external.hpp>
 #include <source/basics/sinetest.hpp>
 #include <source/basics/vca.hpp>

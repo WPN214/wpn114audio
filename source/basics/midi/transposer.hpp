@@ -1,5 +1,6 @@
 #pragma once
-#include <source/graph.hpp>
+
+#include <wpn114audio/graph.hpp>
 
 //---------------------------------------------------------------------------------------------
 class Transposer : public Node

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QObject>
-#include "graph.hpp"
+#include <wpn114audio/graph.hpp>
 
 //=================================================================================================
 struct spatial_t
@@ -52,7 +52,7 @@ public:
     Spatial()
     {
         m_name = "Spatial";
-        m_dispatch = Dispatch::Downwards;
+        m_dispatch = Dispatch::Chain;
     }
 
     // --------------------------------------------------------------------------------------------

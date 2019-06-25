@@ -10,9 +10,9 @@
 #include <QJSValue>
 
 #include <cmath>
-
 #include <QtDebug>
-//#include "spatial.hpp"
+
+#include <wpn114audio/midi.hpp>
 
 // --------------------------------------------------------------------------------------------------
 // CONVENIENCE MACRO DEFINITIONS
@@ -60,6 +60,12 @@
 #define WPN_DECLARE_AUDIO_OUTPUT(_name, _nchannels) \
     WPN_DECLARE_AUDIO_PORT(_name, Polarity::Output, _nchannels)
 
+#define WPN_DECLARE_MIDI_INPUT(_name, _nchannels) \
+    WPN_DECLARE_MIDI_PORT(_name, Polarity::Input, _nchannels)
+
+#define WPN_DECLARE_MIDI_OUTPUT(_name, _nchannels) \
+    WPN_DECLARE_MIDI_PORT(_name, Polarity::Output, _nchannels)
+
 // ------------------------------------------------------------------------------------------------
 #define wpnwrap(_v, _limit) if (_v >= _limit) _v -= _limit
 #define CSTR(_qstring) _qstring.toStdString().c_str()
@@ -85,9 +91,6 @@ using nchannels_t   = uint8_t;
 using byte_t        = uint8_t;
 using vector_t      = uint16_t;
 using nframes_t     = uint32_t;
-
-
-#include <source/midi.hpp>
 
 using audiobuffer_t = sample_t**;
 using midibuffer_t  = midibuffer**;
@@ -133,7 +136,16 @@ class Dispatch : public QObject
 
 public:
 
-    enum Values { Upwards = 0, Downwards = 1 };
+    enum Values
+    {
+        Upwards         = 0,
+        Chain           = 1,
+        Parallel        = 2,
+        Split           = 3,
+        Merge           = 4,
+        Expand          = 5
+    };
+
     Q_ENUM (Values)
 };
 
@@ -1166,7 +1178,7 @@ public:
             }
             break;
         }
-        case Dispatch::Values::Downwards:
+        case Dispatch::Values::Chain:
         {
             // connect this Node default outputs to first subnode
             auto& front = *m_subnodes.front();
@@ -1342,7 +1354,7 @@ public:
         switch(m_dispatch) {
         case Dispatch::Values::Upwards:
             return *this;
-        case Dispatch::Values::Downwards:
+        case Dispatch::Values::Chain:
             if (m_subnodes.empty())
                 return *this;
             else return *m_subnodes.back();

@@ -1,5 +1,6 @@
 #pragma once
-#include <source/graph.hpp>
+
+#include <wpn114audio/graph.hpp>
 
 //=================================================================================================
 class Sinetest : public Node
@@ -29,7 +30,7 @@ public:
     //-------------------------------------------------------------------------------------------------
     {
         m_name      = "Sinetest";
-        m_dispatch  = Dispatch::Values::Downwards;
+        m_dispatch  = Dispatch::Chain;
         // this would be the default dipsatch behaviour withinin Sinetest QML scope
     }
 
