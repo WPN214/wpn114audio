@@ -1,16 +1,17 @@
 cmake_minimum_required(VERSION 3.1)
-project(wpn114audio-qml LANGUAGES C CXX)
+project(wpn114audio-qml LANGUAGES CXX)
 
-set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_CXX_LINK_FLAGS)
 
 find_package(Qt5 REQUIRED COMPONENTS Quick Core Qml)
 
 set(WPN114AUDIO_QML_SOURCES
     qml_plugin.cpp
+    include/wpn114audio/graph.hpp
+    include/wpn114audio/spatial.hpp
+    include/wpn114audio/midi.hpp
     source/graph.cpp
     source/spatial.cpp
     source/io/external.hpp
@@ -19,7 +20,6 @@ set(WPN114AUDIO_QML_SOURCES
     source/basics/midi/transposer.hpp
     source/basics/sinetest.hpp
     source/basics/vca.hpp    
-#    source/network/tree/node.hpp
     examples/Audio.qml
     )
 

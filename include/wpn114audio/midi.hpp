@@ -113,6 +113,31 @@ public:
         return mt;
     }
 
+    //---------------------------------------------------------------------------------------------
+    midi_t*
+    reserve(byte_t nbytes, byte_t status, byte_t frame, byte_t* data)
+    //---------------------------------------------------------------------------------------------
+    {
+        midi_t* mt = reserve(nbytes);
+        mt->status = status;
+        mt->frame = frame;
+        memcpy(mt->data, data, nbytes);
+        return mt;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    midi_t*
+    reserve(byte_t status, byte_t frame, byte_t b1, byte_t b2)
+    //---------------------------------------------------------------------------------------------
+    {
+        midi_t* mt = reserve(2);
+        mt->status = status;
+        mt->frame = frame;
+        mt->data[0] = b1;
+        mt->data[1] = b2;
+        return mt;
+    }
+
     // --------------------------------------------------------------------------------------------
     bool
     push(midi_t const& event)
