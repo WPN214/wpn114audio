@@ -84,7 +84,6 @@ public:
     //-------------------------------------------------------------------------------------------------
     Q_INVOKABLE void
     write_sysex(QVariantList list)
-    // when do we deallocate it?
     //-------------------------------------------------------------------------------------------------
     {
         QByteArray arr8;
@@ -139,7 +138,6 @@ public:
     initialize(const Graph::properties& properties) override
     {
         m_outbuffer.allocate(sizeof(sample_t)*properties.vector);
-        m_rate = properties.rate;
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -164,6 +162,7 @@ public:
     //-------------------------------------------------------------------------------------------------
     virtual void
     rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    //-------------------------------------------------------------------------------------------------
     {
         auto midi_events  = inputs.midi[0][0];
         auto midi_out     = outputs.midi[0][0];
@@ -193,17 +192,7 @@ public:
         m_outbuffer.clear();
     }
 
-    //-------------------------------------------------------------------------------------------------
-    virtual void
-    on_rate_changed(sample_t rate) override { m_rate = rate; }
-
 private:
-
-    size_t
-    m_phase = 0;
-
-    sample_t
-    m_rate = 0;
 
     midibuffer
     m_outbuffer;

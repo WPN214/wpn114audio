@@ -86,16 +86,13 @@ Port::assign(QVariant v)
     {
         auto node = v.value<Node*>();
 
-        switch(m_polarity)
-        {
-        case Polarity::Input: {
-            auto target = node->default_port(m_type, Polarity::Output);
-            Graph::instance().connect(*target, *this); break;
+        switch(m_polarity) {
+        case Polarity::Input:
+            Graph::instance().connect(node->chainout(), *this);
+            break;
+        case Polarity::Output:
+             Graph::instance().connect(*this, *node);
         }
-        case Polarity::Output: {
-            auto target = node->default_port(m_type, Polarity::Input);
-            Graph::instance().connect(*this, *target);
-        }}
     }
 
     else if (v.canConvert<Port*>())
@@ -281,9 +278,16 @@ Connection&
 Graph::connect(Node& source, Node& dest, Routing matrix)
 // ------------------------------------------------------------------------------------------------
 {
-    auto& s_port = *source.default_port(Polarity::Output);
-    auto& d_port = *dest.default_port(s_port.type(), Polarity::Input);
-    return connect(s_port, d_port, matrix);
+    // find matching input/output pair
+    Port* s_port = nullptr, *d_port = nullptr;
+
+    if (!(s_port = source.default_port(Port::Audio, Polarity::Output)) ||
+        !(d_port = dest.default_port(Port::Audio, Polarity::Input))) {
+          s_port = source.default_port(Port::Midi_1_0, Polarity::Output);
+          d_port = dest.default_port(Port::Midi_1_0, Polarity::Input);
+    }
+
+    return connect(*s_port, *d_port, matrix);
 }
 
 // ------------------------------------------------------------------------------------------------

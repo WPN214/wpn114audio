@@ -2,8 +2,9 @@
 #include <wpn114audio/graph.hpp>
 #include <wpn114audio/spatial.hpp>
 #include <source/io/external.hpp>
-#include <source/basics/sinetest.hpp>
-#include <source/basics/vca.hpp>
+#include <source/basics/audio/sinetest.hpp>
+#include <source/basics/audio/vca.hpp>
+#include <source/basics/midi/velocity-table.hpp>
 #include <source/basics/midi/transposer.hpp>
 #include <source/basics/midi/rwriter.hpp>
 #include <QQmlEngine>
@@ -64,5 +65,8 @@ void qml_plugin::registerTypes(const char* uri)
 
     qmlRegisterType<Transposer, 1>
     ("WPN114.Audio", 1, 1, "MIDITransposer");
+
+    qmlRegisterType<VelocityMap, 1>
+    ("WPN114.Audio", 1, 1, "VelocityMap");
 
 }
