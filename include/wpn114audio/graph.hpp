@@ -86,7 +86,7 @@
 
 enum class Polarity { Output = 0, Input = 1 };
 
-using sample_t      = qreal;
+using sample_t      = float;
 using nchannels_t   = uint8_t;
 using byte_t        = uint8_t;
 using vector_t      = uint16_t;
@@ -440,7 +440,7 @@ private:
     m_routing;
 
     // --------------------------------------------------------------------------------------------
-    std::atomic<qreal>
+    std::atomic<sample_t>
     m_mul {1}, m_add {0};
 };
 
@@ -703,7 +703,7 @@ private:
     // --------------------------------------------------------------------------------------------
     {
         for (nchannels_t n = 0; n < m_nchannels; ++n)
-            memset(m_buffer.audio[n], 0, sizeof(sample_t*)*nframes);
+             memset(m_buffer.audio[n], 0, sizeof(sample_t*)*nframes);
     }
 
     // --------------------------------------------------------------------------------------------

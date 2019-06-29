@@ -82,10 +82,10 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         for (auto& channel : input->channels_vec())
         {
             auto j_in = j_ext.m_audio_inputs[channel];
-            auto j_buf = static_cast<float*>(jack_port_get_buffer(j_in, nframes));
+            auto j_buf = static_cast<sample_t*>(jack_port_get_buffer(j_in, nframes));
 
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                 bufr[0][f] = static_cast<sample_t>(j_buf[f]);
+                 bufr[0][f] = j_buf[f];
             n++;
         }
     }
@@ -143,7 +143,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
             auto j_buf = static_cast<float*>(jack_port_get_buffer(j_out, nframes));
 
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                j_buf[f] = static_cast<float>(bufr[n][f]);
+                j_buf[f] = bufr[n][f];
             n++;
         }
     }

@@ -1,5 +1,4 @@
 #pragma once
-
 #include <wpn114audio/graph.hpp>
 
 //-------------------------------------------------------------------------------------------------
@@ -22,11 +21,7 @@ public:
     enqueue_basic(unsigned int status, unsigned int b1, unsigned int b2 = 0)
     //-------------------------------------------------------------------------------------------------
     {
-        midi_t* mt = m_outbuffer.reserve(2);
-        mt->frame = m_frame.load();
-        mt->status = status;
-        mt->data[0] = b1;
-        mt->data[1] = b2;
+        m_outbuffer.reserve(status, m_frame.load(), b1, b2);
     }
 
     //-------------------------------------------------------------------------------------------------

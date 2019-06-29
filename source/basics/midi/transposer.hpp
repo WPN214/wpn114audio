@@ -1,5 +1,4 @@
 #pragma once
-
 #include <wpn114audio/graph.hpp>
 
 //---------------------------------------------------------------------------------------------
@@ -13,7 +12,6 @@ class Transposer : public Node
     WPN_DECLARE_DEFAULT_MIDI_OUTPUT(midi_out, 1)
 
 public:
-
     //---------------------------------------------------------------------------------------------
     Transposer() { m_name = "MidiTransposer"; }
 

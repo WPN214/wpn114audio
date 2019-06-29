@@ -376,8 +376,11 @@ Graph::run(Node& target) noexcept
 
 // ------------------------------------------------------------------------------------------------
 Node::~Node()
+// ------------------------------------------------------------------------------------------------
 {
-    if (m_spatial) delete m_spatial;
+    if (m_spatial)
+        delete m_spatial;
+
     Graph::instance().unregister_node(*this);
 }
 
