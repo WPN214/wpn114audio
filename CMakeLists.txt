@@ -21,6 +21,7 @@ set(WPN114AUDIO_QML_SOURCES
     source/basics/midi/velocity-table.hpp
     source/basics/audio/sinetest.hpp
     source/basics/audio/vca.hpp
+    source/basics/audio/clock.hpp
     examples/Audio.qml
     )
 

@@ -2,6 +2,8 @@
 
 #include <wpn114audio/graph.hpp>
 
+#define fmpi static_cast<float>(M_PI)
+
 //-------------------------------------------------------------------------------------------------
 class VelocityMap : public Node
 //-------------------------------------------------------------------------------------------------
@@ -25,16 +27,17 @@ public:
 //        for (byte_t n = 0; n < 128; ++n)
 //             m_vtable[n] = n;
 
-        m_vtable[0] = 0;
+        // lanczos2 window
+        fprintf(stderr, "velocitymap: lanczos window\n");
 
-        // 180° switched cosine/4
         for (byte_t n = 0; n < 128; ++n) {
-            float phase = n/128.f;
-            phase *= static_cast<float>(M_PI_4)*2.f;
-            m_vtable[n] = 1+static_cast<byte_t>((1.f-cosf(phase))*128.f);
-
-            fprintf(stderr, "velocity map at n=%d: %d\n", n, m_vtable[n]);
+            float x = n/128.f-1;
+            float sinc_x = std::sin(fmpi*x);
+            sinc_x /= fmpi*x;
+            m_vtable[n] = sinc_x*128.f;
         }
+
+        m_vtable[0] = 1;
 
     }
 
@@ -49,9 +52,10 @@ public:
         for (auto& mt : *midi_in)
         {
             switch(mt.status & 0xf0) {
-            case 0x90:
+            case 0x90: {
                 mt.data[1] = m_vtable[mt.data[1]];
                 break;
+            }
             }
 
             midi_out->push(mt);
