@@ -8,8 +8,8 @@ class VelocityMap : public Node
 {
     Q_OBJECT
 
-    WPN_DECLARE_DEFAULT_MIDI_INPUT(midi_in, 1)
-    WPN_DECLARE_DEFAULT_MIDI_OUTPUT(midi_out, 1)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT      (midi_in, 1)
+    WPN_DECLARE_DEFAULT_MIDI_OUTPUT     (midi_out, 1)
 
 public:
 
@@ -27,11 +27,11 @@ public:
 
         m_vtable[0] = 0;
 
-        // 180° switched cosine
-        for (byte_t n = 0; n < 127; ++n) {
-            float phase = n/127.f;
-            phase *= static_cast<float>(M_PI)*2.f;
-            m_vtable[n] = static_cast<byte_t>(1.f-cosf(phase));
+        // 180° switched cosine/4
+        for (byte_t n = 0; n < 128; ++n) {
+            float phase = n/128.f;
+            phase *= static_cast<float>(M_PI_4)*2.f;
+            m_vtable[n] = 1+static_cast<byte_t>((1.f-cosf(phase))*128.f);
 
             fprintf(stderr, "velocity map at n=%d: %d\n", n, m_vtable[n]);
         }

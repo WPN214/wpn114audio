@@ -115,7 +115,7 @@ public:
 
     //---------------------------------------------------------------------------------------------
     midi_t*
-    reserve(byte_t nbytes, byte_t status, byte_t frame, byte_t* data)
+    reserve(byte_t nbytes, byte_t status, vector_t frame, byte_t* data)
     //---------------------------------------------------------------------------------------------
     {
         midi_t* mt = reserve(nbytes);
@@ -127,7 +127,7 @@ public:
 
     //---------------------------------------------------------------------------------------------
     midi_t*
-    reserve(byte_t status, byte_t frame, byte_t b1, byte_t b2)
+    reserve(byte_t status, vector_t frame, byte_t b1, byte_t b2)
     //---------------------------------------------------------------------------------------------
     {
         midi_t* mt = reserve(2);
