@@ -74,6 +74,15 @@ public:
 
 
 class External;
+class ExternalIO;
+class Input;
+class Output;
+
+struct JackExternalIO
+{
+    ExternalIO* io;
+    std::vector<jack_port_t*> ports;
+};
 
 //---------------------------------------------------------------------------------------------
 class JackExternal : public ExternalBase
@@ -88,11 +97,13 @@ class JackExternal : public ExternalBase
     m_client = nullptr;
 
     //---------------------------------------------------------------------------------------------
+    std::vector<JackExternalIO>
+    m_audio_input_ios, m_audio_output_ios,
+    m_midi_input_ios, m_midi_output_ios;
+
     std::vector<jack_port_t*>
-    m_audio_inputs,
-    m_audio_outputs,
-    m_midi_inputs,
-    m_midi_outputs;
+    m_audio_input_ports, m_audio_output_ports,
+    m_midi_input_ports, m_midi_output_ports;
 
     //---------------------------------------------------------------------------------------------
     static int
@@ -112,19 +123,24 @@ class JackExternal : public ExternalBase
 
     //---------------------------------------------------------------------------------------------
     void
-    register_ports(nchannels_t nchannels,
-                   const char* port_mask,
-                   const char* type,
-                   unsigned long polarity,
-                   std::vector<jack_port_t*>& target);
+    register_io(ExternalIO* io);
 
     //---------------------------------------------------------------------------------------------
+    jack_port_t*
+    find_or_create_port(JackPortFlags polarity, int type, int index);
+
     void
-    connect_ports(std::vector<jack_port_t*>& ports,
-                  unsigned long target_polarity,
-                  const char *type,
-                  QString target,
-                  Routing routing);
+    connect(ExternalIO*, QString target, Routing r);
+
+    std::vector<jack_port_t*>&
+    io_ports(ExternalIO* io);
+
+    const char*
+    io_type(ExternalIO* io);
+
+    JackPortFlags
+    io_polarity(ExternalIO* io);
+
 
 public:
 
@@ -378,9 +394,6 @@ class ExternalIO : public Node
     Q_OBJECT
 
     //---------------------------------------------------------------------------------------------
-    enum Type { Audio, Midi }; Q_ENUM (Type)
-
-    //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (Type type READ type WRITE set_type)
 
     //---------------------------------------------------------------------------------------------
@@ -389,21 +402,11 @@ class ExternalIO : public Node
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariant connections READ targets WRITE set_targets)
 
-protected:
-
-    Type
-    m_type = Type::Audio;
-
-    QVector<int>
-    m_channels;
-
-    std::vector<ExternalConnection>
-    m_connections;
-
-    QVariant
-    m_targets;
-
 public:
+
+    //---------------------------------------------------------------------------------------------
+    enum Type { Audio, Midi }; Q_ENUM (Type)
+
     //---------------------------------------------------------------------------------------------
     Type
     type() const { return m_type; }
@@ -495,6 +498,20 @@ public:
             }
         }
     }
+
+protected:
+
+    Type
+    m_type = Type::Audio;
+
+    QVector<int>
+    m_channels;
+
+    std::vector<ExternalConnection>
+    m_connections;
+
+    QVariant
+    m_targets;
 };
 
 //---------------------------------------------------------------------------------------------
@@ -509,7 +526,7 @@ class Output : public ExternalIO
 public:
 
     //---------------------------------------------------------------------------------------------
-    Output() { m_name = "Output"; }
+    Output() { m_name = "output"; }
 
     //---------------------------------------------------------------------------------------------
     virtual void
@@ -518,6 +535,11 @@ public:
     {
         parse_external_connections();
         Graph::instance().external()->register_output(this);
+
+        if (m_type == Type::Audio)
+             m_audio_in.set_nchannels(m_channels.count());
+        else m_midi_in.set_nchannels(m_channels.count());
+
         Node::componentComplete();
     }
 };
@@ -536,7 +558,7 @@ public:
     //---------------------------------------------------------------------------------------------
     Input()
     {
-        m_name = "Input";
+        m_name = "input";
         m_dispatch = Dispatch::Chain;
     }
 
@@ -547,6 +569,11 @@ public:
     {
         parse_external_connections();
         Graph::instance().external()->register_input(this);
+
+        if (m_type == Type::Audio)
+             m_audio_out.set_nchannels(m_channels.count());
+        else m_midi_out.set_nchannels(m_channels.count());
+
         Node::componentComplete();
     }
 };

@@ -64,59 +64,46 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     auto& j_ext = *static_cast<JackExternal*>(udata);
     auto& ext = j_ext.parent();
 
-    nchannels_t n = 0;
+    // AUDIO INPUTS -------------------------------------------------------------------------------
 
-    auto audio_inputs   = ext.audio_inputs();
-    auto midi_inputs    = ext.midi_inputs();
-
-    // AUDIO_INPUTS ------------------------------------------------------------------------------
-    for (auto& input : audio_inputs)
+    for (auto& input : j_ext.m_audio_input_ios)
     {
-        // directly fetch the output buffer
-        // no need to process the node
-        auto port  = input->default_port(Port::Audio, Polarity::Output);
-        auto bufr  = port->buffer<audiobuffer_t>();
+        auto wport = input.io->default_port(Port::Audio, Polarity::Output);
+        auto wbufr = wport->buffer<audiobuffer_t>();
 
-        auto channels = input->channels_vec();
-
-        for (auto& channel : input->channels_vec())
+        for (nchannels_t n = 0; n < input.ports.size(); ++n)
         {
-            auto j_in = j_ext.m_audio_inputs[channel];
+            auto j_in = input.ports[n];
             auto j_buf = static_cast<sample_t*>(jack_port_get_buffer(j_in, nframes));
-
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                bufr[0][f] = j_buf[f];
-            n++;
+                 wbufr[n][f] += j_buf[f];
         }
     }
 
-    // MIDI_INPUTS ------------------------------------------------------------------------------
+    // MIDI INPUTS -------------------------------------------------------------------------------
 
-    for (auto& input : midi_inputs)
+    for (auto& input : j_ext.m_midi_input_ios)
     {
-        auto port = input->default_port(Port::Midi_1_0, Polarity::Output);
-        auto bufr = port->buffer<midibuffer_t>();
-        auto channels = input->channels_vec();
-        jack_midi_event_t ev;
-        n = 0;
+        auto wport = input.io->default_port(Port::Midi_1_0, Polarity::Output);
+        auto wbufr = wport->buffer<midibuffer_t>();
+        jack_midi_event_t mevent;
 
-        for (auto& channel : channels)
+        for (nchannels_t n = 0; n < input.ports.size(); ++n)
         {
-            auto j_in   = j_ext.m_midi_inputs[channel];
-            auto j_buf  = jack_port_get_buffer(j_in, nframes);
-            auto n_evt  = jack_midi_get_event_count(j_buf);
+            auto j_in = input.ports[n];
+            auto j_buf = jack_port_get_buffer(j_in, nframes);
+            auto n_evt = jack_midi_get_event_count(j_buf);
 
             for (jack_nframes_t f = 0; f < nframes; ++f) {
                 for (jack_nframes_t e = 0; e < n_evt; ++e)
                 {
-                    jack_midi_event_get(&ev, j_buf, e);
-                    if (ev.time == f) {
-                        midi_t* mt = bufr[n]->reserve(ev.size-1);
-                        mt->frame = ev.time;
-                        mt->status = ev.buffer[0];
-                        memcpy(mt->data, &(ev.buffer[1]), ev.size-1);
+                    jack_midi_event_get(&mevent, j_buf, e);
+                    if (mevent.time == f) {
+                        midi_t* mt = wbufr[n]->reserve(mevent.size-1);
+                        mt->frame  = mevent.time;
+                        mt->status = mevent.buffer[0];
+                        memcpy(mt->data, &(mevent.buffer[1]), mevent.size-1);
                     }}}
-            n++;
         }
     }
 
@@ -124,74 +111,108 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
     // process the internal graph
     Graph::instance().run();
 
-    // fill outputs
-    auto audio_outputs  = ext.audio_outputs();
-    auto midi_outputs   = ext.midi_outputs();
-
     // AUDIO OUTPUTS ------------------------------------------------------------------------------
 
-    for (auto& audio_out : audio_outputs)
+    for (auto& output : j_ext.m_audio_output_ios)
     {
-        auto port = audio_out->default_port(Port::Audio, Polarity::Input);
-        auto bufr = port->buffer<audiobuffer_t>();
-        auto channels = audio_out->channels_vec();
-        n = 0;
+        auto wport = output.io->default_port(Port::Audio, Polarity::Input);
+        auto wbufr = wport->buffer<audiobuffer_t>();
 
-        for (auto& channel : channels)
+        for (nchannels_t n = 0; n < output.ports.size(); ++n)
         {
-            auto j_out = j_ext.m_audio_outputs[channel];
-            auto j_buf = static_cast<float*>(jack_port_get_buffer(j_out, nframes));
-
+            auto j_out = output.ports[n];
+            auto j_buf = static_cast<sample_t*>(jack_port_get_buffer(j_out, nframes));
             for (jack_nframes_t f = 0; f < nframes; ++f)
-                j_buf[f] = bufr[n][f];
-            n++;
+                 j_buf[f] += wbufr[n][f];
         }
     }
 
-    // MIDI OUTPUTS ------------------------------------------------------------------------------
+    // MIDI OUTPUTS -------------------------------------------------------------------------------
 
-    for (auto& midi_out : midi_outputs)
+    for (auto& output : j_ext.m_midi_output_ios)
     {
-        auto port = midi_out->default_port(Port::Midi_1_0, Polarity::Input);
-        auto bufr = port->buffer<midibuffer_t>();
-        auto channels = midi_out->channels_vec();
-        n = 0;
+        auto wport = output.io->default_port(Port::Midi_1_0, Polarity::Input);
+        auto wbufr = wport->buffer<midibuffer_t>();
 
-        for (auto channel : channels)
+        for (nchannels_t n = 0; n < output.ports.size(); ++n)
         {
-            auto j_out = j_ext.m_midi_outputs[channel];
+            auto j_out = output.ports[n];
             auto j_buf = jack_port_get_buffer(j_out, nframes);
             jack_midi_clear_buffer(j_buf);
 
-            for (auto& mt : *bufr[n])
+            for (auto& mt : *wbufr[n])
             {
                 auto ev = jack_midi_event_reserve(j_buf, mt.frame, mt.nbytes+1);
                 memcpy(&(ev[1]), mt.data, mt.nbytes);
                 ev[0] = mt.status;
             }
-
-            n++;
         }
     }
 
     return 0;
 }
 
-//-------------------------------------------------------------------------------------------------
-void
-JackExternal::register_ports(
-        nchannels_t nchannels,
-        const char* port_mask,
-        const char* type, unsigned long polarity,
-        std::vector<jack_port_t*>& target)
+// ------------------------------------------------------------------------------------------------
+jack_port_t*
+JackExternal::find_or_create_port(JackPortFlags polarity, int type, int index)
+// ------------------------------------------------------------------------------------------------
 {
-    for (nchannels_t n = 0; n < nchannels; ++n) {
-        qDebug() << "[JACK] registering jack port:" << port_mask;
-        auto port = jack_port_register(m_client, port_mask, type, polarity, 0);
-        target.push_back(port);
+    std::vector<jack_port_t*>* target = nullptr;
+
+    if (polarity == JackPortIsInput) {
+        if (type == ExternalIO::Audio)
+             target = &m_audio_input_ports;
+        else target = &m_midi_input_ports;
+    }   else  {
+        if (type == ExternalIO::Audio)
+             target = &m_audio_output_ports;
+        else target = &m_midi_output_ports;
     }
+
+    if (index < target->size())
+        return target->at(index);
+
+    return nullptr;
 }
 
+// ------------------------------------------------------------------------------------------------
+const char*
+JackExternal::io_type(ExternalIO* io)
+// ------------------------------------------------------------------------------------------------
+{
+    return io->type() == ExternalIO::Audio ? JACK_DEFAULT_AUDIO_TYPE : JACK_DEFAULT_MIDI_TYPE;
+}
+
+// ------------------------------------------------------------------------------------------------
+JackPortFlags
+JackExternal::io_polarity(ExternalIO* io)
+// ------------------------------------------------------------------------------------------------
+{
+    return qobject_cast<Input*>(io) ? JackPortIsInput : JackPortIsOutput;
+}
+
+// ------------------------------------------------------------------------------------------------
+void
+JackExternal::register_io(ExternalIO* io)
+// ------------------------------------------------------------------------------------------------
+{
+    auto polarity = qobject_cast<Input*>(io) ?
+                    JackPortIsInput : JackPortIsOutput;
+
+    auto type = io->type() == ExternalIO::Audio ?
+                JACK_DEFAULT_AUDIO_TYPE :
+                JACK_DEFAULT_MIDI_TYPE ;
+
+    auto name = CSTR(io->name());
+
+    JackExternalIO j_ext;
+    j_ext.io = io;
+
+    for (auto& index : io->channels_vec()) {
+        jack_port_t* port = find_or_create_port(polarity, io->type(), index);
+        j_ext.ports.push_back(port);
+    }
+}
 //-------------------------------------------------------------------------------------------------
 JackExternal::JackExternal(External* parent) : m_parent(*parent)
   //-------------------------------------------------------------------------------------------------
@@ -206,8 +227,8 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
     // sample rate and buffer sizes are defined by the user from jack
     // there's no need to set them from the graph
     jack_nframes_t
-            srate = jack_get_sample_rate(m_client),
-            bsize = jack_get_buffer_size(m_client);
+    srate = jack_get_sample_rate(m_client),
+    bsize = jack_get_buffer_size(m_client);
 
     qDebug() << "[JACK] samplerate:" << QString::number(srate)
              << "buffer size:" << QString::number(bsize);
@@ -221,58 +242,35 @@ JackExternal::JackExternal(External* parent) : m_parent(*parent)
     jack_set_process_callback(m_client, jack_process_callback, this);
     jack_set_client_registration_callback(m_client, on_jack_client_registration, this);
 
-    auto audio_inputs   = parent->audio_inputs();
-    auto midi_inputs    = parent->midi_inputs();
-    auto audio_outputs  = parent->audio_outputs();
-    auto midi_outputs   = parent->midi_outputs();
+    for (auto& input : parent->audio_inputs())
+        register_io(input);
 
-    // register input/output ports
-    for (auto& input : audio_inputs)
-        register_ports(input->nchannels(), CSTR(input->name()),
-                       JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput,
-                       m_audio_inputs);
+    for (auto& input : parent->midi_inputs())
+        register_io(input);
 
-    for (auto& input : midi_inputs)
-        register_ports(input->nchannels(), CSTR(input->name()),
-                       JACK_DEFAULT_MIDI_TYPE, JackPortIsInput,
-                       m_midi_inputs);
+    for (auto& output : parent->audio_outputs())
+        register_io(output);
 
-    for (auto& output : audio_outputs)
-        register_ports(output->nchannels(), CSTR(output->name()),
-                       JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput,
-                       m_audio_outputs);
-
-    for (auto& output : midi_outputs)
-        register_ports(output->nchannels(), CSTR(output->name()),
-                       JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput,
-                       m_midi_outputs);
+    for (auto& output : parent->midi_outputs())
+        register_io(output);
 }
 
 //-------------------------------------------------------------------------------------------------
 void
-JackExternal::connect_ports(
-        std::vector<jack_port_t*>& ports,
-        unsigned long polarity,
-        const char* type,
-        QString target,
-        Routing routing)
+JackExternal::connect(ExternalIO* io, QString target, Routing routing)
+//-------------------------------------------------------------------------------------------------
 {
-    if (target.isEmpty())
-        return;
+    auto& source_ports      = io_ports(io);
+    auto type               = io_type(io);
+    auto polarity           = io_polarity(io);
+    auto target_ports       = jack_get_ports(m_client, CSTR(target), type, polarity);
 
-    auto ctarget = jack_get_ports(m_client, CSTR(target), type, polarity);
-
-    if (!ctarget) {
-        qDebug() << "[JACK] error, could not connect to target" << target;
-    }
-
-    if (routing.null()) {
-        for (nchannels_t n = 0; n < ports.size(); ++n) {
-            auto pname = jack_port_name(ports[n]);
-            if (polarity == JackPortIsOutput)
-                jack_connect(m_client, ctarget[n], pname);
-            else jack_connect(m_client, pname, ctarget[n]);
-        }
+    if (routing.null())
+    {
+        for (nchannels_t n = 0; n < source_ports.size(); ++n)
+            if (polarity == JackPortIsInput)
+                 jack_connect(m_client, jack_port_name(source_ports[n]), target_ports[n]);
+            else jack_connect(m_client, target_ports[n], jack_port_name(source_ports[n]));
     }
     else for (nchannels_t n = 0; n < routing.ncables(); ++n)
     {
@@ -281,11 +279,11 @@ JackExternal::connect_ports(
         outno = routing[n][1];
 
         if (polarity == JackPortIsInput) {
-            auto pname = jack_port_name(ports[outno]);
-            jack_connect(m_client, pname, ctarget[inno]);
+            auto pname = jack_port_name(source_ports[outno]);
+            jack_connect(m_client, pname, target_ports[inno]);
         } else {
-            auto pname = jack_port_name(ports[inno]);
-            jack_connect(m_client, ctarget[outno], pname);
+            auto pname = jack_port_name(source_ports[inno]);
+            jack_connect(m_client, target_ports[outno], pname);
         }
     }
 }
@@ -305,27 +303,19 @@ JackExternal::run()
 
     for (auto& input : m_parent.audio_inputs())
         for (auto& connection : input->connections())
-            connect_ports(m_audio_inputs, JackPortIsOutput,
-                          JACK_DEFAULT_AUDIO_TYPE,
-                          connection.target, connection.routing);
+            connect(input, connection.target, connection.routing);
 
     for (auto& input : m_parent.midi_inputs())
          for (auto& connection : input->connections())
-             connect_ports(m_midi_inputs, JackPortIsOutput,
-                           JACK_DEFAULT_MIDI_TYPE,
-                           connection.target, connection.routing);
+             connect(input, connection.target, connection.routing);
 
     for (auto& output : m_parent.audio_outputs())
         for (auto& connection : output->connections())
-            connect_ports(m_audio_outputs, JackPortIsInput,
-                          JACK_DEFAULT_AUDIO_TYPE,
-                          connection.target, connection.routing);
+            connect(output, connection.target, connection.routing);
 
     for (auto& output: m_parent.midi_outputs())
         for (auto& connection : output->connections())
-            connect_ports(m_midi_outputs, JackPortIsInput,
-                          JACK_DEFAULT_MIDI_TYPE,
-                          connection.target, connection.routing);
+            connect(output, connection.target, connection.routing);
 
     m_parent.connected();
     qDebug() << "[JACK] running";

@@ -211,7 +211,8 @@ public:
     void
     append(uint8_t source, uint8_t dest)
     {
-        m_routing.emplace_back(source, dest);
+        cable c = { source, dest };
+        m_routing.emplace_back(c);
     }
 
     // --------------------------------------------------------------------------------------------
