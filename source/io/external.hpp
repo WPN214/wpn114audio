@@ -123,7 +123,7 @@ class JackExternal : public ExternalBase
     connect_ports(std::vector<jack_port_t*>& ports,
                   unsigned long target_polarity,
                   const char *type,
-                  QStringList const& targets,
+                  QString target,
                   Routing routing);
 
 public:
@@ -197,63 +197,6 @@ public:
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (bool running READ running WRITE set_running)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (int numAudioInputs READ n_audio_inputs WRITE setn_audio_inputs)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (int numAudioOutputs READ n_audio_outputs WRITE setn_audio_outputs)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (int numMidiInputs READ n_midi_inputs WRITE setn_midi_inputs)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (int numMidiOutputs READ n_midi_outputs WRITE setn_midi_outputs)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant outAudioTargets READ out_audio_targets WRITE set_out_audio_targets)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant inAudioTargets READ in_audio_targets WRITE set_in_audio_targets)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant outMidiTargets READ out_midi_targets WRITE set_out_midi_targets)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant inMidiTargets READ in_midi_targets WRITE set_in_midi_targets)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariantList outAudioRouting READ out_audio_routing WRITE set_out_audio_routing)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariantList inAudioRouting READ in_audio_routing WRITE set_in_audio_routing)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariantList outMidiRouting READ out_midi_routing WRITE set_out_midi_routing)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariantList inMidiRouting READ in_midi_routing WRITE set_in_midi_routing)
-
-    //---------------------------------------------------------------------------------------------
-    QStringList
-    m_in_audio_targets,
-    m_out_audio_targets,
-    m_in_midi_targets,
-    m_out_midi_targets;
-
-    //---------------------------------------------------------------------------------------------
-    Routing
-    m_out_audio_routing,
-    m_out_midi_routing,
-    m_in_audio_routing,
-    m_in_midi_routing;
-
-    //---------------------------------------------------------------------------------------------
-    uint8_t
-    m_out_audio_nchannels   = 2,
-    m_out_midi_nchannels    = 0,
-    m_in_audio_nchannels    = 0,
-    m_in_midi_nchannels     = 0;
 
     //---------------------------------------------------------------------------------------------
     ExternalBase*
@@ -352,164 +295,6 @@ public:
         }
     }
 
-    //-------------------------------------------------------------------------------------------------
-    uint8_t
-    n_audio_inputs() const { return m_in_audio_nchannels; }
-
-    void
-    setn_audio_inputs(uint8_t nchannels)
-    {
-        m_in_audio_nchannels = nchannels;
-    }
-
-    //-------------------------------------------------------------------------------------------------
-    uint8_t
-    n_audio_outputs() const { return m_out_audio_nchannels; }
-
-    void
-    setn_audio_outputs(uint8_t nchannels)
-    {
-        m_out_audio_nchannels = nchannels;
-    }
-
-    //-------------------------------------------------------------------------------------------------
-    uint8_t
-    n_midi_inputs() const { return m_in_midi_nchannels; }
-
-    void
-    setn_midi_inputs(uint8_t nchannels)
-    {
-        m_in_midi_nchannels = nchannels;
-    }
-
-    //-------------------------------------------------------------------------------------------------
-    uint8_t
-    n_midi_outputs() const { return m_out_midi_nchannels; }
-
-    void
-    setn_midi_outputs(uint8_t nchannels)
-    {
-        m_out_midi_nchannels = nchannels;
-    }
-
-    //---------------------------------------------------------------------------------------------
-    QVariant
-    in_audio_targets() const { return m_in_audio_targets; }
-
-    QStringList const&
-    in_audio_targets_list() const { return m_in_audio_targets; }
-    // TODO:
-    // not sure q_properties accept template functions as READ/WRITE targets
-    // this is really annoying...
-
-    //---------------------------------------------------------------------------------------------
-    QVariant
-    out_audio_targets() const { return m_out_audio_targets; }
-
-    QStringList const&
-    out_audio_targets_list() const { return m_out_audio_targets; }
-
-    //---------------------------------------------------------------------------------------------
-    QVariant
-    in_midi_targets() const { return m_in_midi_targets; }
-
-    QStringList const&
-    in_midi_targets_list() const { return m_in_midi_targets; }
-
-    //---------------------------------------------------------------------------------------------
-    QVariant
-    out_midi_targets() const { return m_out_midi_targets; }
-
-    QStringList const&
-    out_midi_targets_list() const { return m_out_midi_targets; }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_in_audio_targets(QVariant variant)
-    //---------------------------------------------------------------------------------------------
-    {
-        auto list = variant.value<QStringList>();
-
-        if (m_in_audio_targets != list) {
-            m_in_audio_targets = list;
-        }
-
-        if (m_complete)
-            m_backend->on_input_audio_targets_changed(m_in_audio_targets, {});
-    }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_out_audio_targets(QVariant variant)
-    //---------------------------------------------------------------------------------------------
-    {
-        m_out_audio_targets = variant.value<QStringList>();
-    }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_in_midi_targets(QVariant variant)
-    //---------------------------------------------------------------------------------------------
-    {
-        m_in_midi_targets = variant.value<QStringList>();
-    }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_out_midi_targets(QVariant variant)
-    //---------------------------------------------------------------------------------------------
-    {
-        m_out_midi_targets = variant.value<QStringList>();
-    }
-
-    //---------------------------------------------------------------------------------------------
-    QVariantList
-    in_audio_routing() const    { return m_in_audio_routing; }
-
-    //---------------------------------------------------------------------------------------------
-    QVariantList
-    out_audio_routing() const   { return m_out_audio_routing; }
-
-    //---------------------------------------------------------------------------------------------
-    QVariantList
-    in_midi_routing() const     { return m_in_midi_routing; }
-
-    //---------------------------------------------------------------------------------------------
-    QVariantList
-    out_midi_routing() const    { return m_out_midi_routing; }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_in_audio_routing(QVariantList variant)
-    //---------------------------------------------------------------------------------------------
-    {
-        m_in_audio_routing = variant;
-    }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_out_audio_routing(QVariantList variant)
-    //---------------------------------------------------------------------------------------------
-    {
-        m_out_audio_routing = variant;
-    }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_in_midi_routing(QVariantList variant)
-    //---------------------------------------------------------------------------------------------
-    {
-        m_in_midi_routing = variant;
-    }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_out_midi_routing(QVariantList variant)
-    //---------------------------------------------------------------------------------------------
-    {
-        m_out_midi_routing = variant;
-    }
-
     //---------------------------------------------------------------------------------------------
     bool
     running() const { return m_running; }
@@ -567,13 +352,30 @@ private:
 };
 
 //---------------------------------------------------------------------------------------------
-class Output : public Node
+struct ExternalConnection
 //---------------------------------------------------------------------------------------------
 {
-    Q_OBJECT
+    QString target;
+    Routing routing;
 
-    WPN_DECLARE_DEFAULT_AUDIO_INPUT(audio_in, 0)
-    WPN_DECLARE_DEFAULT_MIDI_INPUT(midi_in, 0)
+    ExternalConnection() {}
+
+    operator
+    QVariant() const
+    {
+        QVariantList output;
+        output << target;
+        output << routing;
+
+        return output;
+    }
+};
+
+//-------------------------------------------------------------------------------------------------
+class ExternalIO : public Node
+//-------------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
 
     //---------------------------------------------------------------------------------------------
     enum Type { Audio, Midi }; Q_ENUM (Type)
@@ -582,21 +384,26 @@ class Output : public Node
     Q_PROPERTY  (Type type READ type WRITE set_type)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant channels READ channels WRITE set_channels)
+    Q_PROPERTY  (QVariant indexes READ channels WRITE set_channels)
 
     //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (QVariant connections READ targets WRITE set_targets)
+
+protected:
+
     Type
     m_type = Type::Audio;
 
-    //---------------------------------------------------------------------------------------------
     QVector<int>
     m_channels;
 
+    std::vector<ExternalConnection>
+    m_connections;
+
+    QVariant
+    m_targets;
+
 public:
-
-    //---------------------------------------------------------------------------------------------
-    Output() { m_name = "Output"; }
-
     //---------------------------------------------------------------------------------------------
     Type
     type() const { return m_type; }
@@ -607,14 +414,30 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QVariant
+    targets() const { return m_targets; }
+
+    //---------------------------------------------------------------------------------------------
+    std::vector<ExternalConnection>&
+    connections() { return m_connections; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_targets(QVariant variant) { m_targets = variant; }
+
+    //---------------------------------------------------------------------------------------------
+    QVariant
     channels() const { return QVariant::fromValue(m_channels); }
 
     QVector<int>&
     channels_vec() { return m_channels; }
 
+    nchannels_t
+    nchannels() const { return m_channels.size(); }
+
     //---------------------------------------------------------------------------------------------
     void
     set_channels(QVariant var)
+    //---------------------------------------------------------------------------------------------
     {
         if (var.canConvert<int>())
             m_channels.push_back(var.value<int>());
@@ -624,64 +447,89 @@ public:
                 set_channels(channel);
     }
 
+
+    //---------------------------------------------------------------------------------------------
+    void
+    parse_external_connections()
+    //---------------------------------------------------------------------------------------------
+    {
+        if (m_targets.canConvert<QString>()) {
+            ExternalConnection con;
+            con.target = m_targets.value<QString>();
+            m_connections.push_back(con);
+        }
+
+        else if (m_targets.canConvert<QVariantList>())
+        {
+            auto list = m_targets.value<QVariantList>();
+            auto targets = list[0];
+            auto routing = list[1];
+
+            if (targets.canConvert<QString>())
+            {
+                ExternalConnection con;
+                con.target = targets.value<QString>();
+
+                if (routing.canConvert<int>()) {
+                    // single routing argument
+                    uint8_t source = m_channels[0];
+                    uint8_t dest = routing.value<uint8_t>();
+                    con.routing.append(source, dest);
+
+                }
+
+                else if (routing.canConvert<QVariantList>())
+                {
+                    auto lrouting = routing.value<QVariantList>();
+                    con.routing = Routing(lrouting);
+
+                    for (int n = 0; n < con.routing.ncables(); ++n)
+                        // replace source index by channel
+                        con.routing[n][0] = m_channels[con.routing[n][0]];
+                }
+            }
+
+            else if (targets.canConvert<QVariantList>())
+            {
+                // TODO...
+            }
+        }
+    }
+};
+
+//---------------------------------------------------------------------------------------------
+class Output : public ExternalIO
+//---------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT(audio_in, 0)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT(midi_in, 0)
+
+public:
+
+    //---------------------------------------------------------------------------------------------
+    Output() { m_name = "Output"; }
+
     //---------------------------------------------------------------------------------------------
     virtual void
     componentComplete() override
     //---------------------------------------------------------------------------------------------
     {
+        parse_external_connections();
         Graph::instance().external()->register_output(this);
-
-        if (m_channels.isEmpty())
-        {
-            if (m_type == Type::Audio) {
-                auto nchannels = Graph::instance().external()->n_audio_outputs();
-                for (int n = 0; n < nchannels; ++n)
-                     m_channels.push_back(n);
-                m_audio_in.set_nchannels(nchannels);
-            }
-            else {
-                auto nchannels = Graph::instance().external()->n_midi_outputs();
-                for (int n = 0; n < nchannels; ++n)
-                     m_channels.push_back(n);
-                m_midi_in.set_nchannels(nchannels);
-            }
-        }
-        else
-        {
-            if  (m_type == Type::Audio)
-                 m_audio_in.set_nchannels(m_channels.count());
-            else m_midi_in.set_nchannels(m_channels.count());
-        }
-
         Node::componentComplete();
     }
 };
 
 //---------------------------------------------------------------------------------------------
-class Input : public Node
+class Input : public ExternalIO
 //---------------------------------------------------------------------------------------------
 {
     Q_OBJECT
 
     WPN_DECLARE_DEFAULT_AUDIO_OUTPUT(audio_out, 0)
     WPN_DECLARE_DEFAULT_MIDI_OUTPUT(midi_out, 0)
-
-    //---------------------------------------------------------------------------------------------
-    enum Type { Audio, Midi }; Q_ENUM (Type)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (Type type READ type WRITE set_type)
-
-    //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant channels READ channels WRITE set_channels)
-
-    //---------------------------------------------------------------------------------------------
-    Type
-    m_type = Type::Audio;
-
-    //---------------------------------------------------------------------------------------------
-    QVector<int>
-    m_channels;
 
 public:
 
@@ -693,61 +541,12 @@ public:
     }
 
     //---------------------------------------------------------------------------------------------
-    Type
-    type() const { return m_type; }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_type(Type t) { m_type = t; }
-
-    //---------------------------------------------------------------------------------------------
-    QVariant
-    channels() const { return QVariant::fromValue(m_channels); }
-
-    QVector<int>&
-    channels_vec() { return m_channels; }
-
-    //---------------------------------------------------------------------------------------------
-    void
-    set_channels(QVariant var)
-    {
-        if (var.canConvert<int>())
-            m_channels.push_back(var.value<int>());
-
-        else if (var.canConvert<QVariantList>())
-            for (auto& channel : var.value<QVariantList>())
-                set_channels(channel);
-    }
-
-    //---------------------------------------------------------------------------------------------
     virtual void
     componentComplete() override
     //---------------------------------------------------------------------------------------------
     {
+        parse_external_connections();
         Graph::instance().external()->register_input(this);
-
-        if (m_channels.isEmpty())
-        {
-            if (m_type == Type::Audio) {
-                auto nchannels = Graph::instance().external()->n_audio_inputs();
-                for (int n = 0; n < nchannels; ++n)
-                     m_channels.push_back(n);
-                m_audio_out.set_nchannels(nchannels);
-            }
-            else {
-                auto nchannels = Graph::instance().external()->n_midi_inputs();
-                for (int n = 0; n < nchannels; ++n)
-                     m_channels.push_back(n);
-                m_midi_out.set_nchannels(nchannels);
-            }
-        }
-        else
-        {
-            if  (m_type == Type::Audio)
-                 m_audio_out.set_nchannels(m_channels.count());
-            else m_midi_out.set_nchannels(m_channels.count());
-        }
-
         Node::componentComplete();
     }
 };

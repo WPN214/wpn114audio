@@ -205,6 +205,16 @@ public:
     // returns routing matrix 'cable' at index
 
     // --------------------------------------------------------------------------------------------
+    void
+    append(cable const& c) { m_routing.push_back(c); }
+
+    void
+    append(uint8_t source, uint8_t dest)
+    {
+        m_routing.emplace_back(source, dest);
+    }
+
+    // --------------------------------------------------------------------------------------------
     nchannels_t
     ncables() const { return static_cast<nchannels_t>(m_routing.size()); }
 
