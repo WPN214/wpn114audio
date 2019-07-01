@@ -127,20 +127,26 @@ class JackExternal : public ExternalBase
 
     //---------------------------------------------------------------------------------------------
     jack_port_t*
-    find_or_create_port(JackPortFlags polarity, int type, int index);
+    find_port(JackPortFlags polarity, int type, int index);
 
+    //---------------------------------------------------------------------------------------------
     void
     connect(ExternalIO*, QString target, Routing r);
 
+    void
+    connect(std::vector<JackExternalIO>& target);
+
+    //---------------------------------------------------------------------------------------------
     std::vector<jack_port_t*>&
     io_ports(ExternalIO* io);
 
+    //---------------------------------------------------------------------------------------------
     const char*
     io_type(ExternalIO* io);
 
+    //---------------------------------------------------------------------------------------------
     JackPortFlags
     io_polarity(ExternalIO* io);
-
 
 public:
 
@@ -478,7 +484,6 @@ public:
                     uint8_t source = m_channels[0];
                     uint8_t dest = routing.value<uint8_t>();
                     con.routing.append(source, dest);
-
                 }
 
                 else if (routing.canConvert<QVariantList>())
@@ -490,6 +495,8 @@ public:
                         // replace source index by channel
                         con.routing[n][0] = m_channels[con.routing[n][0]];
                 }
+
+                m_connections.push_back(con);
             }
 
             else if (targets.canConvert<QVariantList>())

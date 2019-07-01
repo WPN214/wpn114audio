@@ -154,7 +154,7 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
 
 // ------------------------------------------------------------------------------------------------
 jack_port_t*
-JackExternal::find_or_create_port(JackPortFlags polarity, int type, int index)
+JackExternal::find_port(JackPortFlags polarity, int type, int index)
 // ------------------------------------------------------------------------------------------------
 {
     std::vector<jack_port_t*>* target = nullptr;
@@ -192,6 +192,30 @@ JackExternal::io_polarity(ExternalIO* io)
 }
 
 // ------------------------------------------------------------------------------------------------
+std::vector<jack_port_t*>&
+JackExternal::io_ports(ExternalIO* io)
+// ------------------------------------------------------------------------------------------------
+{
+    std::vector<JackExternalIO>* target = nullptr;
+
+    if (io_polarity(io) == JackPortIsInput) {
+        if (io->type() == ExternalIO::Audio)
+             target = &m_audio_input_ios;
+        else target = &m_midi_input_ios;
+    }   else  {
+        if (io->type() == ExternalIO::Audio)
+             target = &m_audio_output_ios;
+        else target = &m_midi_output_ios;
+    }
+
+    for (auto& jio : *target)
+        if (jio.io == io)
+            return jio.ports;
+
+    assert(false);
+}
+
+// ------------------------------------------------------------------------------------------------
 void
 JackExternal::register_io(ExternalIO* io)
 // ------------------------------------------------------------------------------------------------
@@ -209,9 +233,26 @@ JackExternal::register_io(ExternalIO* io)
     j_ext.io = io;
 
     for (auto& index : io->channels_vec()) {
-        jack_port_t* port = find_or_create_port(polarity, io->type(), index);
+
+        jack_port_t* port = find_port(polarity, io->type(), index);
+
+        if (port == nullptr)
+            port = jack_port_register(m_client, name, type, polarity, 0);
+
         j_ext.ports.push_back(port);
     }
+
+    if (polarity == JackPortIsInput) {
+        if (io->type() == ExternalIO::Audio)
+             m_audio_input_ios.push_back(j_ext);
+        else m_midi_input_ios.push_back(j_ext);
+    }   else  {
+        if (io->type() == ExternalIO::Audio)
+             m_audio_output_ios.push_back(j_ext);
+        else m_midi_output_ios.push_back(j_ext);
+    }
+
+
 }
 //-------------------------------------------------------------------------------------------------
 JackExternal::JackExternal(External* parent) : m_parent(*parent)
@@ -263,14 +304,18 @@ JackExternal::connect(ExternalIO* io, QString target, Routing routing)
     auto& source_ports      = io_ports(io);
     auto type               = io_type(io);
     auto polarity           = io_polarity(io);
-    auto target_ports       = jack_get_ports(m_client, CSTR(target), type, polarity);
+    auto target_ports       = jack_get_ports(m_client, CSTR(target), type,
+                              polarity == JackPortIsInput ? JackPortIsOutput : JackPortIsInput);
+
+    if (target_ports == nullptr)
+        return;
 
     if (routing.null())
     {
         for (nchannels_t n = 0; n < source_ports.size(); ++n)
             if (polarity == JackPortIsInput)
-                 jack_connect(m_client, jack_port_name(source_ports[n]), target_ports[n]);
-            else jack_connect(m_client, target_ports[n], jack_port_name(source_ports[n]));
+                 jack_connect(m_client, target_ports[n], jack_port_name(source_ports[n]));
+            else jack_connect(m_client, jack_port_name(source_ports[n]), target_ports[n]);
     }
     else for (nchannels_t n = 0; n < routing.ncables(); ++n)
     {
@@ -279,13 +324,23 @@ JackExternal::connect(ExternalIO* io, QString target, Routing routing)
         outno = routing[n][1];
 
         if (polarity == JackPortIsInput) {
-            auto pname = jack_port_name(source_ports[outno]);
-            jack_connect(m_client, pname, target_ports[inno]);
-        } else {
             auto pname = jack_port_name(source_ports[inno]);
             jack_connect(m_client, target_ports[outno], pname);
+        } else {
+            auto pname = jack_port_name(source_ports[inno]);
+            jack_connect(m_client, pname, target_ports[outno]);
         }
     }
+}
+
+//-------------------------------------------------------------------------------------------------
+void
+JackExternal::connect(std::vector<JackExternalIO>& target)
+//-------------------------------------------------------------------------------------------------
+{
+    for (auto& j_ext : target)
+        for (auto& connection : j_ext.io->connections())
+            connect(j_ext.io, connection.target, connection.routing);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -301,21 +356,10 @@ JackExternal::run()
     // make the appropriate connections
     qDebug() << "[JACK] connecting ports";
 
-    for (auto& input : m_parent.audio_inputs())
-        for (auto& connection : input->connections())
-            connect(input, connection.target, connection.routing);
-
-    for (auto& input : m_parent.midi_inputs())
-         for (auto& connection : input->connections())
-             connect(input, connection.target, connection.routing);
-
-    for (auto& output : m_parent.audio_outputs())
-        for (auto& connection : output->connections())
-            connect(output, connection.target, connection.routing);
-
-    for (auto& output: m_parent.midi_outputs())
-        for (auto& connection : output->connections())
-            connect(output, connection.target, connection.routing);
+    connect(m_audio_input_ios);
+    connect(m_midi_input_ios);
+    connect(m_audio_output_ios);
+    connect(m_midi_output_ios);
 
     m_parent.connected();
     qDebug() << "[JACK] running";
