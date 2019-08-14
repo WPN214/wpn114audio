@@ -22,10 +22,11 @@ set(WPN114AUDIO_QML_SOURCES
     source/basics/audio/sinetest.hpp
     source/basics/audio/vca.hpp
     source/basics/audio/clock.hpp
-    examples/Audio.qml
     )
 
 add_library(${PROJECT_NAME} SHARED ${WPN114AUDIO_QML_SOURCES})
+add_subdirectory(examples)
+
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Qml)
 target_include_directories(${PROJECT_NAME} PUBLIC include)
 

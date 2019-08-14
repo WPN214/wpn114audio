@@ -1,7 +1,6 @@
 #include <QtDebug>
 #include <vector>
 #include <cmath>
-
 #include <wpn114audio/graph.hpp>
 
 using namespace wpn114;
