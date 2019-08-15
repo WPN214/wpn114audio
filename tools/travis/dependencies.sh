@@ -10,7 +10,7 @@
 		sudo apt-get install -qq --force-yes \
 			libasound-dev jackd2 portaudio19-dev \
 			libgl1-mesa-dev \
-			qt513base qt512quickcontrols2 
+			qt512base qt512quickcontrols2 
 
 		wait wget || true
 
