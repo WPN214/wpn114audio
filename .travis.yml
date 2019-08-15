@@ -3,5 +3,16 @@ sudo: required
 dist: xenial
 compiler: 
 - clang
+- gcc
 os: 
 - linux
+
+before_install:
+  - ./tools/travis/dependencies.sh
+
+script:
+  - ./tools/travis/build.sh
+
+notifications:
+  email: false
+
