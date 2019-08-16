@@ -16,6 +16,7 @@ Item
         WPN114.Output
         {
             name: "audio_out"
+            indexes: [0, 1]
 
             WPN114.Sinetest
             {
