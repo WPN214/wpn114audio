@@ -1,9 +1,2 @@
 # WPN114-audio
-[![Build Status](https://travis-ci.org/WPN214/WPN114-audio.svg?branch=master)](https://travis-ci.org/WPN214/WPN114-audio)
-[![Build status](https://ci.appveyor.com/api/projects/status/p0g3kohu5lufooh0/branch/master?svg=true)](https://ci.appveyor.com/project/pchdev/wpn114-audio/branch/master)
-
-an audio-programming environment for Qt5/QML
-
-## Prerequisites
-- qt5.12 or higher
-- cmake 
+an audio-programming environment for Qt5/QML (work in progress)
