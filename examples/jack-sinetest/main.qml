@@ -8,21 +8,21 @@ Item
     {
         // these are the default graph property values
         rate: 44100; vector: 512
-
-        name: "wpn114audio-test-device"
-        extern.backend: WPN114.External.Jack
-        extern.running: true
+        external.name: "wpn114audio-test"
+        external.backend: WPN114.External.Jack
+        external.running: true
 
         WPN114.Output
         {
-            name: "audio_out"
-            indexes: [0, 1]
+            name: "audio_out"            
+            channels: [0, 1]
 
             WPN114.Sinetest
             {
                 id: sinetest
                 name: "sinetest"
                 frequency.value: 440.0
+                audio_out.mul: 0.15
                 audio_out.routing: [0, 0, 0, 1]
             }
         }

@@ -1,6 +1,8 @@
 #pragma once
 #include <wpn114audio/graph.hpp>
 
+#define esz 16384
+
 //=================================================================================================
 class Sinetest : public Node
 /*!
@@ -12,14 +14,11 @@ class Sinetest : public Node
     Q_OBJECT
 
     WPN_DECLARE_DEFAULT_AUDIO_INPUT     (frequency, 1)
+    WPN_DECLARE_DEFAULT_AUDIO_OUTPUT    (audio_out, 1)
     WPN_DECLARE_DEFAULT_MIDI_INPUT      (midi_in, 1)
-    WPN_DECLARE_DEFAULT_MIDI_OUTPUT     (audio_out, 1)
 
     enum inputs     { frequency = 0, midi_in = 1 };
     enum outputs    { audio_out = 0 };
-
-    static constexpr size_t
-    esz = 16384;
 
 public:
 
@@ -63,9 +62,9 @@ public:
     //-------------------------------------------------------------------------------------------------
     {        
         // fetch in/out buffers (first channel, as they only have one anyway)
-        auto freq  = inputs.audio[0][0];
-        auto midi  = inputs.midi[0]; // todo
-        auto out   = outputs.audio[0][0];
+        auto freq  = inputs.audio[Sinetest::frequency][0];
+        auto midi  = inputs.midi[Sinetest::midi_in]; // todo
+        auto out   = outputs.audio[Sinetest::audio_out][0];
 
         // put member attributes on the stack
         size_t phs = m_phs;

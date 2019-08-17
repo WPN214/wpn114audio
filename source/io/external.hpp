@@ -403,7 +403,7 @@ class ExternalIO : public Node
     Q_PROPERTY  (Type type READ type WRITE set_type)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (QVariant indexes READ channels WRITE set_channels)
+    Q_PROPERTY  (QVariant channels READ channels WRITE set_channels)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariant connections READ targets WRITE set_targets)
@@ -455,7 +455,6 @@ public:
             for (auto& channel : var.value<QVariantList>())
                 set_channels(channel);
     }
-
 
     //---------------------------------------------------------------------------------------------
     void
@@ -527,8 +526,8 @@ class Output : public ExternalIO
 {
     Q_OBJECT
 
-    WPN_DECLARE_DEFAULT_AUDIO_INPUT(audio_in, 0)
-    WPN_DECLARE_DEFAULT_MIDI_INPUT(midi_in, 0)
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT     (audio_in, 0)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT      (midi_in, 0)
 
 public:
 
@@ -543,7 +542,7 @@ public:
         parse_external_connections();
         Graph::instance().external()->register_output(this);
 
-        if (m_type == Type::Audio)
+        if  (m_type == Type::Audio)
              m_audio_in.set_nchannels(m_channels.count());
         else m_midi_in.set_nchannels(m_channels.count());
 
@@ -557,8 +556,8 @@ class Input : public ExternalIO
 {
     Q_OBJECT
 
-    WPN_DECLARE_DEFAULT_AUDIO_OUTPUT(audio_out, 0)
-    WPN_DECLARE_DEFAULT_MIDI_OUTPUT(midi_out, 0)
+    WPN_DECLARE_DEFAULT_AUDIO_OUTPUT    (audio_out, 0)
+    WPN_DECLARE_DEFAULT_MIDI_OUTPUT     (midi_out, 0)
 
 public:
 

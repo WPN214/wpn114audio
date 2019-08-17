@@ -821,7 +821,7 @@ class Graph : public QObject, public QQmlParserStatus
     Q_OBJECT
 
     // --------------------------------------------------------------------------------------------
-    Q_PROPERTY (External* extern READ external)
+    Q_PROPERTY (External* external READ external)
 
     // --------------------------------------------------------------------------------------------
     Q_PROPERTY (int vector READ vector WRITE set_vector)

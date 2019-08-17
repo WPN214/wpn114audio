@@ -514,9 +514,11 @@ Connection::pull(vector_t nframes) noexcept
     if (routing.null())
         for (nchannels_t c = 0; c < m_nchannels; ++c)
             for (vector_t f = 0; f < nframes; ++f)
-                dbuf[c][f] += sbuf[c][f] * mul + add;
+                dbuf[c][f] += sbuf[c][f] * mul + add;           
     else
         for (nchannels_t c = 0; c < routing.ncables(); ++c)
-            for (vector_t f = 0; f < nframes; ++f)
-                dbuf[routing[c][1]][f] += sbuf[routing[c][0]][f] * mul + add;
+            for (vector_t f = 0; f < nframes; ++f) {
+                auto cable = routing[c];
+                dbuf[cable[1]][f] += sbuf[cable[0]][f] * mul + add;
+            }
 }

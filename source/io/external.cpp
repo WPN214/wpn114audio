@@ -122,8 +122,13 @@ JackExternal::jack_process_callback(jack_nframes_t nframes, void* udata)
         {
             auto j_out = output.ports[n];
             auto j_buf = static_cast<sample_t*>(jack_port_get_buffer(j_out, nframes));
-            for (jack_nframes_t f = 0; f < nframes; ++f)
-                 j_buf[f] += wbufr[n][f];
+            for (jack_nframes_t f = 0; f < nframes; ++f) {
+                // note: this would be a 'process replacing' system
+                // if we have to implement mixing from different Output instances
+                // targetting the same jack output
+                // we should mix them somewhere first
+                 j_buf[f] = wbufr[n][f];
+            }
         }
     }
 
@@ -227,19 +232,22 @@ JackExternal::register_io(ExternalIO* io)
                 JACK_DEFAULT_AUDIO_TYPE :
                 JACK_DEFAULT_MIDI_TYPE ;
 
-    auto name = CSTR(io->name());
-
     JackExternalIO j_ext;
     j_ext.io = io;
 
+    int n = 0;
     for (auto& index : io->channels_vec()) {
 
         jack_port_t* port = find_port(polarity, io->type(), index);
+        auto name = CSTR(io->name().append(QString::number(n)));
 
-        if (port == nullptr)
+        if (port == nullptr) {
             port = jack_port_register(m_client, name, type, polarity, 0);
+            qDebug() << "[JACK] registered port" << name;
+        }
 
         j_ext.ports.push_back(port);
+        n++;
     }
 
     if (polarity == JackPortIsInput) {
@@ -258,15 +266,16 @@ JackExternal::register_io(ExternalIO* io)
 JackExternal::JackExternal(External* parent) : m_parent(*parent)
   //-------------------------------------------------------------------------------------------------
 {
-    auto name = CSTR(parent->name());
     jack_status_t status;
 
     qDebug() << "[JACK] opening jack client with name:"
              << parent->name();
 
-    m_client = jack_client_open(name, JackNullOption, &status);
+    m_client = jack_client_open(CSTR(parent->name()), JackNullOption, &status);
     // sample rate and buffer sizes are defined by the user from jack
     // there's no need to set them from the graph
+    assert(m_client);
+
     jack_nframes_t
     srate = jack_get_sample_rate(m_client),
     bsize = jack_get_buffer_size(m_client);
