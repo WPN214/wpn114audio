@@ -6,9 +6,10 @@
 Graph*
 Graph::s_instance;
 
+namespace wpn114 {
 // ------------------------------------------------------------------------------------------------
 template<> audiobuffer_t
-wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
+allocate_buffer(nchannels_t nchannels, vector_t nframes)
 // we make no assumption as to how many channels each input/output may have
 // by the time the graph is ready/updated, so we can't really template it upfront
 // ------------------------------------------------------------------------------------------------
@@ -22,7 +23,7 @@ wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
 
 // ------------------------------------------------------------------------------------------------
 template<> midibuffer_t
-wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
+allocate_buffer(nchannels_t nchannels, vector_t nframes)
 // ------------------------------------------------------------------------------------------------
 {
     midibuffer** block = new midibuffer*[nchannels];
@@ -31,6 +32,7 @@ wpn114::allocate_buffer(nchannels_t nchannels, vector_t nframes)
          block[n] = new midibuffer(sizeof(sample_t)*nframes);
 
     return block;
+}
 }
 
 // ------------------------------------------------------------------------------------------------
