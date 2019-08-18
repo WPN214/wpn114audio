@@ -3,8 +3,6 @@
 #include <cmath>
 #include <wpn114audio/graph.hpp>
 
-using namespace wpn114;
-
 Graph*
 Graph::s_instance;
 
