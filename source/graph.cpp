@@ -396,7 +396,7 @@ Node::spatial()
     if (!m_spatial) {
         qDebug() << m_name << "creating spatial attributes";
 
-        m_spatial = new Spatial;
+        m_spatial = new Spatial(default_port(Polarity::Output)->nchannels());
         // we make an implicit connection
         m_subnodes.push_front(m_spatial);
     }
