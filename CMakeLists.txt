@@ -22,6 +22,7 @@ set(WPN114AUDIO_QML_SOURCES
     source/basics/audio/sinetest.hpp
     source/basics/audio/vca.hpp
     source/basics/audio/clock.hpp
+    source/basics/audio/peakrms.hpp
     )
 
 add_library(${PROJECT_NAME} SHARED ${WPN114AUDIO_QML_SOURCES})

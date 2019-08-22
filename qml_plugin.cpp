@@ -5,6 +5,7 @@
 #include <source/basics/audio/sinetest.hpp>
 #include <source/basics/audio/vca.hpp>
 #include <source/basics/audio/clock.hpp>
+#include <source/basics/audio/peakrms.hpp>
 #include <source/basics/midi/velocity-table.hpp>
 #include <source/basics/midi/transposer.hpp>
 #include <source/basics/midi/rwriter.hpp>
@@ -57,6 +58,9 @@ void qml_plugin::registerTypes(const char* uri)
 
     qmlRegisterType<VCA, 1>
     ("WPN114.Audio", 1, 1, "VCA");
+
+    qmlRegisterType<PeakRMS, 1>
+    ("WPN114.Audio", 1, 1, "PeakRMS");
 
     qmlRegisterType<StereoPanner, 1>
     ("WPN114.Audio", 1, 1, "StereoPanner");
