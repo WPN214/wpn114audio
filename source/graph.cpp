@@ -239,7 +239,7 @@ Port::add_connection(Connection* con)
     m_connections.push_back(con);
 }
 
-#include <source/io/external.hpp>
+#include "io/external.hpp"
 
 // ------------------------------------------------------------------------------------------------
 Graph::Graph()
