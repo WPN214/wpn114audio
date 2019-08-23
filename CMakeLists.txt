@@ -30,35 +30,51 @@ set(WPN114AUDIO_SOURCES
     ${WPN114AUDIO_SOURCE_DIR}/basics/audio/clock.hpp
     ${WPN114AUDIO_SOURCE_DIR}/basics/audio/peakrms.hpp)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+if(ANDROID)
+    # we'd have to use QtMultimedia for that
+    find_package(Qt5 REQUIRED COMPONENTS Multimedia)
+
+    set(WPN114AUDIO_SOURCES ${WPN114AUDIO_SOURCES}
+        ${WPN114AUDIO_SOURCE_DIR}/io/io_qt.hpp
+        ${WPN114AUDIO_SOURCE_DIR}/io/io_qt.cpp)
+elseif(APPLE)
+elseif(UNIX)
+    find_package(ALSA REQUIRED)
+    find_package(JACK QUIET)
+    # we'll see later about PulseAudio...
+    if(JACK_FOUND)
+        message("Compiling with Jack support")
+        set(WPN114AUDIO_SOURCES ${WPN114AUDIO_SOURCES}
+            ${WPN114AUDIO_SOURCE_DIR}/io/io_jack.hpp
+            ${WPN114AUDIO_SOURCE_DIR}/io/io_jack.cpp)
+    endif()
+endif()
+
 option(WPN114AUDIO_EXAMPLES OFF)
 
 if(WPN114AUDIO_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
+# PROJECT -----------------------------------------------------------------------------------------
+
 add_library(${PROJECT_NAME} SHARED ${WPN114AUDIO_HEADERS} ${WPN114AUDIO_SOURCES})
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Qml)
 target_include_directories(${PROJECT_NAME} PUBLIC ${WPN114AUDIO_INCLUDE_DIR})
 
-# DEPENDENCIES ------------------------------------------------------------------------------------
+# LINKING -----------------------------------------------------------------------------------------
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} -framework CoreFoundation -framework CoreAudio)
 elseif(ANDROID)
-    # we'd have to use QtMultimedia for that
-    find_package(Qt5 REQUIRED COMPONENTS Multimedia)
     target_link_libraries(${PROJECT_NAME} Qt5::Multimedia)
 elseif(UNIX)
-    find_package(ALSA REQUIRED)
-    find_package(JACK QUIET)
-    # we'll see later about PulseAudio...
-
     target_link_libraries(${PROJECT_NAME} ${ALSA_LIBRARIES})
     if(JACK_FOUND)
-        message("Compiling with Jack support")
         target_compile_definitions(${PROJECT_NAME} PRIVATE -DWPN114AUDIO_JACK)
         target_link_libraries(${PROJECT_NAME} ${JACK_LIBRARY})
     endif()
@@ -68,7 +84,8 @@ endif()
 
 # INSTALLING --------------------------------------------------------------------------------------
 
-if(${CMAKE_PREFIX_PATH} STREQUAL "/usr")
+if(${CMAKE_PREFIX_PATH} AND
+   ${CMAKE_PREFIX_PATH} STREQUAL "/usr")
     set(QT5_QML_INSTALL_PATH /usr/lib/qt/qml)
 else()
     set(QT5_QML_INSTALL_PATH ${CMAKE_PREFIX_PATH}/qml)

@@ -1,7 +1,5 @@
 #pragma once
-
 #include <wpn114audio/graph.hpp>
-#include <jack/jack.h>
 
 //---------------------------------------------------------------------------------------------
 class ExternalBase
@@ -73,116 +71,7 @@ public:
 };
 
 
-class External;
 class ExternalIO;
-class Input;
-class Output;
-
-//-------------------------------------------------------------------------------------------------
-struct JackExternalIO
-//-------------------------------------------------------------------------------------------------
-{
-    ExternalIO* io;
-    std::vector<jack_port_t*> ports;
-};
-
-//-------------------------------------------------------------------------------------------------
-class JackExternal : public ExternalBase
-//-------------------------------------------------------------------------------------------------
-{
-    //---------------------------------------------------------------------------------------------
-    External&
-    m_parent;
-
-    //---------------------------------------------------------------------------------------------
-    jack_client_t*
-    m_client = nullptr;
-
-    //---------------------------------------------------------------------------------------------
-    std::vector<JackExternalIO>
-    m_audio_input_ios, m_audio_output_ios,
-    m_midi_input_ios, m_midi_output_ios;
-
-    std::vector<jack_port_t*>
-    m_audio_input_ports, m_audio_output_ports,
-    m_midi_input_ports, m_midi_output_ports;
-
-    //---------------------------------------------------------------------------------------------
-    static int
-    on_jack_sample_rate_changed(jack_nframes_t nframes, void* udata);
-
-    //---------------------------------------------------------------------------------------------
-    static int
-    on_jack_buffer_size_changed(jack_nframes_t nframes, void* udata);
-
-    //---------------------------------------------------------------------------------------------
-    static int
-    jack_process_callback(jack_nframes_t nframes, void* udata);
-
-    //---------------------------------------------------------------------------------------------
-    static void
-    on_jack_client_registration(const char* name, int reg, void* udata);
-
-    //---------------------------------------------------------------------------------------------
-    void
-    register_io(ExternalIO* io);
-
-    //---------------------------------------------------------------------------------------------
-    jack_port_t*
-    find_port(JackPortFlags polarity, int type, int index);
-
-    //---------------------------------------------------------------------------------------------
-    void
-    connect(ExternalIO*, QString target, Routing r);
-
-    void
-    connect(std::vector<JackExternalIO>& target);
-
-    //---------------------------------------------------------------------------------------------
-    std::vector<jack_port_t*>&
-    io_ports(ExternalIO* io);
-
-    //---------------------------------------------------------------------------------------------
-    const char*
-    io_type(ExternalIO* io);
-
-    //---------------------------------------------------------------------------------------------
-    JackPortFlags
-    io_polarity(ExternalIO* io);
-
-public:
-
-    //---------------------------------------------------------------------------------------------
-    JackExternal(External* parent);
-
-    //---------------------------------------------------------------------------------------------
-    virtual
-    ~JackExternal() override
-    //---------------------------------------------------------------------------------------------
-    {
-        jack_deactivate(m_client);
-        jack_client_close(m_client);
-    }
-
-    //---------------------------------------------------------------------------------------------
-    External&
-    parent() { return m_parent; }
-
-    //---------------------------------------------------------------------------------------------
-    virtual void
-    run() override;
-
-    //---------------------------------------------------------------------------------------------
-    virtual void
-    stop() override { jack_deactivate(m_client); }
-
-    //---------------------------------------------------------------------------------------------
-    virtual void
-    on_name_changed(QString& name) override { Q_UNUSED(name) }
-    // TODO: override the other ones...
-
-};
-
 class Input;
 class Output;
 
@@ -196,16 +85,34 @@ class External : public QObject, public QQmlParserStatus
     Q_OBJECT
 
 public:
+
+
     //---------------------------------------------------------------------------------------------
     enum Backend
     //---------------------------------------------------------------------------------------------
     {
-        None         = 0,
-//        Alsa         = 1,
-        Jack         = 2,
-//        PulseAudio   = 3,
-//        CoreAudio    = 4,
-//        VSTHost      = 5
+        None,
+
+        Default
+
+#ifdef __linux__
+        ,Alsa
+#endif
+#ifdef WPN114AUDIO_JACK
+        ,Jack
+#endif
+#ifdef WPN114AUDIO_PULSEAUDIO
+//      ,PulseAudio
+#endif
+#ifdef __APPLE__
+//      ,CoreAudio
+#endif
+#ifdef WPN114AUDIO_VSTHOST
+//      ,VSTHost
+#endif
+#ifdef ANDROID
+        ,Qt
+#endif
     };
 
     Q_ENUM (Backend)
@@ -254,17 +161,7 @@ public:
 
     //-------------------------------------------------------------------------------------------------
     virtual void
-    componentComplete() override
-    //-------------------------------------------------------------------------------------------------
-    {
-        m_complete = true;
-        m_backend = new JackExternal(this);
-
-        qDebug() << "[GRAPH] external configuration complete";
-
-        if (m_running)
-            m_backend->run();
-    }
+    componentComplete() override;
 
     //-------------------------------------------------------------------------------------------------
     Q_SIGNAL void
@@ -300,23 +197,8 @@ public:
     void
     set_backend(Backend backend)
     //-------------------------------------------------------------------------------------------------
-    {
-        if (!m_complete)
-            return;
-
-        if (m_backend)
-            delete m_backend;
-
-        switch(backend)
-        {
-        case Jack:
-        {
-            m_backend = new JackExternal(this);
-
-            if (m_running)
-                m_backend->run();
-        }
-        }
+    {       
+        m_backend_id = backend;
     }
 
     //---------------------------------------------------------------------------------------------
