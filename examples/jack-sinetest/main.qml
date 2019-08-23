@@ -9,7 +9,7 @@ Item
         // these are the default graph property values
         rate: 44100; vector: 512
         external.name: "wpn114audio-test"
-        external.backend: WPN114.External.Jack
+        external.backend: WPN114.External.Default
         external.running: true
 
         WPN114.Output

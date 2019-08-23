@@ -52,7 +52,7 @@ elseif(UNIX)
     endif()
 endif()
 
-option(WPN114AUDIO_EXAMPLES OFF)
+option(WPN114AUDIO_EXAMPLES ON)
 
 if(WPN114AUDIO_EXAMPLES)
     add_subdirectory(examples)
