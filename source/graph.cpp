@@ -27,7 +27,6 @@ allocate_buffer(nchannels_t nchannels, vector_t nframes)
 // ------------------------------------------------------------------------------------------------
 {
     midibuffer** block = new midibuffer*[nchannels];
-
     for (nchannels_t n = 0; n < nchannels; ++n)
          block[n] = new midibuffer(sizeof(sample_t)*nframes);
 

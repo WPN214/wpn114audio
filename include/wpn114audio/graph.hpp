@@ -8,9 +8,8 @@
 #include <QVector>
 #include <QVariant>
 #include <QJSValue>
-
-#include <cmath>
 #include <QtDebug>
+#include <cmath>
 
 #include <wpn114audio/midi.hpp>
 
@@ -83,21 +82,24 @@
 #define WPN_AUDIOTHREAD
 
 //-------------------------------------------------------------------------------------------------
-enum class
-Polarity
+enum class Polarity
+//-------------------------------------------------------------------------------------------------
 {
     Output = 0, Input = 1
 };
 
-enum class
-Interpolation
+//-------------------------------------------------------------------------------------------------
+enum class Interpolation
+//-------------------------------------------------------------------------------------------------
 {
     Linear = 0, Sin4 = 1
 };
 
+//-------------------------------------------------------------------------------------------------
 #define lininterp(_x,_a,_b) _a+_x*(_b-_a)
 #define sininterp(_x,_a,_b) _a+ sin(x*(_b-_a)*(sample_t)M_PI_2)
 
+//-------------------------------------------------------------------------------------------------
 using sample_t      = float;
 using nchannels_t   = uint8_t;
 using byte_t        = uint8_t;

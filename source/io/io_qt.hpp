@@ -7,12 +7,12 @@
 #include <source/io/external.hpp>
 
 //=================================================================================================
-class QtAudioBackend : public ExternalBase, public QIODevice
+class QtAudioBackend : public QIODevice, public ExternalBase
 // this would be the preferred i/o backend for Android/iOS platforms
 //=================================================================================================
 {
     Q_OBJECT
-    Q_INTERFACES (QIODevice)
+    //Q_INTERFACES (QIODevice)
 
     External&
     m_parent;

@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 project(wpn114audio-qml LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 14)
+# weird things happen if cxx_standard is not 17 for Android (llvm libc++)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -54,7 +55,7 @@ endif()
 
 option(WPN114AUDIO_EXAMPLES ON)
 
-if(WPN114AUDIO_EXAMPLES)
+if(NOT ANDROID AND WPN114AUDIO_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
