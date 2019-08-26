@@ -1,6 +1,6 @@
 #pragma once
 
-#include <asoundlib.h>
+#include <alsa/asoundlib.h>
 #include <source/io/external.hpp>
 
 //=================================================================================================
