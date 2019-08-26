@@ -587,10 +587,19 @@ public:
 
     // --------------------------------------------------------------------------------------------
     ~Port()
+    // --------------------------------------------------------------------------------------------
     {
-        if (m_type == Port::Audio)
+        if (m_type == Port::Audio) {
+            for (nchannels_t n = 0; n < m_nchannels; ++n)
+                if (m_buffer.audio[n])
+                    delete[] m_buffer.audio[n];
             delete[] m_buffer.audio;
-        else m_buffer.midi.~midibuffer_t();
+        } else {
+            for (nchannels_t n = 0; n < m_nchannels; ++n)
+                if (m_buffer.midi[n])
+                    m_buffer.midi[n]->~midibuffer();
+            delete[] m_buffer.midi;
+        }
     }
 
     // --------------------------------------------------------------------------------------------
@@ -688,6 +697,9 @@ public:
     // --------------------------------------------------------------------------------------------
     template<typename T> T
     buffer() noexcept;
+
+    template<typename T> void
+    set_buffer(T& buffer) noexcept;
 
     // --------------------------------------------------------------------------------------------
     std::vector<Connection*>&

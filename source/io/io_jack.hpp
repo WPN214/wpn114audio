@@ -3,13 +3,7 @@
 #include <jack/jack.h>
 #include <source/io/external.hpp>
 
-//-------------------------------------------------------------------------------------------------
-struct JackExternalIO
-//-------------------------------------------------------------------------------------------------
-{
-    ExternalIO* io;
-    std::vector<jack_port_t*> ports;
-};
+using jack_port_flags_t = JackPortFlags;
 
 //-------------------------------------------------------------------------------------------------
 class JackExternal : public ExternalBase
@@ -23,14 +17,11 @@ class JackExternal : public ExternalBase
     jack_client_t*
     m_client = nullptr;
 
-    //---------------------------------------------------------------------------------------------
-    std::vector<JackExternalIO>
-    m_audio_input_ios, m_audio_output_ios,
-    m_midi_input_ios, m_midi_output_ios;
-
     std::vector<jack_port_t*>
-    m_audio_input_ports, m_audio_output_ports,
-    m_midi_input_ports, m_midi_output_ports;
+    m_audio_input_ports,
+    m_audio_output_ports,
+    m_midi_input_ports,
+    m_midi_output_ports;
 
     //---------------------------------------------------------------------------------------------
     static int
@@ -47,33 +38,6 @@ class JackExternal : public ExternalBase
     //---------------------------------------------------------------------------------------------
     static void
     on_jack_client_registration(const char* name, int reg, void* udata);
-
-    //---------------------------------------------------------------------------------------------
-    void
-    register_io(ExternalIO* io);
-
-    //---------------------------------------------------------------------------------------------
-    jack_port_t*
-    find_port(JackPortFlags polarity, int type, int index);
-
-    //---------------------------------------------------------------------------------------------
-    void
-    connect(ExternalIO*, QString target, Routing r);
-
-    void
-    connect(std::vector<JackExternalIO>& target);
-
-    //---------------------------------------------------------------------------------------------
-    std::vector<jack_port_t*>&
-    io_ports(ExternalIO* io);
-
-    //---------------------------------------------------------------------------------------------
-    const char*
-    io_type(ExternalIO* io);
-
-    //---------------------------------------------------------------------------------------------
-    JackPortFlags
-    io_polarity(ExternalIO* io);
 
 public:
 
@@ -92,6 +56,21 @@ public:
     //---------------------------------------------------------------------------------------------
     External&
     parent() { return m_parent; }
+
+    //---------------------------------------------------------------------------------------------------
+    void
+    register_ports(std::vector<jack_port_t*>& dest,
+                   nchannels_t nports,
+                   const char* mask,
+                   const char* type,
+                   jack_port_flags_t flags);
+
+    //---------------------------------------------------------------------------------------------------
+    void
+    connect(QVector<ExternalConnection>& connections,
+            std::vector<jack_port_t*>& ports,
+            jack_port_flags_t polarity,
+            const char* type);
 
     //---------------------------------------------------------------------------------------------
     virtual void

@@ -45,6 +45,11 @@ elseif(UNIX)
     find_package(ALSA REQUIRED)
     find_package(JACK QUIET)
     # we'll see later about PulseAudio...
+
+    set(WPN114AUDIO_SOURCES ${WPN114AUDIO_SOURCES}
+        ${WPN114AUDIO_SOURCE_DIR}/io/io_alsa.hpp
+        ${WPN114AUDIO_SOURCE_DIR}/io/io_alsa.cpp)
+
     if(JACK_FOUND)
         message("Compiling with Jack support")
         set(WPN114AUDIO_SOURCES ${WPN114AUDIO_SOURCES}

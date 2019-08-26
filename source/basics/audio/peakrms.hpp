@@ -11,8 +11,8 @@ class PeakRMS : public Node
     WPN_DECLARE_DEFAULT_AUDIO_INPUT     (audio_in, 0)
     WPN_DECLARE_DEFAULT_AUDIO_OUTPUT    (audio_out, 0)
 
-    WPN_DECLARE_AUDIO_OUTPUT(peak, 0)
-    WPN_DECLARE_AUDIO_OUTPUT(rms, 0)
+    WPN_DECLARE_AUDIO_OUTPUT            (peak, 0)
+    WPN_DECLARE_AUDIO_OUTPUT            (rms, 0)
 
     audiobuffer_t
     m_buffer = nullptr;

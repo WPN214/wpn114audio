@@ -47,10 +47,10 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterType<External, 1>
     ("WPN114.Audio", 1, 1, "External");
 
-    qmlRegisterType<Input, 1>
+    qmlRegisterType<InputProxy, 1>
     ("WPN114.Audio", 1, 1, "Input");
 
-    qmlRegisterType<Output, 1>
+    qmlRegisterType<OutputProxy, 1>
     ("WPN114.Audio", 1, 1, "Output");
 
     qmlRegisterType<Sinetest, 1>

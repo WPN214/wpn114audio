@@ -1,6 +1,8 @@
 #pragma once
 #include <wpn114audio/graph.hpp>
 
+#include <QVector>
+
 //---------------------------------------------------------------------------------------------
 class ExternalBase
 //---------------------------------------------------------------------------------------------
@@ -70,10 +72,152 @@ public:
     on_io_vector_changed(uint16_t nframes) { Q_UNUSED(nframes) }
 };
 
+//-------------------------------------------------------------------------------------------------
+class IOProxy;
+class InputProxy;
+class OutputProxy;
 
-class ExternalIO;
-class Input;
-class Output;
+//---------------------------------------------------------------------------------------------
+struct ExternalConnection
+// jack-only
+//---------------------------------------------------------------------------------------------
+{
+    QString target;
+    Routing routing;
+
+    ExternalConnection() {}
+
+    operator
+    QVariant() const
+    {
+        QVariantList output;
+        output << target;
+        output << routing;
+
+        return output;
+    }
+};
+
+//=================================================================================================
+class IOBase : public Node
+//=================================================================================================
+{
+    Q_OBJECT
+
+protected:
+
+    Polarity
+    m_polarity;
+
+    nchannels_t
+    m_nchannels;
+
+    QVector<ExternalConnection>
+    m_connections;
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override
+    //---------------------------------------------------------------------------------------------
+    {
+        auto port = default_port(m_polarity);
+        port->set_nchannels(m_nchannels);
+        Node::componentComplete();
+    }
+
+public:
+
+    //---------------------------------------------------------------------------------------------
+    template<typename T> T*
+    add_proxy(QVector<nchannels_t> const& channels)
+    //---------------------------------------------------------------------------------------------
+    {
+        auto buffer = default_port(m_polarity)->buffer<T*>();
+        T* channel_proxy = new T[channels.size()];
+        nchannels_t n = 0;
+
+        for (const auto& channel : channels) {
+            m_nchannels = std::max(channel, m_nchannels);
+            channel_proxy[n] = buffer[channel];
+            n++;
+        }
+
+        return channel_proxy;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    add_connections(QVector<ExternalConnection>& connections)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_connections.append(connections);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    nchannels_t
+    nchannels() const { return m_nchannels; }
+
+    //---------------------------------------------------------------------------------------------
+    QVector<ExternalConnection>&
+    connections()
+    //---------------------------------------------------------------------------------------------
+    {
+        return m_connections;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    template<typename T> T
+    buffer()  { return default_port(m_polarity)->buffer<T>(); }
+
+};
+
+//=================================================================================================
+class AudioInput : public IOBase
+//=================================================================================================
+{
+    Q_OBJECT
+    WPN_DECLARE_DEFAULT_AUDIO_OUTPUT    (audio_out, 0)
+
+public:
+    //---------------------------------------------------------------------------------------------
+    AudioInput() { m_polarity = Polarity::Output; }
+};
+
+//=================================================================================================
+class MidiInput : public IOBase
+//=================================================================================================
+{
+    Q_OBJECT
+    WPN_DECLARE_DEFAULT_MIDI_OUTPUT (midi_out, 0)
+
+public:
+    //---------------------------------------------------------------------------------------------
+    MidiInput() { m_polarity = Polarity::Output; }
+};
+
+//=================================================================================================
+class AudioOutput : public IOBase
+//=================================================================================================
+{
+    Q_OBJECT
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT (audio_in, 0)
+
+public:
+    //---------------------------------------------------------------------------------------------
+    AudioOutput() { m_polarity = Polarity::Input; }
+};
+
+//=================================================================================================
+class MidiOutput : public IOBase
+//=================================================================================================
+{
+    Q_OBJECT
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT (midi_in, 0)
+
+public:
+    //---------------------------------------------------------------------------------------------
+    MidiOutput() { m_polarity = Polarity::Input; }
+};
 
 //=================================================================================================
 class External : public QObject, public QQmlParserStatus
@@ -86,7 +230,6 @@ class External : public QObject, public QQmlParserStatus
 
 public:
 
-
     //---------------------------------------------------------------------------------------------
     enum Backend
     //---------------------------------------------------------------------------------------------
@@ -98,14 +241,14 @@ public:
 #ifdef __linux__
         ,Alsa
 #endif
-#ifdef WPN114AUDIO_JACK
-        ,Jack
-#endif
 #ifdef WPN114AUDIO_PULSEAUDIO
 //      ,PulseAudio
 #endif
 #ifdef __APPLE__
 //      ,CoreAudio
+#endif
+#ifdef WPN114AUDIO_JACK
+        ,Jack
 #endif
 #ifdef WPN114AUDIO_VSTHOST
 //      ,VSTHost
@@ -221,65 +364,38 @@ public:
     void
     set_name(QString name) { m_name = name; }
 
-    //---------------------------------------------------------------------------------------------
-    void
-    register_input(Input* input);
-
-    //---------------------------------------------------------------------------------------------
-    void
-    register_output(Output* output);
-
-    //---------------------------------------------------------------------------------------------
-    std::vector<Input*>&
-    midi_inputs() { return m_midi_inputs; }
-
-    //---------------------------------------------------------------------------------------------
-    std::vector<Output*>&
-    midi_outputs() { return m_midi_outputs; }
-
-    //---------------------------------------------------------------------------------------------
-    std::vector<Input*>&
+    //-------------------------------------------------------------------------------------------------
+    AudioInput&
     audio_inputs() { return m_audio_inputs; }
 
-    //---------------------------------------------------------------------------------------------
-    std::vector<Output*>&
+    MidiInput&
+    midi_inputs() { return m_midi_inputs; }
+
+    AudioOutput&
     audio_outputs() { return m_audio_outputs; }
+
+    MidiOutput&
+    midi_outputs() { return m_midi_outputs; }
 
 private:
 
-    std::vector<Input*>
-    m_audio_inputs,
+    AudioInput
+    m_audio_inputs;
+
+    MidiInput
     m_midi_inputs;
 
-    std::vector<Output*>
-    m_audio_outputs,
+    AudioOutput
+    m_audio_outputs;
+
+    MidiOutput
     m_midi_outputs;
 
 };
 
-//---------------------------------------------------------------------------------------------
-struct ExternalConnection
-//---------------------------------------------------------------------------------------------
-{
-    QString target;
-    Routing routing;
-
-    ExternalConnection() {}
-
-    operator
-    QVariant() const
-    {
-        QVariantList output;
-        output << target;
-        output << routing;
-
-        return output;
-    }
-};
-
-//-------------------------------------------------------------------------------------------------
-class ExternalIO : public Node
-//-------------------------------------------------------------------------------------------------
+//=================================================================================================
+class IOProxy : public Node
+//=================================================================================================
 {
     Q_OBJECT
 
@@ -307,25 +423,19 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QVariant
+    channels() const { return QVariant::fromValue(m_channels); }
+
+    //---------------------------------------------------------------------------------------------
+    QVariant
     targets() const { return m_targets; }
 
     //---------------------------------------------------------------------------------------------
-    std::vector<ExternalConnection>&
+    QVector<ExternalConnection>&
     connections() { return m_connections; }
 
     //---------------------------------------------------------------------------------------------
     void
     set_targets(QVariant variant) { m_targets = variant; }
-
-    //---------------------------------------------------------------------------------------------
-    QVariant
-    channels() const { return QVariant::fromValue(m_channels); }
-
-    QVector<int>&
-    channels_vec() { return m_channels; }
-
-    nchannels_t
-    nchannels() const { return m_channels.size(); }
 
     //---------------------------------------------------------------------------------------------
     void
@@ -394,10 +504,10 @@ protected:
     Type
     m_type = Type::Audio;
 
-    QVector<int>
+    QVector<nchannels_t>
     m_channels;
 
-    std::vector<ExternalConnection>
+    QVector<ExternalConnection>
     m_connections;
 
     QVariant
@@ -405,7 +515,7 @@ protected:
 };
 
 //---------------------------------------------------------------------------------------------
-class Output : public ExternalIO
+class OutputProxy : public IOProxy
 //---------------------------------------------------------------------------------------------
 {
     Q_OBJECT
@@ -416,7 +526,7 @@ class Output : public ExternalIO
 public:
 
     //---------------------------------------------------------------------------------------------
-    Output() { m_name = "output"; }
+    OutputProxy() { m_name = "output_proxy"; }
 
     //---------------------------------------------------------------------------------------------
     virtual void
@@ -424,18 +534,28 @@ public:
     //---------------------------------------------------------------------------------------------
     {
         parse_external_connections();
-        Graph::instance().external()->register_output(this);
 
-        if  (m_type == Type::Audio)
-             m_audio_in.set_nchannels(m_channels.count());
-        else m_midi_in.set_nchannels(m_channels.count());
+        auto ext = Graph::instance().external();
 
-        Node::componentComplete();
+        if (m_type == Type::Audio) {
+            auto& out = ext->audio_outputs();
+            auto abuf = out.add_proxy<sample_t*>(m_channels);
+            m_audio_in.set_buffer<audiobuffer_t>(abuf);
+            out.add_connections(m_connections);
+
+        } else {
+            auto& out = ext->midi_outputs();
+            auto mbuf = out.add_proxy<midibuffer*>(m_channels);
+            m_midi_in.set_buffer<midibuffer_t>(mbuf);
+            out.add_connections(m_connections);
+        }
+
+        Node::componentComplete();       
     }
 };
 
 //---------------------------------------------------------------------------------------------
-class Input : public ExternalIO
+class InputProxy : public IOProxy
 //---------------------------------------------------------------------------------------------
 {
     Q_OBJECT
@@ -446,9 +566,10 @@ class Input : public ExternalIO
 public:
 
     //---------------------------------------------------------------------------------------------
-    Input()
+    InputProxy()
+    //---------------------------------------------------------------------------------------------
     {
-        m_name = "input";
+        m_name = "input_proxy";
         m_dispatch = Dispatch::Chain;
     }
 
@@ -458,11 +579,19 @@ public:
     //---------------------------------------------------------------------------------------------
     {
         parse_external_connections();
-        Graph::instance().external()->register_input(this);
+        auto ext = Graph::instance().external();
 
-        if (m_type == Type::Audio)
-             m_audio_out.set_nchannels(m_channels.count());
-        else m_midi_out.set_nchannels(m_channels.count());
+        if (m_type == Type::Audio) {
+            auto& out = ext->audio_inputs();
+            auto abuf = out.add_proxy<sample_t*>(m_channels);
+            m_audio_out.set_buffer<audiobuffer_t>(abuf);
+            out.add_connections(m_connections);
+        } else {
+            auto& out = ext->midi_inputs();
+            auto mbuf = out.add_proxy<midibuffer*>(m_channels);
+            m_midi_out.set_buffer<midibuffer_t>(mbuf);
+            out.add_connections(m_connections);
+        }
 
         Node::componentComplete();
     }
