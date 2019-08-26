@@ -8,8 +8,8 @@
 
 //=================================================================================================
 class QtAudioBackend : public QIODevice, public ExternalBase
-// this would be the preferred i/o backend for Android/iOS platforms
-//=================================================================================================
+        // this would be the preferred i/o backend for Android/iOS platforms
+        //=================================================================================================
 {
     Q_OBJECT
     //Q_INTERFACES (QIODevice)
@@ -30,14 +30,14 @@ public:
 
     //---------------------------------------------------------------------------------------------
     QtAudioBackend(External& parent) : m_parent(parent)
-    //---------------------------------------------------------------------------------------------
+      //---------------------------------------------------------------------------------------------
     {
-        m_format.setCodec("audio/pcm");
-        m_format.setByteOrder(QAudioFormat::LittleEndian);
-        m_format.setSampleType(QAudioFormat::Float);
-        m_format.setSampleSize(32);
-        m_format.setSampleRate(Graph::instance().rate());
-        m_format.setChannelCount(2);
+        m_format.setCodec           ("audio/pcm");
+        m_format.setByteOrder       (QAudioFormat::LittleEndian);
+        m_format.setSampleType      (QAudioFormat::Float);
+        m_format.setSampleSize      (32);
+        m_format.setSampleRate      (Graph::instance().rate());
+        m_format.setChannelCount    (m_parent.audio_outputs().nchannels());
 
         auto in_device_info   = QAudioDeviceInfo::defaultInputDevice();
         auto out_device_info  = QAudioDeviceInfo::defaultOutputDevice();
@@ -59,17 +59,14 @@ public:
         auto out = reinterpret_cast<sample_t*>(data);
         auto vsz = Graph::instance().vector();
 
-        for (auto output : m_parent.audio_outputs())
-        {
-            auto port = output->default_port(Port::Audio, Polarity::Input);
-            auto bufr = port->buffer<audiobuffer_t>();
+        auto buffer = m_parent.audio_outputs().buffer<audiobuffer_t>();
+        auto nchnls = m_parent.audio_outputs().nchannels();
 
-            for (nchannels_t c = 0; c < port->nchannels(); ++c)
-                for (vector_t f = 0; f < vsz; ++f)
-                     *out++ = bufr[c][f];
-        }
+        for (nchannels_t c = 0; c < nchnls; ++c)
+            for (vector_t f = 0; f < vsz; ++f)
+                *out++ = buffer[c][f];
 
-        return vsz*sizeof(sample_t)*2;
+        return vsz*sizeof(sample_t)*nchnls;
     }
 
     //---------------------------------------------------------------------------------------------
@@ -80,17 +77,14 @@ public:
         auto in = reinterpret_cast<const sample_t*>(data);
         auto vsz = Graph::instance().vector();
 
-        for (auto input : m_parent.audio_inputs())
-        {
-            auto port = input->default_port(Port::Audio, Polarity::Output);
-            auto bufr = port->buffer<audiobuffer_t>();
+        auto in_buffer = m_parent.audio_inputs().buffer<audiobuffer_t>();
+        auto nchannels = m_parent.audio_inputs().nchannels();
 
-            for (nchannels_t c = 0; c < port->nchannels(); ++c)
-                for (vector_t f = 0; f < vsz; ++f)
-                    bufr[c][f] = *in++;
-        }
+        for (nchannels_t c = 0; c < nchannels; ++c)
+            for (vector_t f = 0; f < vsz; ++f)
+                in_buffer[c][f] = *in++;
 
-        return vsz*sizeof(sample_t)*2;
+        return vsz*sizeof(sample_t)*nchannels;
     }
 
     //---------------------------------------------------------------------------------------------
