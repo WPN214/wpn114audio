@@ -239,7 +239,9 @@ public:
         Default
 
 #ifdef __linux__
+#ifndef __ANDROID__
         ,Alsa
+#endif
 #endif
 #ifdef WPN114AUDIO_PULSEAUDIO
 //      ,PulseAudio

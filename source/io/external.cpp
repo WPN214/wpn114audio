@@ -1,15 +1,17 @@
 #include "external.hpp"
 
 #ifdef __linux__
-#include "io_alsa.hpp"
+    #ifndef __ANDROID__
+        #include "io_alsa.hpp"
+    #endif
 #endif
 
 #ifdef WPN114AUDIO_JACK
-#include "io_jack.hpp"
+    #include "io_jack.hpp"
 #endif
 
 #ifdef __ANDROID__
-#include "io_qt.hpp"
+    #include "io_qt.hpp"
 #endif
 
 //-------------------------------------------------------------------------------------------------

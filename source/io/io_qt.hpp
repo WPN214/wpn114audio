@@ -8,11 +8,10 @@
 
 //=================================================================================================
 class QtAudioBackend : public QIODevice, public ExternalBase
-        // this would be the preferred i/o backend for Android/iOS platforms
-        //=================================================================================================
+// this would be the preferred i/o backend for Android/iOS platforms
+//=================================================================================================
 {
     Q_OBJECT
-    //Q_INTERFACES (QIODevice)
 
     External&
     m_parent;
