@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-project(wpn114audio-qml LANGUAGES CXX)
+project(wpn114audio LANGUAGES CXX)
 
 # weird things happen if cxx_standard is not 17 for Android (llvm libc++)
 set(CMAKE_CXX_STANDARD 17)
@@ -10,26 +10,32 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt5 REQUIRED COMPONENTS Quick Core Qml)
 
-set(WPN114AUDIO_INCLUDE_DIR include)
-set(WPN114AUDIO_HEADERS
-    ${WPN114AUDIO_INCLUDE_DIR}/wpn114audio/graph.hpp
-    ${WPN114AUDIO_INCLUDE_DIR}/wpn114audio/midi.hpp
-    ${WPN114AUDIO_INCLUDE_DIR}/wpn114audio/spatial.hpp)
+# SOURCES -----------------------------------------------------------------------------------------
 
-set(WPN114AUDIO_SOURCE_DIR source)
-set(WPN114AUDIO_SOURCES
+set(WPN114_AUDIO_INCLUDE_DIR include)
+set(WPN114_AUDIO_HEADERS
+    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/graph.hpp
+    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/midi.hpp
+    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/spatial.hpp)
+
+set(WPN114_AUDIO_SOURCE_DIR source)
+set(WPN114_AUDIO_QML_DIR qml)
+
+set(WPN114_AUDIO_SOURCES
     qml_plugin.cpp
-    ${WPN114AUDIO_SOURCE_DIR}/graph.cpp
-    ${WPN114AUDIO_SOURCE_DIR}/spatial.cpp
-    ${WPN114AUDIO_SOURCE_DIR}/io/external.hpp
-    ${WPN114AUDIO_SOURCE_DIR}/io/external.cpp
-    ${WPN114AUDIO_SOURCE_DIR}/basics/midi/rwriter.hpp
-    ${WPN114AUDIO_SOURCE_DIR}/basics/midi/transposer.hpp
-    ${WPN114AUDIO_SOURCE_DIR}/basics/midi/velocity-table.hpp
-    ${WPN114AUDIO_SOURCE_DIR}/basics/audio/sinetest.hpp
-    ${WPN114AUDIO_SOURCE_DIR}/basics/audio/vca.hpp
-    ${WPN114AUDIO_SOURCE_DIR}/basics/audio/clock.hpp
-    ${WPN114AUDIO_SOURCE_DIR}/basics/audio/peakrms.hpp)
+    ${WPN114_AUDIO_QML_DIR}/qmldir
+    ${WPN114_AUDIO_QML_DIR}/audio.qmltypes
+    ${WPN114_AUDIO_SOURCE_DIR}/graph.cpp
+    ${WPN114_AUDIO_SOURCE_DIR}/spatial.cpp
+    ${WPN114_AUDIO_SOURCE_DIR}/io/external.hpp
+    ${WPN114_AUDIO_SOURCE_DIR}/io/external.cpp
+    ${WPN114_AUDIO_SOURCE_DIR}/basics/midi/rwriter.hpp
+    ${WPN114_AUDIO_SOURCE_DIR}/basics/midi/transposer.hpp
+    ${WPN114_AUDIO_SOURCE_DIR}/basics/midi/velocity-table.hpp
+    ${WPN114_AUDIO_SOURCE_DIR}/basics/audio/sinetest.hpp
+    ${WPN114_AUDIO_SOURCE_DIR}/basics/audio/vca.hpp
+    ${WPN114_AUDIO_SOURCE_DIR}/basics/audio/clock.hpp
+    ${WPN114_AUDIO_SOURCE_DIR}/basics/audio/peakrms.hpp)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -37,38 +43,38 @@ if(ANDROID)
     # we'd have to use QtMultimedia for that
     find_package(Qt5 REQUIRED COMPONENTS Multimedia)
 
-    set(WPN114AUDIO_SOURCES ${WPN114AUDIO_SOURCES}
-        ${WPN114AUDIO_SOURCE_DIR}/io/io_qt.hpp
-        ${WPN114AUDIO_SOURCE_DIR}/io/io_qt.cpp)
+    set(WPN114_AUDIO_SOURCES ${WPN114_AUDIO_SOURCES}
+        ${WPN114_AUDIO_SOURCE_DIR}/io/io_qt.hpp
+        ${WPN114_AUDIO_SOURCE_DIR}/io/io_qt.cpp)
 elseif(APPLE)
 elseif(UNIX)
     find_package(ALSA REQUIRED)
     find_package(JACK QUIET)
     # we'll see later about PulseAudio...
 
-    set(WPN114AUDIO_SOURCES ${WPN114AUDIO_SOURCES}
-        ${WPN114AUDIO_SOURCE_DIR}/io/io_alsa.hpp
-        ${WPN114AUDIO_SOURCE_DIR}/io/io_alsa.cpp)
+    set(WPN114_AUDIO_SOURCES ${WPN114_AUDIO_SOURCES}
+        ${WPN114_AUDIO_SOURCE_DIR}/io/io_alsa.hpp
+        ${WPN114_AUDIO_SOURCE_DIR}/io/io_alsa.cpp)
 
     if(JACK_FOUND)
         message("[WPN114] Compiling with Jack support")
-        set(WPN114AUDIO_SOURCES ${WPN114AUDIO_SOURCES}
-            ${WPN114AUDIO_SOURCE_DIR}/io/io_jack.hpp
-            ${WPN114AUDIO_SOURCE_DIR}/io/io_jack.cpp)
+        set(WPN114_AUDIO_SOURCES ${WPN114_AUDIO_SOURCES}
+            ${WPN114_AUDIO_SOURCE_DIR}/io/io_jack.hpp
+            ${WPN114_AUDIO_SOURCE_DIR}/io/io_jack.cpp)
     endif()
 endif()
 
-option(WPN114AUDIO_EXAMPLES ON)
+option(WPN114_AUDIO_EXAMPLES ON)
 
-if(NOT ANDROID AND WPN114AUDIO_EXAMPLES)
+if(NOT ANDROID AND WPN114_AUDIO_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
 # PROJECT -----------------------------------------------------------------------------------------
 
-add_library(${PROJECT_NAME} SHARED ${WPN114AUDIO_HEADERS} ${WPN114AUDIO_SOURCES})
+add_library(${PROJECT_NAME} SHARED ${WPN114_AUDIO_HEADERS} ${WPN114_AUDIO_SOURCES})
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Qml)
-target_include_directories(${PROJECT_NAME} PUBLIC ${WPN114AUDIO_INCLUDE_DIR})
+target_include_directories(${PROJECT_NAME} PUBLIC ${WPN114_AUDIO_INCLUDE_DIR})
 
 # LINKING -----------------------------------------------------------------------------------------
 
@@ -98,9 +104,9 @@ else()
     set(QT5_QML_INSTALL_PATH ${CMAKE_PREFIX_PATH}/qml)
 endif()
 
-set(WPN114AUDIO_INSTALL_PATH ${QT5_QML_INSTALL_PATH}/WPN114/Audio)
-message("[WPN114] Library will be installed in ${WPN114AUDIO_INSTALL_PATH}")
+set(WPN114_AUDIO_INSTALL_PATH ${QT5_QML_INSTALL_PATH}/WPN114/Audio)
+message("[WPN114] Library will be installed in ${WPN114_AUDIO_INSTALL_PATH}")
 
-install(TARGETS ${PROJECT_NAME} DESTINATION ${WPN114AUDIO_INSTALL_PATH})
-install(FILES qml/audio.qmltypes qml/qmldir DESTINATION ${WPN114AUDIO_INSTALL_PATH})
-install(DIRECTORY include DESTINATION ${WPN114AUDIO_INSTALL_PATH})
+install(TARGETS ${PROJECT_NAME} DESTINATION ${WPN114_AUDIO_INSTALL_PATH})
+install(FILES qml/audio.qmltypes qml/qmldir DESTINATION ${WPN114_AUDIO_INSTALL_PATH})
+install(DIRECTORY include DESTINATION ${WPN114_AUDIO_INSTALL_PATH})

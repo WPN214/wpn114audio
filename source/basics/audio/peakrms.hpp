@@ -1,7 +1,6 @@
 #pragma once
 #include <wpn114audio/graph.hpp>
 
-
 //=================================================================================================
 class PeakRMS : public Node
 //=================================================================================================
@@ -23,7 +22,7 @@ class PeakRMS : public Node
     m_refresh = 20;
 
     std::atomic<vector_t>
-    m_block_size = 0;
+    m_block_size {0};
 
     size_t
     m_pos = 0;
