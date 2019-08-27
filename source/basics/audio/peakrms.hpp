@@ -14,13 +14,15 @@ class PeakRMS : public Node
     WPN_DECLARE_AUDIO_OUTPUT            (peak, 0)
     WPN_DECLARE_AUDIO_OUTPUT            (rms, 0)
 
+    Q_PROPERTY  (qreal refresh READ refresh WRITE set_refresh)
+
     audiobuffer_t
     m_buffer = nullptr;
 
     sample_t
     m_refresh = 20;
 
-    vector_t
+    std::atomic<vector_t>
     m_block_size = 0;
 
     size_t
@@ -38,11 +40,7 @@ class PeakRMS : public Node
 public:
 
     //---------------------------------------------------------------------------------------------
-    PeakRMS()
-    //---------------------------------------------------------------------------------------------
-    {
-
-    }
+    PeakRMS() {}
 
     //---------------------------------------------------------------------------------------------
     virtual
@@ -61,6 +59,19 @@ public:
 
     Q_SIGNAL void
     rms(QVector<sample_t> rms);
+
+    //---------------------------------------------------------------------------------------------
+    sample_t
+    refresh() const { return m_refresh; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_refresh(sample_t refresh)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_refresh = refresh;
+        m_block_size = Graph::instance().rate()/refresh;
+    }
 
     //---------------------------------------------------------------------------------------------
     virtual void
@@ -157,7 +168,7 @@ public:
         const auto nchannels    = m_nchannels;
         auto pos                = m_pos;
         auto buffer             = m_buffer;
-        auto bsize              = m_block_size;
+        auto bsize              = m_block_size.load();
 
         int32_t rest = bsize-(pos+nframes);
 

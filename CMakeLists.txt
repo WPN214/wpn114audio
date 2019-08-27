@@ -51,7 +51,7 @@ elseif(UNIX)
         ${WPN114AUDIO_SOURCE_DIR}/io/io_alsa.cpp)
 
     if(JACK_FOUND)
-        message("Compiling with Jack support")
+        message("[WPN114] Compiling with Jack support")
         set(WPN114AUDIO_SOURCES ${WPN114AUDIO_SOURCES}
             ${WPN114AUDIO_SOURCE_DIR}/io/io_jack.hpp
             ${WPN114AUDIO_SOURCE_DIR}/io/io_jack.cpp)
@@ -91,7 +91,7 @@ endif()
 
 # INSTALLING --------------------------------------------------------------------------------------
 
-if(${CMAKE_PREFIX_PATH} AND
+if(EXISTS ${CMAKE_PREFIX_PATH} AND
    ${CMAKE_PREFIX_PATH} STREQUAL "/usr")
     set(QT5_QML_INSTALL_PATH /usr/lib/qt/qml)
 else()
@@ -99,6 +99,7 @@ else()
 endif()
 
 set(WPN114AUDIO_INSTALL_PATH ${QT5_QML_INSTALL_PATH}/WPN114/Audio)
+message("[WPN114] Library will be installed in ${WPN114AUDIO_INSTALL_PATH}")
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${WPN114AUDIO_INSTALL_PATH})
 install(FILES qml/audio.qmltypes qml/qmldir DESTINATION ${WPN114AUDIO_INSTALL_PATH})
