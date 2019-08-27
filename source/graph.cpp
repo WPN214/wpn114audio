@@ -208,7 +208,8 @@ Port::buffer() noexcept { return m_buffer.audio; }
 template<> midibuffer_t
 Port::buffer() noexcept { return m_buffer.midi; }
 
-// the following is used for Input/Output proxies:
+// the following is used for Input/Output proxies
+// it should not be used otherwise
 
 template<> void
 Port::set_buffer(audiobuffer_t& buffer) noexcept { m_buffer.audio = buffer; }

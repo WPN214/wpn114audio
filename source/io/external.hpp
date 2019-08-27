@@ -410,6 +410,18 @@ class IOProxy : public Node
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QVariant connections READ targets WRITE set_targets)
 
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (int nchannels READ nchannels WRITE set_nchannels)
+
+    //---------------------------------------------------------------------------------------------
+    Q_PROPERTY  (int offset READ offset WRITE set_offset)
+
+    nchannels_t
+    m_nchannels = 0;
+
+    nchannels_t
+    m_offset = 0;
+
 public:
 
     //---------------------------------------------------------------------------------------------
@@ -422,6 +434,29 @@ public:
     //---------------------------------------------------------------------------------------------
     void
     set_type(Type t) { m_type = t; }
+
+    //---------------------------------------------------------------------------------------------
+    nchannels_t
+    nchannels() const { return m_nchannels; }
+
+    nchannels_t
+    offset() const { return m_offset; }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_nchannels(nchannels_t nchannels)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_nchannels = nchannels;
+    }
+
+    //---------------------------------------------------------------------------------------------
+    void
+    set_offset(nchannels_t offset)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_offset = offset;
+    }
 
     //---------------------------------------------------------------------------------------------
     QVariant
@@ -450,6 +485,19 @@ public:
         else if (var.canConvert<QVariantList>())
             for (auto& channel : var.value<QVariantList>())
                 set_channels(channel);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override
+    //---------------------------------------------------------------------------------------------
+    {
+        if (m_channels.empty())
+            for (nchannels_t n = m_offset; n < m_offset+m_nchannels; n++)
+                m_channels.push_back(n);
+
+        parse_external_connections();
+        Node::componentComplete();
     }
 
     //---------------------------------------------------------------------------------------------
@@ -534,8 +582,8 @@ public:
     virtual void
     componentComplete() override
     //---------------------------------------------------------------------------------------------
-    {
-        parse_external_connections();
+    {        
+        IOProxy::componentComplete();
 
         auto ext = Graph::instance().external();
 
@@ -550,9 +598,7 @@ public:
             auto mbuf = out.add_proxy<midibuffer*>(m_channels);
             m_midi_in.set_buffer<midibuffer_t>(mbuf);
             out.add_connections(m_connections);
-        }
-
-        Node::componentComplete();       
+        } 
     }
 };
 
@@ -580,7 +626,8 @@ public:
     componentComplete() override
     //---------------------------------------------------------------------------------------------
     {
-        parse_external_connections();
+        IOProxy::componentComplete();
+
         auto ext = Graph::instance().external();
 
         if (m_type == Type::Audio) {
@@ -594,7 +641,5 @@ public:
             m_midi_out.set_buffer<midibuffer_t>(mbuf);
             out.add_connections(m_connections);
         }
-
-        Node::componentComplete();
     }
 };
