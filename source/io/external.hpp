@@ -219,6 +219,47 @@ public:
     MidiOutput() { m_polarity = Polarity::Input; }
 };
 
+
+//-------------------------------------------------------------------------------------------------
+class Backend : public QObject
+//-------------------------------------------------------------------------------------------------
+{
+    Q_OBJECT
+
+public:
+    //---------------------------------------------------------------------------------------------
+    enum Values
+    //---------------------------------------------------------------------------------------------
+    {
+            None
+
+        ,   Default
+
+#ifdef __linux__
+#ifndef __ANDROID__
+        ,   Alsa
+#endif
+#endif
+#ifdef WPN114AUDIO_PULSEAUDIO
+//      ,   PulseAudio
+#endif
+#ifdef __APPLE__
+//      ,   CoreAudio
+#endif
+#ifdef WPN114AUDIO_JACK
+        ,   Jack
+#endif
+#ifdef WPN114AUDIO_VSTHOST
+//      ,   VSTHost
+#endif
+#ifdef ANDROID
+        ,   Qt
+#endif
+    };
+
+    Q_ENUM (Values)
+};
+
 //=================================================================================================
 class External : public QObject, public QQmlParserStatus
 // this is a generic Node wrapper for the external backends
@@ -228,45 +269,11 @@ class External : public QObject, public QQmlParserStatus
 {
     Q_OBJECT
 
-public:
-
-    //---------------------------------------------------------------------------------------------
-    enum Backend
-    //---------------------------------------------------------------------------------------------
-    {
-        None,
-
-        Default
-
-#ifdef __linux__
-#ifndef __ANDROID__
-        ,Alsa
-#endif
-#endif
-#ifdef WPN114AUDIO_PULSEAUDIO
-//      ,PulseAudio
-#endif
-#ifdef __APPLE__
-//      ,CoreAudio
-#endif
-#ifdef WPN114AUDIO_JACK
-        ,Jack
-#endif
-#ifdef WPN114AUDIO_VSTHOST
-//      ,VSTHost
-#endif
-#ifdef ANDROID
-        ,Qt
-#endif
-    };
-
-    Q_ENUM (Backend)
-
     //---------------------------------------------------------------------------------------------
     Q_INTERFACES (QQmlParserStatus)
 
     //---------------------------------------------------------------------------------------------
-    Q_PROPERTY  (Backend backend READ backend WRITE set_backend)
+    Q_PROPERTY  (Backend::Values backend READ backend WRITE set_backend)
 
     //---------------------------------------------------------------------------------------------
     Q_PROPERTY  (QString name READ name WRITE set_name)
@@ -282,10 +289,6 @@ public:
     bool
     m_complete  = false,
     m_running   = false;
-
-    //---------------------------------------------------------------------------------------------
-    Backend
-    m_backend_id = None;
 
     //---------------------------------------------------------------------------------------------
     QString
@@ -335,12 +338,12 @@ public:
     on_rate_changed(sample_t rate) { m_backend->on_sample_rate_changed(rate); }
 
     //-------------------------------------------------------------------------------------------------
-    Backend
+    Backend::Values
     backend() const { return m_backend_id; }
 
     //-------------------------------------------------------------------------------------------------
     void
-    set_backend(Backend backend)
+    set_backend(Backend::Values backend)
     //-------------------------------------------------------------------------------------------------
     {       
         m_backend_id = backend;
@@ -392,6 +395,9 @@ private:
 
     MidiOutput
     m_midi_outputs;
+
+    Backend::Values
+    m_backend_id = Backend::None;
 
 };
 

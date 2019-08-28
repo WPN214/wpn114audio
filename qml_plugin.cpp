@@ -34,6 +34,9 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterUncreatableType<Routing, 1>
     ("WPN114.Audio", 1, 1, "Routing", "Uncreatable");
 
+    qmlRegisterUncreatableType<External, 1>
+    ("WPN114.Audio", 1, 1, "External", "Uncreatable");
+
     //=============================================================================================
     // MODULES
     //=============================================================================================
@@ -41,11 +44,11 @@ void qml_plugin::registerTypes(const char* uri)
     qmlRegisterType<Graph, 1>
     ("WPN114.Audio", 1, 1, "Graph");
 
+    qmlRegisterType<Backend, 1>
+    ("WPN114.Audio", 1, 1, "Backend");
+
     qmlRegisterType<Connection, 1>
     ("WPN114.Audio", 1, 1, "Connection");
-
-    qmlRegisterType<External, 1>
-    ("WPN114.Audio", 1, 1, "External");
 
     qmlRegisterType<InputProxy, 1>
     ("WPN114.Audio", 1, 1, "Input");
