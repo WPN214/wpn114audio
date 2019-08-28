@@ -337,8 +337,8 @@ Graph::componentComplete()
         // to the list of direct subnodes
         // they won't be processed by the Graph otherwise
         if (!node->m_output_ports.size() &&
-                !m_subnodes.contains(node))
-            m_subnodes.push_back(node);
+            !m_subnodes.contains(node))
+             m_subnodes.push_back(node);
     }
 
     Graph::debug("i/o allocation complete, setting up external configuration");

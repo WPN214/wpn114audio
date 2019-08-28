@@ -151,6 +151,7 @@ JackExternal::register_ports(
         strcpy(name, mask);
         strcat(name, num);
         dest.push_back(jack_port_register(m_client, name, type, flags, 0));
+        qDebug() << "[JACK] registered port:" << name;
     }
 }
 

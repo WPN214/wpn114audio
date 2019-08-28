@@ -1249,7 +1249,7 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    Q_SLOT void
+    Q_SLOT virtual void
     on_graph_complete(Graph::properties const& properties)
     {
         allocate_ports(properties.vector);

@@ -110,40 +110,27 @@ protected:
     m_polarity;
 
     nchannels_t
-    m_nchannels;
+    m_nchannels = 0;
 
     QVector<ExternalConnection>
     m_connections;
 
-    //---------------------------------------------------------------------------------------------
-    virtual void
-    componentComplete() override
-    //---------------------------------------------------------------------------------------------
-    {
-        auto port = default_port(m_polarity);
-        port->set_nchannels(m_nchannels);
-        Node::componentComplete();
-    }
+    QVector<IOProxy*>
+    m_proxies;
 
 public:
 
-    //---------------------------------------------------------------------------------------------
-    template<typename T> T*
-    add_proxy(QVector<nchannels_t> const& channels)
-    //---------------------------------------------------------------------------------------------
-    {
-        auto buffer = default_port(m_polarity)->buffer<T*>();
-        T* channel_proxy = new T[channels.size()];
-        nchannels_t n = 0;
+    void
+    add_proxy(IOProxy& proxy) { m_proxies.push_back(&proxy); }
 
-        for (const auto& channel : channels) {
-            m_nchannels = std::max(channel, m_nchannels);
-            channel_proxy[n] = buffer[channel];
-            n++;
-        }
+    template<typename T> void
+    link_proxy(IOProxy* proxy);
 
-        return channel_proxy;
-    }
+    virtual void
+    on_graph_complete(const Graph::properties &properties) override;
+
+    virtual void
+    initialize(const Graph::properties &properties) override;
 
     //---------------------------------------------------------------------------------------------
     void
@@ -154,18 +141,13 @@ public:
     }
 
     //---------------------------------------------------------------------------------------------
+
     nchannels_t
     nchannels() const { return m_nchannels; }
 
-    //---------------------------------------------------------------------------------------------
     QVector<ExternalConnection>&
-    connections()
-    //---------------------------------------------------------------------------------------------
-    {
-        return m_connections;
-    }
+    connections() { return m_connections; }
 
-    //---------------------------------------------------------------------------------------------
     template<typename T> T
     buffer()  { return default_port(m_polarity)->buffer<T>(); }
 
@@ -180,7 +162,11 @@ class AudioInput : public IOBase
 
 public:
     //---------------------------------------------------------------------------------------------
-    AudioInput() { m_polarity = Polarity::Output; }
+    AudioInput()
+    {
+        m_name = "audio_inputs";
+        m_polarity = Polarity::Output;
+    }
 };
 
 //=================================================================================================
@@ -192,7 +178,11 @@ class MidiInput : public IOBase
 
 public:
     //---------------------------------------------------------------------------------------------
-    MidiInput() { m_polarity = Polarity::Output; }
+    MidiInput()
+    {
+        m_name = "midi_inputs";
+        m_polarity = Polarity::Output;
+    }
 };
 
 //=================================================================================================
@@ -204,7 +194,11 @@ class AudioOutput : public IOBase
 
 public:
     //---------------------------------------------------------------------------------------------
-    AudioOutput() { m_polarity = Polarity::Input; }
+    AudioOutput()
+    {
+        m_name = "audio_outputs";
+        m_polarity = Polarity::Input;
+    }
 };
 
 //=================================================================================================
@@ -216,7 +210,11 @@ class MidiOutput : public IOBase
 
 public:
     //---------------------------------------------------------------------------------------------
-    MidiOutput() { m_polarity = Polarity::Input; }
+    MidiOutput()
+    {
+        m_name = "midi_outputs";
+        m_polarity = Polarity::Input;
+    }
 };
 
 
@@ -297,7 +295,13 @@ class External : public QObject, public QQmlParserStatus
 public:
 
     //-------------------------------------------------------------------------------------------------
-    External() {}
+    External()
+    {
+        m_audio_inputs.componentComplete();
+        m_audio_outputs.componentComplete();
+        m_midi_inputs.componentComplete();
+        m_midi_outputs.componentComplete();
+    }
 
     //-------------------------------------------------------------------------------------------------
     virtual
@@ -468,6 +472,9 @@ public:
     QVariant
     channels() const { return QVariant::fromValue(m_channels); }
 
+    QVector<nchannels_t> const&
+    channel_vector() const { return m_channels; }
+
     //---------------------------------------------------------------------------------------------
     QVariant
     targets() const { return m_targets; }
@@ -592,19 +599,10 @@ public:
         IOProxy::componentComplete();
 
         auto ext = Graph::instance().external();
-
-        if (m_type == Type::Audio) {
-            auto& out = ext->audio_outputs();
-            auto abuf = out.add_proxy<sample_t*>(m_channels);
-            m_audio_in.set_buffer<audiobuffer_t>(abuf);
-            out.add_connections(m_connections);
-
-        } else {
-            auto& out = ext->midi_outputs();
-            auto mbuf = out.add_proxy<midibuffer*>(m_channels);
-            m_midi_in.set_buffer<midibuffer_t>(mbuf);
-            out.add_connections(m_connections);
-        } 
+        if (m_type == Type::Audio)
+            ext->audio_outputs().add_proxy(*this);
+        else
+            ext->midi_outputs().add_proxy(*this);
     }
 };
 
@@ -634,18 +632,10 @@ public:
     {
         IOProxy::componentComplete();
 
-        auto ext = Graph::instance().external();
-
-        if (m_type == Type::Audio) {
-            auto& out = ext->audio_inputs();
-            auto abuf = out.add_proxy<sample_t*>(m_channels);
-            m_audio_out.set_buffer<audiobuffer_t>(abuf);
-            out.add_connections(m_connections);
-        } else {
-            auto& out = ext->midi_inputs();
-            auto mbuf = out.add_proxy<midibuffer*>(m_channels);
-            m_midi_out.set_buffer<midibuffer_t>(mbuf);
-            out.add_connections(m_connections);
-        }
+        auto ext = Graph::instance().external();       
+        if (m_type == Type::Audio)
+            ext->audio_inputs().add_proxy(*this);
+        else
+            ext->midi_inputs().add_proxy(*this);
     }
 };
