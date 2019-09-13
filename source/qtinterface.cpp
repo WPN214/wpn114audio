@@ -1,38 +1,12 @@
 #include <QtDebug>
 #include <vector>
 #include <cmath>
-#include <wpn114audio/graph.hpp>
+#include <wpn114audio/qtinterface.hpp>
+
+using namespace wpn114::qt;
 
 Graph*
 Graph::s_instance;
-
-namespace wpn114 {
-// ------------------------------------------------------------------------------------------------
-template<> audiobuffer_t
-allocate_buffer(nchannels_t nchannels, vector_t nframes)
-// we make no assumption as to how many channels each input/output may have
-// by the time the graph is ready/updated, so we can't really template it upfront
-// ------------------------------------------------------------------------------------------------
-{
-    sample_t** block = new sample_t*[nchannels];
-    for (nchannels_t n = 0; n < nchannels; ++n)
-        block[n] = new sample_t[nframes];
-
-    return block;
-}
-
-// ------------------------------------------------------------------------------------------------
-template<> midibuffer_t
-allocate_buffer(nchannels_t nchannels, vector_t nframes)
-// ------------------------------------------------------------------------------------------------
-{
-    midibuffer** block = new midibuffer*[nchannels];
-    for (nchannels_t n = 0; n < nchannels; ++n)
-         block[n] = new midibuffer(sizeof(sample_t)*nframes);
-
-    return block;
-}
-}
 
 // ------------------------------------------------------------------------------------------------
 Port::Port(Node* parent, QString name, Type type, Polarity polarity,
@@ -49,17 +23,6 @@ Port::Port(Node* parent, QString name, Type type, Polarity polarity,
     m_default     (is_default)
 {
     parent->register_port(*this);
-}
-
-// ------------------------------------------------------------------------------------------------
-void
-Port::allocate(vector_t nframes)
-// ------------------------------------------------------------------------------------------------
-{
-    if   (m_type == Port::Midi_1_0)
-         m_buffer.midi = wpn114::allocate_buffer<midibuffer_t>(m_nchannels, nframes);
-    // we allocate the same buffer size (in bytes) for the midibuffer
-    else m_buffer.audio = wpn114::allocate_buffer<audiobuffer_t>(m_nchannels, nframes);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -98,7 +61,7 @@ Port::assign(QVariant v)
 
     else if (v.canConvert<Connection>())
     {
-        WPN_TODO
+        // TODO
     }
 
     else if (v.canConvert<QVariantList>())
@@ -144,7 +107,7 @@ QVariantList
 Port::routing() const noexcept { return m_routing; }
 
 // ------------------------------------------------------------------------------------------------
-WPN_INCOMPLETE void
+void
 Port::set_routing(QVariantList r) noexcept
 {
     m_routing = r;
@@ -161,7 +124,7 @@ Port::set_muted(bool muted)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_CLEANUP bool
+bool
 Port::connected(Port const& s) const noexcept
 // returns true if Port is connected to target Port p
 // ------------------------------------------------------------------------------------------------
@@ -180,7 +143,7 @@ Port::connected(Port const& s) const noexcept
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_CLEANUP bool
+bool
 Port::connected(Node const& n) const noexcept
 // returns true if this Port is connected to any Port in Node n
 // returns false otherwise
@@ -200,42 +163,12 @@ Port::connected(Node const& n) const noexcept
 }
 
 // ------------------------------------------------------------------------------------------------
-// these are implemented here as not to break ODR
-
-template<> audiobuffer_t
-Port::buffer() noexcept { return m_buffer.audio; }
-
-template<> midibuffer_t
-Port::buffer() noexcept { return m_buffer.midi; }
-
-// the following is used for Input/Output proxies
-// it should not be used otherwise
-
-template<> void
-Port::set_buffer(audiobuffer_t& buffer) noexcept { m_buffer.audio = buffer; }
-
-template<> void
-Port::set_buffer(midibuffer_t& buffer) noexcept { m_buffer.midi = buffer; }
-
-// ------------------------------------------------------------------------------------------------
-void
-Port::reset()
-// ------------------------------------------------------------------------------------------------
-{
-    if (m_type == Port::Midi_1_0)
-        for (nchannels_t n = 0; n < m_nchannels; ++n)
-             m_buffer.midi[n]->clear();
-}
-
-// ------------------------------------------------------------------------------------------------
 void
 Graph::register_node(Node& node) noexcept
 // we should maybe add a vectorChanged signal-slot connection to this
 // ------------------------------------------------------------------------------------------------
 {
     qDebug() << "[GRAPH] registering node:" << node.name();
-
-    QObject::connect(s_instance, &Graph::rateChanged, &node, &Node::on_rate_changed);
     m_nodes.push_back(&node);
 }
 
@@ -314,7 +247,7 @@ Graph::connect(Port& source, Node& dest, Routing matrix)
 }
 
 // ------------------------------------------------------------------------------------------------
-WPN_EXAMINE void
+void
 Graph::componentComplete()
 // Graph is complete, all connections have been set-up
 // we send signal to all registered Nodes to proceed to Port/pool allocation
@@ -347,41 +280,6 @@ Graph::componentComplete()
     emit complete();
 }
 
-// ------------------------------------------------------------------------------------------------
-WPN_AUDIOTHREAD vector_t
-Graph::run() noexcept
-// ------------------------------------------------------------------------------------------------
-{
-    vector_t nframes = m_properties.vector;
-
-    for (auto& subnode : m_subnodes)
-        subnode->process(nframes);
-
-    for (auto& node : m_nodes)
-        node->set_processed(false);
-
-    return nframes;
-}
-
-// ------------------------------------------------------------------------------------------------
-WPN_AUDIOTHREAD vector_t
-Graph::run(Node& target) noexcept
-// the main processing function
-// Graph will process itself from target Node and upstream recursively
-// ------------------------------------------------------------------------------------------------
-{
-    // take a little amount of time to process asynchronous graph update requests (TODO)
-    WPN_TODO
-
-    // process target, return outputs            
-    vector_t nframes = m_properties.vector;
-    target.process(nframes);
-
-    for (auto& node : m_nodes)
-         node->set_processed(false);
-
-    return nframes;
-}
 
 #include <wpn114audio/spatial.hpp>
 
@@ -410,22 +308,6 @@ Node::spatial()
     }
 
     return m_spatial;
-}
-
-// ------------------------------------------------------------------------------------------------
-void
-Node::allocate_pools()
-// ------------------------------------------------------------------------------------------------
-{
-    for (auto& port : m_input_ports)
-        if (port->type() == Port::Audio)
-             m_input_pool.audio.push_back(port->buffer<audiobuffer_t>());
-        else m_input_pool.midi.push_back(port->buffer<midibuffer_t>());
-
-    for (auto& port : m_output_ports)
-        if (port->type() == Port::Audio)
-             m_output_pool.audio.push_back(port->buffer<audiobuffer_t>());
-        else m_output_pool.midi.push_back(port->buffer<midibuffer_t>());
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -473,60 +355,4 @@ Connection::update()
 // ------------------------------------------------------------------------------------------------
 {
     m_nchannels = std::min(m_source->nchannels(), m_dest->nchannels());
-}
-
-// ------------------------------------------------------------------------------------------------
-WPN_AUDIOTHREAD void
-Connection::pull(vector_t nframes) noexcept
-// ------------------------------------------------------------------------------------------------
-{       
-    auto& source = m_source->parent_node();
-    // if source hasn't been processed yet in the current Graph run
-    // process it
-    if (!source.processed())
-        source.process(nframes);
-
-    // if connection is muted return
-    if (m_muted.load())
-        return;
-
-    // in the case of a MIDI connection
-    if (m_source->type() == Port::Midi_1_0)
-    {
-        auto sbuf = m_source->buffer<midibuffer_t>();
-        auto dbuf = m_dest->buffer<midibuffer_t>();
-
-        Routing routing = m_routing;
-
-        // append midi events to dest buffer
-        // (without intermediate copy)
-        if (routing.null())
-            for (nchannels_t c = 0; c < m_nchannels; ++c)
-                for (auto& mt : *sbuf[c])
-                     dbuf[c]->push(mt);
-        else
-            for (nchannels_t c = 0; c < routing.ncables(); ++c)
-                for (auto& mt : *sbuf[routing[c][0]])
-                     dbuf[routing[c][1]]->push(mt);
-        return;
-    }
-
-    // else Audio connection
-    auto dbuf = m_dest->buffer<audiobuffer_t>();
-    auto sbuf = m_source->buffer<audiobuffer_t>();
-
-    sample_t mul = m_mul, add = m_add;
-    Routing routing = m_routing;
-
-    // if routing hasn't been explicitely set
-    if (routing.null())
-        for (nchannels_t c = 0; c < m_nchannels; ++c)
-            for (vector_t f = 0; f < nframes; ++f)
-                dbuf[c][f] += sbuf[c][f] * mul + add;           
-    else
-        for (nchannels_t c = 0; c < routing.ncables(); ++c)
-            for (vector_t f = 0; f < nframes; ++f) {
-                auto cable = routing[c];
-                dbuf[cable[1]][f] += sbuf[cable[0]][f] * mul + add;
-            }
 }

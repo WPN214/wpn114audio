@@ -11,7 +11,7 @@
 #include <QtDebug>
 #include <cmath>
 
-#include <wpn114audio/midi.hpp>
+#include <wpn114audio/basic_types.hpp>
 
 // --------------------------------------------------------------------------------------------------
 // CONVENIENCE MACRO DEFINITIONS
@@ -69,79 +69,23 @@
 #define wpnwrap(_v, _limit) if (_v >= _limit) _v -= _limit
 #define CSTR(_qstring) _qstring.toStdString().c_str()
 
-// ------------------------------------------------------------------------------------------------
-// empty annotations
+//-------------------------------------------------------------------------------------------------
+enum class Polarity { Output = 0, Input = 1 };
+enum class Interpolation { Linear = 0, Sin4 = 1 };
 
-#define WPN_TODO
-#define WPN_EXAMINE
-#define WPN_OK
-#define WPN_INCORRECT
-#define WPN_CLEANUP
-#define WPN_INCOMPLETE
-#define WPN_UNIMPLEMENTED
-#define WPN_AUDIOTHREAD
-
-//-------------------------------------------------------------------------------------------------
-enum class Polarity
-//-------------------------------------------------------------------------------------------------
-{
-    Output = 0, Input = 1
-};
-
-//-------------------------------------------------------------------------------------------------
-enum class Interpolation
-//-------------------------------------------------------------------------------------------------
-{
-    Linear = 0, Sin4 = 1
-};
-
-//-------------------------------------------------------------------------------------------------
 #define lininterp(_x,_a,_b) _a+_x*(_b-_a)
 #define sininterp(_x,_a,_b) _a+ sin(x*(_b-_a)*(sample_t)M_PI_2)
 
 //-------------------------------------------------------------------------------------------------
-using sample_t      = float;
-using nchannels_t   = uint8_t;
-using byte_t        = uint8_t;
-using vector_t      = uint16_t;
-using nframes_t     = uint32_t;
-
-using audiobuffer_t = sample_t**;
-using midibuffer_t  = midibuffer**;
-
-//=================================================================================================
-struct pool
-// this is what is passed as inputs/outputs to the user processing functions
-//=================================================================================================
+namespace wpn114
 {
-    std::vector<audiobuffer_t> audio;
-    std::vector<midibuffer_t> midi;
-};
+namespace qt
+{
 
 class Connection;
 class Node;
-
-//-------------------------------------------------------------------------------------------------
-namespace wpn114
-{
-//-------------------------------------------------------------------------------------------------
-template<typename T> T
-allocate_buffer(nchannels_t nchannels, vector_t nframes);
-
-//-------------------------------------------------------------------------------------------------
-WPN_UNIMPLEMENTED sample_t
-midicps(byte_t mnote);
-// midi pitch value to frequency (hertz)
-
-//-------------------------------------------------------------------------------------------------
-WPN_UNIMPLEMENTED byte_t
-cpsmidi(sample_t f);
-// frequency (hertz) to midi pitch value
-
-} // end namespace wpn114
-
-//-------------------------------------------------------------------------------------------------
 class Port;
+
 //=================================================================================================
 class Dispatch : public QObject
 //=================================================================================================
@@ -246,8 +190,6 @@ private:
     m_routing;
 };
 
-Q_DECLARE_METATYPE(Routing)
-
 //=================================================================================================
 class Connection : public QObject, public QQmlParserStatus, public QQmlPropertyValueSource
 //=================================================================================================
@@ -307,10 +249,10 @@ public:
         m_source    (cp.m_source),
         m_dest      (cp.m_dest),
         m_routing   (cp.m_routing),
-        m_active    (cp.m_active.load()),
-        m_muted     (cp.m_muted.load()),
-        m_mul       (cp.m_mul.load()),
-        m_add       (cp.m_add.load()) {}
+        m_active    (cp.m_active),
+        m_muted     (cp.m_muted),
+        m_mul       (cp.m_mul),
+        m_add       (cp.m_add) {}
     // copy constructor, don't really know in which case it should/will be used
 
     // --------------------------------------------------------------------------------------------
@@ -326,10 +268,10 @@ public:
         m_dest       = cp.m_dest;
         m_routing    = cp.m_routing;
         m_nchannels  = cp.m_nchannels;
-        m_mul        = cp.m_mul.load();
-        m_add        = cp.m_add.load();
-        m_active     = cp.m_active.load();
-        m_muted      = cp.m_muted.load();
+        m_mul        = cp.m_mul;
+        m_add        = cp.m_add;
+        m_active     = cp.m_active;
+        m_muted      = cp.m_muted;
 
         return *this;
     }
@@ -434,17 +376,12 @@ public:
 private:
 
     // --------------------------------------------------------------------------------------------
-    WPN_AUDIOTHREAD void
-    pull(vector_t nframes) noexcept;
-    // the main processing function
-
-    // --------------------------------------------------------------------------------------------
-    std::atomic<bool>
+    bool
     m_muted {false};
     // if Connection is muted, it will still process its inputs
     // but will output 0 continuously
 
-    std::atomic<bool>
+    bool
     m_active {true};
     // if Connection is inactive, it won't process its inputs
     // and consequently call the upstream graph
@@ -465,11 +402,9 @@ private:
     m_routing;
 
     // --------------------------------------------------------------------------------------------
-    std::atomic<sample_t>
+    sample_t
     m_mul {1}, m_add {0};
 };
-
-Q_DECLARE_METATYPE(Connection)
 
 //=================================================================================================
 class Port : public QObject
@@ -586,23 +521,6 @@ public:
     }
 
     // --------------------------------------------------------------------------------------------
-    ~Port()
-    // --------------------------------------------------------------------------------------------
-    {
-        if (m_type == Port::Audio) {
-            for (nchannels_t n = 0; n < m_nchannels; ++n)
-                if (m_buffer.audio[n])
-                    delete[] m_buffer.audio[n];
-            delete[] m_buffer.audio;
-        } else {
-            for (nchannels_t n = 0; n < m_nchannels; ++n)
-                if (m_buffer.midi[n])
-                    m_buffer.midi[n]->~midibuffer();
-            delete[] m_buffer.midi;
-        }
-    }
-
-    // --------------------------------------------------------------------------------------------
     void
     assign(Port* p);
     // explicitely assign another Port to this one in ordre to make a connection
@@ -617,18 +535,6 @@ public:
     // --------------------------------------------------------------------------------------------
     qreal
     value() const { return m_value; }
-
-    // --------------------------------------------------------------------------------------------
-    WPN_AUDIOTHREAD void
-    pull_value(vector_t nframes) noexcept
-    // --------------------------------------------------------------------------------------------
-    {
-        sample_t v = m_value;
-
-        for (nchannels_t c = 0; c < m_nchannels; ++c)
-            for (vector_t f = 0; f < nframes; ++f)
-                 m_buffer.audio[c][f] = v;
-    }
 
     // --------------------------------------------------------------------------------------------
     void
@@ -695,13 +601,6 @@ public:
     is_default() const noexcept { return m_default; }
 
     // --------------------------------------------------------------------------------------------
-    template<typename T> T
-    buffer() noexcept;
-
-    template<typename T> void
-    set_buffer(T& buffer) noexcept;
-
-    // --------------------------------------------------------------------------------------------
     std::vector<Connection*>&
     connections() noexcept { return m_connections; }
     // returns Port's current connections
@@ -731,24 +630,6 @@ private:
 
     // --------------------------------------------------------------------------------------------
     void
-    allocate(vector_t nframes);
-
-    // --------------------------------------------------------------------------------------------
-    void
-    reset(vector_t nframes)
-    // note: this one is actually never called at the moment
-    // --------------------------------------------------------------------------------------------
-    {
-        for (nchannels_t n = 0; n < m_nchannels; ++n)
-             memset(m_buffer.audio[n], 0, sizeof(sample_t*)*nframes);
-    }
-
-    // --------------------------------------------------------------------------------------------
-    void
-    reset();
-
-    // --------------------------------------------------------------------------------------------
-    WPN_INCOMPLETE void
     add_connection(Connection* con);
     // note: we have to clearly separate the default connection from the other ones
     // the default connection is set from the parent-child structure within QML
@@ -789,41 +670,24 @@ private:
     Node*
     m_parent = nullptr;
 
-    // --------------------------------------------------------------------------------------------    
-    union buffer
-    // --------------------------------------------------------------------------------------------
-    {
-        buffer() {}
-        ~buffer() {}
-
-        audiobuffer_t
-        audio;
-
-        midibuffer_t
-        midi;
-
-    }   m_buffer;
-
     // --------------------------------------------------------------------------------------------
     bool
     m_muted = false,
     m_default = false;
 
     // --------------------------------------------------------------------------------------------
-    qreal
+    sample_t
     m_mul = 1,
     m_add = 0;
 
     // --------------------------------------------------------------------------------------------
-    std::atomic<qreal>
+    sample_t
     m_value;
 
     // --------------------------------------------------------------------------------------------
     Routing
     m_routing;
 };
-
-Q_DECLARE_METATYPE(Port)
 
 class External;
 
@@ -955,7 +819,7 @@ public:
     }  
 
     // --------------------------------------------------------------------------------------------
-    WPN_EXAMINE void
+    void
     add_connection(Connection& con) noexcept { m_connections.push_back(con); }
     // this is called when Connection has been explicitely
     // instantiated from a QML context
@@ -1252,24 +1116,8 @@ public:
     Q_SLOT virtual void
     on_graph_complete(Graph::properties const& properties)
     {
-        allocate_ports(properties.vector);
-        allocate_pools();
-        initialize(properties);
+
     }
-
-    // --------------------------------------------------------------------------------------------
-    virtual void
-    initialize(Graph::properties const& properties ) { Q_UNUSED(properties) }
-    // this is called when the graph and allocation are complete
-
-    virtual void
-    rwrite(pool& inputs, pool& outputs, vector_t nframes)
-    { Q_UNUSED(inputs) Q_UNUSED(outputs) Q_UNUSED(nframes) }
-    // the main processing function to override
-
-    virtual void
-    on_rate_changed(sample_t rate) { Q_UNUSED(rate) }
-    // this can be overriden and will be called each time the sample rate changes
 
     // --------------------------------------------------------------------------------------------
     QString
@@ -1476,80 +1324,7 @@ public:
         reinterpret_cast<Node*>(list)->clear_subnodes();
     }
 
-    // --------------------------------------------------------------------------------------------
-    bool
-    processed() const { return m_processed; }
-
-    // --------------------------------------------------------------------------------------------
-    void
-    set_processed(bool processed)
-    // --------------------------------------------------------------------------------------------
-    {
-        m_processed = processed;
-        // reset midi outputs
-        if (processed == false)
-            for (auto& output : m_output_ports)
-                if (output->type() == Port::Midi_1_0)
-                    output->reset();
-    }
-
-    // --------------------------------------------------------------------------------------------
-    WPN_AUDIOTHREAD void
-    process(vector_t nframes) noexcept
-    // pre-processing main function
-    // --------------------------------------------------------------------------------------------
-    {
-        m_processed = true;
-
-        for (auto& port : m_input_ports) {
-            // we start by pulling the input Port value (if Audio)
-            // that has been (or not) set asynchronously from the user thread
-            if  (port->type() == Port::Audio)
-                 port->pull_value(nframes);
-            else port->reset();
-            // then, we pull all Port connections (we'll see later for multithreading)
-
-            for (auto& connection : port->connections())
-                if (connection->active())
-                    connection->pull(nframes);
-        }
-
-        rwrite(m_input_pool, m_output_pool, nframes);
-    }
-
 protected:
-
-    // --------------------------------------------------------------------------------------------
-    void
-    allocate_ports(vector_t nframes)
-    // called when Graph is complete, before audio processing
-    // allocates all nodes i/o Port buffers
-    // --------------------------------------------------------------------------------------------
-    {
-        for (auto& port : m_input_ports)
-             port->allocate(nframes);
-
-        for (auto& port : m_output_ports)
-             port->allocate(nframes);
-    }
-
-    // --------------------------------------------------------------------------------------------
-    WPN_CLEANUP void
-    allocate_pools();
-    // defined in .cpp as not to break the ODR
-
-    // --------------------------------------------------------------------------------------------
-    pool&
-    input_pools() noexcept { return m_input_pool; }
-
-    pool&
-    output_pools() noexcept { return m_output_pool; }
-    // returns a collection of all Port outputs
-
-    // --------------------------------------------------------------------------------------------
-    pool
-    m_input_pool,
-    m_output_pool;
 
     // --------------------------------------------------------------------------------------------
     Spatial*
@@ -1566,9 +1341,9 @@ protected:
 
     // --------------------------------------------------------------------------------------------
     bool
-    m_muted = false,
-    m_active = true,
-    m_processed = false;
+    m_muted      = false,
+    m_active     = true,
+    m_processed  = false;
 
     // --------------------------------------------------------------------------------------------
     Dispatch::Values
@@ -1582,3 +1357,9 @@ protected:
     QString
     m_name = "UnnamedNode";
 };
+}
+}
+
+Q_DECLARE_METATYPE(wpn114::qt::Routing)
+Q_DECLARE_METATYPE(wpn114::qt::Port)
+Q_DECLARE_METATYPE(wpn114::qt::Connection)
