@@ -1,6 +1,11 @@
 #pragma once
-#include <wpn114audio/graph.hpp>
 
+#include <wpn114audio/execution.hpp>
+#include <wpn114audio/qtinterface.hpp>
+
+using namespace wpn114::audio;
+
+using namespace wpn114::audio::qt;
 //=================================================================================================
 class PeakRMS : public Node
 //=================================================================================================

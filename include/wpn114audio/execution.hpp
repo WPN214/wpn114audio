@@ -8,6 +8,7 @@
 // as we'd want this to run on embedded devices
 
 namespace wpn114 {
+namespace audio  {
 
 //-------------------------------------------------------------------------------------------------
 struct connection
@@ -70,6 +71,7 @@ struct node
 
 //-------------------------------------------------------------------------------------------------
 struct xstage_a {
+// audio preprocessing stage part.II (connection pull)
 //-------------------------------------------------------------------------------------------------
     wpn114::vector_ref<abuffer_t> source;
     wpn114::vector_ref<abuffer_t> dest;
@@ -79,6 +81,7 @@ struct xstage_a {
 
 //-------------------------------------------------------------------------------------------------
 struct xstage_m {
+// midi preprocessing stage (connection pull)
 //-------------------------------------------------------------------------------------------------
     wpn114::vector_ref<mbuffer_t> source;
     wpn114::vector_ref<mbuffer_t> dest;
@@ -86,6 +89,7 @@ struct xstage_m {
 
 //-------------------------------------------------------------------------------------------------
 struct xstage_p {
+// audio/midi processing stage
 //-------------------------------------------------------------------------------------------------
     wpn114::vector_ref<wpn114::vector_ref<abuffer_t>> audio;
     wpn114::vector_ref<wpn114::vector_ref<mbuffer_t>> midi;
@@ -130,6 +134,9 @@ struct xdata
     xstages;
 };
 
+static const uint32_t
+nthreads = std::thread::hardware_concurrency();
+
 //-------------------------------------------------------------------------------------------------
 struct graph
 //-------------------------------------------------------------------------------------------------
@@ -147,8 +154,8 @@ struct graph
     {
         node n(int_fn, prc_fn, udata, n_ai, n_ao, n_mi, n_mo);
         n.m_id = m_nodes.count();
-        m_nodes.push(n);
 
+        m_nodes.push(n);
         m_xdata.processors.push(prc_fn);
         m_xdata.udatas.push(udata);
         return m_nodes.last();
@@ -160,7 +167,6 @@ struct graph
     {
         connection c(src.m_id, dst.m_id, s_port, d_port, nullptr, nullptr);
         m_connections.push(c);
-
         return m_connections.last();
     }
 
@@ -180,6 +186,7 @@ struct graph
         }
 
         // reserve allocation space from mempool
+        // audio inputs & offset values
         m_xdata.ai_buffers.reserve(n_ai);
         m_xdata.values.reserve(n_ai);
 
@@ -189,25 +196,28 @@ struct graph
              m_xdata.values.pull().store(0);
         }
 
+        // audio outputs
         m_xdata.ao_buffers.reserve(n_ao);
         for (nchannels_t c = 0; c < n_ao; ++c)  {
              abuffer_t b = m_mempool.request<sample_t>(maxbs, nullptr);
              m_xdata.ai_buffers.push(b);
         }
 
+        // midi inputs
         m_xdata.mi_buffers.reserve(n_mi);
         for (nchannels_t c = 0; c < n_mi; ++c)  {
              mbuffer_t b(m_mempool, sizeof(sample_t)*maxbs);
              m_xdata.mi_buffers.push(b);
         }
 
+        // midi outputs
         m_xdata.mo_buffers.reserve(n_mo);
         for (nchannels_t c = 0; c < n_mo; ++c)  {
              mbuffer_t b(m_mempool, sizeof(sample_t)*maxbs);
              m_xdata.mo_buffers.push(b);
         }
 
-        // connection mul/adds should be reserved now?
+        // connection mul/adds
         m_xdata.adds.reserve(m_connections.count());
         m_xdata.muls.reserve(m_connections.count());
 
@@ -225,8 +235,7 @@ struct graph
         assert(m_xdata.ai_buffers.count() ==  m_xdata.values.count());
         // pull value for each audio input buffer
         // doesn't matter the order, so we'll do it linearly
-        // multithreaded is also a good idea
-        const auto nthreads = std::thread::hardware_concurrency();
+
         std::thread threads[nthreads];
 
         for (vector_t n = 0; n < m_xdata.ai_buffers.count(); ++n)
@@ -235,18 +244,18 @@ struct graph
                      m_xdata.ai_buffers[n][f] = m_xdata.values[n];
                   }); // ok
 
-        // join here
-        for (int n = 0; n < nthreads; ++n) {
+        for (uint32_t n = 0; n < nthreads; ++n) {
              threads[n].join();
         }
 
         // now for each stage,
-        // pull input connections, muladd signal if audio
+        // pull audio/midi input connections, muladd signal if audio
         // process
         for (auto& xstage : m_xdata.xstages)
         {
             const auto nt2 = nthreads/2 == 0 ? 1 : nthreads/2;
 
+            // audio/midi are ideally processed on different threads
             for (vector_t a = 0; a < xstage.audio.dest.count(); ++a) {
                 threads[a%nt2] = std::thread([a, nframes, &xstage]() {
                     auto& src = xstage.audio.source[a];
@@ -260,18 +269,18 @@ struct graph
             }
 
             for (vector_t m = 0; m < xstage.midi.dest.count(); ++m) {
-                threads[m%nt2+nt2] = std::thread([m, nframes, &xstage]() {
+                threads[m%nt2+nt2] = std::thread([m, &xstage]() {
                     auto& src = xstage.midi.source[m];
                     auto& dst = xstage.midi.dest[m];
-                    // todo...
+                    for (const auto& ev : src)
+                         dst.push(ev);
                 });
             }
 
-            for (int n = 0; n < nthreads; ++n) {
+            // join & redispatch threads for processing
+            for (uint32_t n = 0; n < nthreads; ++n) {
                  threads[n].join();
             }
-
-            // redispatch threads for processing
 
             for (vector_t p = 0; p < xstage.process.udatas.count(); ++p) {
                 threads[p%nthreads] = std::thread([p, nframes, &xstage] {
@@ -283,7 +292,7 @@ struct graph
                 });
             }
 
-            for (int n = 0; n < nthreads; ++n) {
+            for (uint32_t n = 0; n < nthreads; ++n) {
                  threads[n].join();
             }
         }
@@ -309,41 +318,5 @@ private:
     xdata
     m_xdata;
 };
-
-//-------------------------------------------------------------------------------------------------
-struct sinetest
-//-------------------------------------------------------------------------------------------------
-{
-    sinetest() noexcept
-    {
-
-    }
-
-    static void
-    initialize(sample_t rate, void* udata)
-    {
-        auto st = static_cast<sinetest*>(udata);
-        st->rate  = rate;
-        st->phase = 0;
-    }
-
-    static void
-    rwrite(wpn114::vector_ref<abuffer_t> audio,
-           wpn114::vector_ref<mbuffer_t> midi,
-           vector_t nframes, void* udata)
-    {
-        auto freq   = audio[0];
-        auto out    = audio[1];
-        auto st     = static_cast<sinetest*>(udata);
-    }
-
-    node&
-    reg(graph& g) { return g.register_node(initialize, rwrite, this, 1, 1, 0, 0); }
-
-    sample_t
-    rate = 0;
-
-    vector_t
-    phase = 0;
-};
+}
 }

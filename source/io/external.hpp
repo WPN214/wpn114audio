@@ -1,7 +1,9 @@
 #pragma once
-#include <wpn114audio/graph.hpp>
 
-#include <QVector>
+#include <wpn114audio/qtinterface.hpp>
+
+using namespace wpn114;
+using namespace wpn114::qt;
 
 //---------------------------------------------------------------------------------------------
 class ExternalBase
@@ -129,9 +131,6 @@ public:
     virtual void
     on_graph_complete(const Graph::properties &properties) override;
 
-    virtual void
-    initialize(const Graph::properties &properties) override;
-
     //---------------------------------------------------------------------------------------------
     void
     add_connections(QVector<ExternalConnection>& connections)
@@ -140,16 +139,11 @@ public:
         m_connections.append(connections);
     }
 
-    //---------------------------------------------------------------------------------------------
-
     nchannels_t
     nchannels() const { return m_nchannels; }
 
     QVector<ExternalConnection>&
     connections() { return m_connections; }
-
-    template<typename T> T
-    buffer()  { return default_port(m_polarity)->buffer<T>(); }
 
 };
 
@@ -622,7 +616,7 @@ public:
     //---------------------------------------------------------------------------------------------
     {
         m_name = "input_proxy";
-        m_dispatch = Dispatch::Chain;
+        m_dispatch = Dispatch::DownwardsChain;
     }
 
     //---------------------------------------------------------------------------------------------

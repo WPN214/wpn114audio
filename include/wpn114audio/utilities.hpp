@@ -1,9 +1,23 @@
 #pragma once
+#include <wpn114audio/basic_types.hpp>
+#include <cmath>
 
-#define CSTR(_qstring) _qstring.toStdString().c_str()
+#define QCSTR(_qstring) _qstring.toStdString().c_str()
+#define SMP_PI_2 static_cast<sample_t>(M_PI_2)
+
+namespace wpn114 {
+namespace audio  {
 
 enum class Interpolation { Linear = 0, Sin4 = 1 };
 
-#define wpnwrap(_v, _limit) if (_v >= _limit) _v -= _limit
-#define lininterp(_x,_a,_b) _a+_x*(_b-_a)
-#define sininterp(_x,_a,_b) _a+ sin(x*(_b-_a)*(sample_t)M_PI_2)
+template<typename T> inline constexpr void
+wrap(T& value, T lim)  { if (value >= lim) value -= lim; }
+
+template<typename T> inline constexpr T
+lininterp(T x, T a, T b) { return a+x*(b-a); }
+
+template<typename T> inline constexpr T
+sininterp(T x, T a, T b) { return a + std::sin(x*(b-a) * SMP_PI_2); }
+}
+}
+

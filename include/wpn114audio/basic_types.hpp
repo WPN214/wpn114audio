@@ -7,20 +7,16 @@
 #include <memory.h>
 #include <cassert>
 
-#ifdef WPN114_DOUBLE_PRECISION
-    using sample_t = double;
-#else
-    using sample_t = float;
-#endif
-
-namespace wpn114 {
+//=================================================================================================
+namespace wpn114
+//=================================================================================================
+{
 
 using byte_t        = uint8_t;
 using vector_t      = uint16_t;
-using nframes_t     = uint32_t;
-using nchannels_t   = byte_t;
-using abuffer_t     = sample_t*;
-class mbuffer_t;
+
+template<typename T>
+struct vector_ref;
 
 //-------------------------------------------------------------------------------------------------
 struct mempool
@@ -70,7 +66,6 @@ struct mempool
     }
 
 private:
-
     byte_t* m_data;
     size_t m_capacity;
     size_t m_used;
@@ -90,37 +85,23 @@ struct vector
     //---------------------------------------------------------------------------------------------
     {
     public:
-        //-----------------------------------------------------------------------------------------
         iterator(T* data) : m_data(data) {}
 
-        //-----------------------------------------------------------------------------------------
-        iterator&
-        operator++() { m_data++; return *this; }
+        iterator& operator++() { m_data++; return *this; }
+        iterator& operator+=(size_t index) { m_data += index; return *this; }
 
-        //-----------------------------------------------------------------------------------------
-        T&
-        operator*() { return *m_data; }
+        T& operator*() { return *m_data; }
 
-        iterator&
-        operator+=(size_t index) { m_data += index; return *this; }
-
-        //-----------------------------------------------------------------------------------------
-        bool
-        operator==(iterator const& rhs) { return m_data == rhs.m_data; }
-
-        //-----------------------------------------------------------------------------------------
-        bool
-        operator!=(iterator const& rhs) { return !operator==(rhs); }
+        bool operator==(iterator const& rhs) { return m_data == rhs.m_data; }
+        bool operator!=(iterator const& rhs) { return !operator==(rhs); }
 
     private:
         T* m_data = nullptr;
     };
 
-    //---------------------------------------------------------------------------------------------
     iterator
     begin() { return iterator(m_data); }
 
-    //---------------------------------------------------------------------------------------------
     iterator
     end() { return iterator(&m_data[m_nelem]); }
 
@@ -177,11 +158,9 @@ struct vector
         target = elem;
     }
 
-    //---------------------------------------------------------------------------------------------
     T&
     operator[](size_t index) { return m_data[index]; }
 
-    //---------------------------------------------------------------------------------------------
     T&
     last() { return m_data[m_nelem]; }
 
@@ -210,17 +189,31 @@ struct vector_ref
 
     T& operator[](size_t index)  { return *(m_begin+=index); }
 
-    uint32_t
+    vector_t
     count() const { return nelem; }
 
 private:
     typename wpn114::vector<T>::iterator m_begin;
     typename wpn114::vector<T>::iterator m_end;
-    uint32_t nelem = 0;
-
+    vector_t nelem = 0; // note: this has to go...
 };
 
-//-------------------------------------------------------------------------------------------------
+//=================================================================================================
+namespace audio
+//=================================================================================================
+{
+
+#ifdef WPN114_DOUBLE_PRECISION
+    using sample_t = double;
+#else
+    using sample_t = float;
+#endif
+
+using nframes_t     = uint32_t;
+using nchannels_t   = byte_t;
+using abuffer_t     = sample_t*;
+
+class mbuffer_t;
 
 typedef void
 (*int_fn_t)(sample_t, void*);
@@ -231,9 +224,8 @@ typedef void
             vector_t, void*);
 
 //-------------------------------------------------------------------------------------------------
-struct midi_t
+struct midi_t {
 //-------------------------------------------------------------------------------------------------
-{
     vector_t frame;
     byte_t status;
     byte_t nbytes;
@@ -259,10 +251,9 @@ public:
     //---------------------------------------------------------------------------------------------
     {
     public:
-        //-----------------------------------------------------------------------------------------
+
         iterator(byte_t* data) : m_data(data) {}
 
-        //-----------------------------------------------------------------------------------------
         iterator&
         operator++()
         {
@@ -271,37 +262,29 @@ public:
             return *this;
         }
 
-        //-----------------------------------------------------------------------------------------
         midi_t&
         operator*() { return *reinterpret_cast<midi_t*>(m_data); }
 
-        //-----------------------------------------------------------------------------------------
-        bool
-        operator==(iterator const& rhs) { return m_data == rhs.m_data; }
-
-        //-----------------------------------------------------------------------------------------
-        bool
-        operator!=(iterator const& rhs) { return !operator==(rhs); }
+        bool operator==(iterator const& rhs) { return m_data == rhs.m_data; }
+        bool operator!=(iterator const& rhs) { return !operator==(rhs); }
 
     private:
         byte_t*
         m_data = nullptr;
     };
 
-    //---------------------------------------------------------------------------------------------
     iterator
     begin() { return iterator(m_data); }
 
-    //---------------------------------------------------------------------------------------------
     iterator
     end() { return iterator(&(m_data[m_index.load()])); }
 
     //---------------------------------------------------------------------------------------------
     void
     allocate(size_t nbytes)
-    //---------------------------------------------------------------------------------------------
     {
-
+        m_data = static_cast<byte_t*>(malloc(nbytes));
+        m_capacity = nbytes;
     }
 
     //---------------------------------------------------------------------------------------------
@@ -370,23 +353,24 @@ public:
         }   else return false;
     }
 
-    //---------------------------------------------------------------------------------------------
-    midi_t*
+    midi_t&
     operator[](vector_t index)
     {
-        return nullptr;
+        mbuffer_t::iterator it = begin();
+        while (index--) { ++it; }
+        return *it;
     }
 
 private:
-    //---------------------------------------------------------------------------------------------
+
     std::atomic<size_t>
     m_index {0}, m_capacity{0};
 
     std::atomic<uint16_t>
     m_count {0};
 
-    //---------------------------------------------------------------------------------------------
     byte_t*
     m_data = nullptr;
 };
+}
 }

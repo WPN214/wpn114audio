@@ -1,5 +1,5 @@
 #include "qml_plugin.hpp"
-#include <wpn114audio/graph.hpp>
+#include <wpn114audio/qtinterface.hpp>
 #include <wpn114audio/spatial.hpp>
 #include <source/io/external.hpp>
 #include <source/basics/audio/sinetest.hpp>
@@ -12,7 +12,10 @@
 #include <QQmlEngine>
 #include <qqml.h>
 
-void qml_plugin::registerTypes(const char* uri)
+using namespace wpn114::qt;
+
+void
+qml_plugin::registerTypes(const char* uri)
 {
     Q_UNUSED(uri)
 

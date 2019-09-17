@@ -65,22 +65,16 @@
 #define WPN_DECLARE_MIDI_OUTPUT(_name, _nchannels) \
     WPN_DECLARE_MIDI_PORT(_name, Polarity::Output, _nchannels)
 
-// ------------------------------------------------------------------------------------------------
-#define wpnwrap(_v, _limit) if (_v >= _limit) _v -= _limit
-#define CSTR(_qstring) _qstring.toStdString().c_str()
-
 //-------------------------------------------------------------------------------------------------
-enum class Polarity { Output = 0, Input = 1 };
-enum class Interpolation { Linear = 0, Sin4 = 1 };
 
-#define lininterp(_x,_a,_b) _a+_x*(_b-_a)
-#define sininterp(_x,_a,_b) _a+ sin(x*(_b-_a)*(sample_t)M_PI_2)
-
-//-------------------------------------------------------------------------------------------------
 namespace wpn114
+{
+namespace audio
 {
 namespace qt
 {
+
+enum class Polarity { Output = 0, Input = 1 };
 
 class Connection;
 class Node;
@@ -94,14 +88,11 @@ class Dispatch : public QObject
 
 public:
 
-    enum Values
-    {
-        Upwards         = 0,
-        Chain           = 1,
-        Parallel        = 2,
-        Split           = 3,
-        Merge           = 4,
-        Expand          = 5
+    enum Values {
+        UpwardsMerge,
+        UpwardsExpand,
+        DownwardsChain,
+        DownwardsParallel
     };
 
     Q_ENUM (Values)
@@ -1069,7 +1060,7 @@ public:
 
         switch(m_dispatch)
         {
-        case Dispatch::Values::Upwards:
+        case Dispatch::Values::UpwardsMerge:
         {
             // subnode's chain out connects to this Node
             for (auto& subnode : m_subnodes) {
@@ -1079,7 +1070,7 @@ public:
             }
             break;
         }
-        case Dispatch::Values::Chain:
+        case Dispatch::Values::DownwardsChain:
         {
             // connect this Node default outputs to first subnode
             auto& front = *m_subnodes.front();
@@ -1240,9 +1231,9 @@ public:
     // --------------------------------------------------------------------------------------------
     {
         switch(m_dispatch) {
-        case Dispatch::Values::Upwards:
+        case Dispatch::Values::UpwardsMerge:
             return *this;
-        case Dispatch::Values::Chain:
+        case Dispatch::Values::DownwardsChain:
             if (m_subnodes.empty())
                 return *this;
             else return *m_subnodes.back();
@@ -1347,7 +1338,7 @@ protected:
 
     // --------------------------------------------------------------------------------------------
     Dispatch::Values
-    m_dispatch = Dispatch::Values::Upwards;
+    m_dispatch = Dispatch::Values::UpwardsMerge;
 
     // --------------------------------------------------------------------------------------------
     Node*
@@ -1359,7 +1350,8 @@ protected:
 };
 }
 }
+}
 
-Q_DECLARE_METATYPE(wpn114::qt::Routing)
-Q_DECLARE_METATYPE(wpn114::qt::Port)
-Q_DECLARE_METATYPE(wpn114::qt::Connection)
+Q_DECLARE_METATYPE(wpn114::audio::qt::Routing)
+Q_DECLARE_METATYPE(wpn114::audio::qt::Port)
+Q_DECLARE_METATYPE(wpn114::audio::qt::Connection)
