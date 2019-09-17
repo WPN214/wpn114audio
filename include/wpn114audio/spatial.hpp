@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QObject>
-#include <wpn114audio/graph.hpp>
+#include <wpn114audio/execution.hpp>
+#include <wpn114audio/qtinterface.hpp>
 
 class SpatialProcessor;
 
