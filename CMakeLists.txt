@@ -74,9 +74,13 @@ endif()
 
 # PROJECT -----------------------------------------------------------------------------------------
 
+include(ProcessorCount)
+ProcessorCount(WPN114_NPROC)
+
 add_library(${PROJECT_NAME} SHARED ${WPN114_AUDIO_HEADERS} ${WPN114_AUDIO_SOURCES})
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Qml)
 target_include_directories(${PROJECT_NAME} PUBLIC ${WPN114_AUDIO_INCLUDE_DIR})
+target_compile_definitions(${PROJECT_NAME} PRIVATE -DWPN114_NPROC=${WPN114_NPROC})
 
 # LINKING -----------------------------------------------------------------------------------------
 

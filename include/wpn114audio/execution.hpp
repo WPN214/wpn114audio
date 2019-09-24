@@ -134,9 +134,6 @@ struct xdata
     xstages;
 };
 
-static const uint32_t
-nthreads = std::thread::hardware_concurrency();
-
 //-------------------------------------------------------------------------------------------------
 struct graph
 //-------------------------------------------------------------------------------------------------
@@ -236,7 +233,7 @@ struct graph
         // pull value for each audio input buffer
         // doesn't matter the order, so we'll do it linearly
 
-        std::thread threads[nthreads];
+        std::thread threads[WPN114_NPROC];
 
         for (vector_t n = 0; n < m_xdata.ai_buffers.count(); ++n)
              threads[n%nthreads] = std::thread([n, nframes, this]() {

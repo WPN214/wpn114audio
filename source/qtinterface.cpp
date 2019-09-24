@@ -3,7 +3,7 @@
 #include <cmath>
 #include <wpn114audio/qtinterface.hpp>
 
-using namespace wpn114::qt;
+using namespace wpn114::audio::qt;
 
 Graph*
 Graph::s_instance;
@@ -170,6 +170,9 @@ Graph::register_node(Node& node) noexcept
 {
     qDebug() << "[GRAPH] registering node:" << node.name();
     m_nodes.push_back(&node);
+
+    auto& xn = m_xgraph.register_node(nullptr, nullptr, nullptr, 0, 0, 0, 0);
+    node.m_xnode = &xn;
 }
 
 // ------------------------------------------------------------------------------------------------

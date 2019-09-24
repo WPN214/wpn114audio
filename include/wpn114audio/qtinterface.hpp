@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <wpn114audio/basic_types.hpp>
+#include <wpn114audio/execution.hpp>
 
 // --------------------------------------------------------------------------------------------------
 // CONVENIENCE MACRO DEFINITIONS
@@ -64,6 +65,16 @@
 
 #define WPN_DECLARE_MIDI_OUTPUT(_name, _nchannels) \
     WPN_DECLARE_MIDI_PORT(_name, Polarity::Output, _nchannels)
+
+#define WPN_SET_EXEC(_type) \
+    virtual void* xbuild() const override { return new _type; }
+
+#define WPN_SET_INIT(_init) \
+    virtual int_fn_t init_fn() const override { return _init; }
+
+#define WPN_SET_PROC(_proc) \
+    virtual prc_fn_t proc_fn() const override { return _proc; }
+
 
 //-------------------------------------------------------------------------------------------------
 
@@ -947,6 +958,9 @@ private:
     static Graph*
     s_instance;
 
+    wpn114::audio::graph
+    m_xgraph;
+
     // --------------------------------------------------------------------------------------------
     std::vector<Connection>
     m_connections;
@@ -1109,6 +1123,17 @@ public:
     {
 
     }
+
+    // --------------------------------------------------------------------------------------------
+
+    virtual void*
+    xbuild() const { return nullptr; }
+
+    virtual int_fn_t
+    init_fn() const { return nullptr; }
+
+    virtual prc_fn_t
+    proc_fn() const { return nullptr; }
 
     // --------------------------------------------------------------------------------------------
     QString
@@ -1316,6 +1341,9 @@ public:
     }
 
 protected:
+
+    wpn114::audio::node*
+    m_xnode = nullptr;
 
     // --------------------------------------------------------------------------------------------
     Spatial*

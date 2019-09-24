@@ -23,6 +23,8 @@ class VCA : public Node
     WPN_DECLARE_AUDIO_INPUT             (gain, 1)
     WPN_DECLARE_DEFAULT_AUDIO_OUTPUT    (audio_out, 0)
 
+    WPN_SET_PROC  (&VCA::rwrite)
+
     enum inputs   { audio_in = 0, gain = 1 };
     enum outputs  { audio_out = 0 };
 
@@ -32,7 +34,7 @@ public:
     VCA() { m_name = "VCA"; }
 
     //-------------------------------------------------------------------------------------------------
-    void
+    static void
     rwrite(vector_ref<abuffer_t> audio,
            vector_ref<mbuffer_t>,
            vector_t nframes, void*)

@@ -12,7 +12,8 @@
 #include <QQmlEngine>
 #include <qqml.h>
 
-using namespace wpn114::qt;
+using namespace
+wpn114::audio::qt;
 
 void
 qml_plugin::registerTypes(const char* uri)
