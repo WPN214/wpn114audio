@@ -1,77 +1,7 @@
 #pragma once
-
-#include <wpn114audio/qtinterface.hpp>
-#include <wpn114audio/execution.hpp>
-#include <wpn114audio/utilities.hpp>
+#include <wpn114audio/graph.hpp>
 
 #define esz 16384
-
-
-namespace wpn114 {
-namespace audio  {
-
-//=================================================================================================
-struct sinetest
-// this is the data that will be passed on in the graph execution context
-// bear in mind it has to be as small/cache-friendly as possible
-// in a qml context, it will be constructed through its qt interface (see below)
-//=================================================================================================
-{
-    enum inputs     { frequency = 0, midi_in = 1 };
-    enum outputs    { audio_out = 0 };
-
-    sample_t*
-    env = nullptr;
-
-    sample_t
-    rate = 0;
-
-    uint32_t
-    phs = 0;
-
-    ~sinetest() { delete[] env; }
-
-    // --------------------------------------------------------------------------------------------
-    static void
-    initialize(sample_t rate, void* udata)
-    // initialization method, all additional allocation should be done here
-    // store sample rate
-    // --------------------------------------------------------------------------------------------
-    {
-        sinetest& st = *static_cast<sinetest*>(udata);
-        st.rate = rate;
-
-        st.env = new sample_t[esz];
-
-        for (size_t n = 0; n < esz; ++n)
-             st.env[n] = std::sin(static_cast<sample_t>(M_PI)*2*
-                                  static_cast<sample_t>(n)/esz);
-    }
-
-    // --------------------------------------------------------------------------------------------
-    static void
-    rwrite(vector_ref<abuffer_t> audio,
-           vector_ref<mbuffer_t> midi,
-           vector_t nframes, void* udata)
-    // --------------------------------------------------------------------------------------------
-    {
-        auto freq  = audio[sinetest::frequency];
-        auto out   = audio[sinetest::audio_out];
-        auto& md   = midi[sinetest::midi_in]; // todo
-
-        auto st = *static_cast<sinetest*>(udata);
-
-        // process each frame
-        for (vector_t f = 0; f < nframes; ++f) {
-            st.phs += static_cast<uint32_t>(freq[f]/st.rate * esz);
-            wpn114::audio::wrap<uint32_t>(st.phs, esz);
-            out[f] = st.env[st.phs];
-        }
-    }
-};
-
-namespace qt {
-// this now is qt's entry point
 
 //=================================================================================================
 class Sinetest : public Node
@@ -87,9 +17,8 @@ class Sinetest : public Node
     WPN_DECLARE_DEFAULT_AUDIO_OUTPUT    (audio_out, 1)
     WPN_DECLARE_DEFAULT_MIDI_INPUT      (midi_in, 1)
 
-    WPN_SET_EXEC (sinetest)
-    WPN_SET_INIT (&sinetest::initialize)
-    WPN_SET_PROC (&sinetest::rwrite)
+    enum inputs     { frequency = 0, midi_in = 1 };
+    enum outputs    { audio_out = 0 };
 
 public:
 
@@ -99,11 +28,67 @@ public:
     //-------------------------------------------------------------------------------------------------
     {
         m_name      = "Sinetest";
-        m_dispatch  = Dispatch::DownwardsChain;
+        m_dispatch  = Dispatch::Chain;
         // this would be the default dipsatch behaviour withinin Sinetest QML scope
     }
-};
 
-}
-}
-}
+    //-------------------------------------------------------------------------------------------------
+    virtual
+    ~Sinetest() override { delete[] m_env; }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    initialize(const Graph::properties& properties) override
+    // initialization method, all additional allocation should be done here
+    // store sample rate
+    //-------------------------------------------------------------------------------------------------
+    {
+        m_rate = properties.rate;
+        m_env = new sample_t[esz];
+
+        for (size_t n = 0; n < esz; ++n)
+            m_env[n] = sin(M_PI*2*static_cast<sample_t>(n)/esz);
+    }
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    on_rate_changed(sample_t rate) override { m_rate = rate; }
+    // this is called whenever Graph's sample rate changes  
+
+    //-------------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    // the main processing function
+    //-------------------------------------------------------------------------------------------------
+    {        
+        // fetch in/out buffers (first channel, as they only have one anyway)
+        auto freq  = inputs.audio[Sinetest::frequency][0];
+        auto midi  = inputs.midi[Sinetest::midi_in]; // todo
+        auto out   = outputs.audio[Sinetest::audio_out][0];
+
+        // put member attributes on the stack
+        size_t phs = m_phs;
+        sample_t const rate = m_rate;
+
+        // process each frame
+        for (vector_t f = 0; f < nframes; ++f) {
+            phs += static_cast<size_t>(freq[f]/rate * esz);
+            wpnwrap(phs, esz);
+            out[f] = m_env[phs];
+        }
+
+        // update member attribute
+        m_phs = phs;
+    }
+
+private:
+
+    sample_t*
+    m_env = nullptr;
+
+    sample_t
+    m_rate = 0;
+
+    size_t
+    m_phs = 0;
+};

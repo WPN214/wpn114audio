@@ -1,17 +1,5 @@
 #pragma once
-
-#include <wpn114audio/execution.hpp>
-#include <wpn114audio/qtinterface.hpp>
-
-namespace wpn114
-{
-namespace audio
-{
-namespace qt
-{
-
-// note: we don't declare any independant data structure here for the simple
-// reason we have no data to actually store during execution
+#include <wpn114audio/graph.hpp>
 
 //=================================================================================================
 class VCA : public Node
@@ -23,8 +11,6 @@ class VCA : public Node
     WPN_DECLARE_AUDIO_INPUT             (gain, 1)
     WPN_DECLARE_DEFAULT_AUDIO_OUTPUT    (audio_out, 0)
 
-    WPN_SET_PROC  (&VCA::rwrite)
-
     enum inputs   { audio_in = 0, gain = 1 };
     enum outputs  { audio_out = 0 };
 
@@ -34,21 +20,16 @@ public:
     VCA() { m_name = "VCA"; }
 
     //-------------------------------------------------------------------------------------------------
-    static void
-    rwrite(vector_ref<abuffer_t> audio,
-           vector_ref<mbuffer_t>,
-           vector_t nframes, void*)
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
     // this Node will benefits from multichannel expansion if needed
+    //-------------------------------------------------------------------------------------------------
     {
-        auto in     = audio[VCA::audio_in];
-        auto gain   = audio[VCA::gain];
-        auto out    = audio[VCA::audio_out];
+        auto in     = inputs.audio[VCA::audio_in][0];
+        auto gain   = inputs.audio[VCA::gain][0];
+        auto out    = outputs.audio[VCA::audio_out][0];
 
         for (vector_t f = 0; f < nframes; ++f)
              out[f] = in[f] * gain[f];
     }
 };
-
-}
-}
-}

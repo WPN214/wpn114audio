@@ -14,10 +14,8 @@ find_package(Qt5 REQUIRED COMPONENTS Quick Core Qml)
 
 set(WPN114_AUDIO_INCLUDE_DIR include)
 set(WPN114_AUDIO_HEADERS
-    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/qtinterface.hpp
-    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/execution.hpp
-    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/basic_types.hpp
-    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/utilities.hpp
+    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/graph.hpp
+    ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/midi.hpp
     ${WPN114_AUDIO_INCLUDE_DIR}/wpn114audio/spatial.hpp)
 
 set(WPN114_AUDIO_SOURCE_DIR source)
@@ -27,7 +25,7 @@ set(WPN114_AUDIO_SOURCES
     qml_plugin.cpp
     ${WPN114_AUDIO_QML_DIR}/qmldir
     ${WPN114_AUDIO_QML_DIR}/audio.qmltypes
-    ${WPN114_AUDIO_SOURCE_DIR}/qtinterface.cpp
+    ${WPN114_AUDIO_SOURCE_DIR}/graph.cpp
     ${WPN114_AUDIO_SOURCE_DIR}/spatial.cpp
     ${WPN114_AUDIO_SOURCE_DIR}/io/external.hpp
     ${WPN114_AUDIO_SOURCE_DIR}/io/external.cpp
@@ -74,13 +72,9 @@ endif()
 
 # PROJECT -----------------------------------------------------------------------------------------
 
-include(ProcessorCount)
-ProcessorCount(WPN114_NPROC)
-
 add_library(${PROJECT_NAME} SHARED ${WPN114_AUDIO_HEADERS} ${WPN114_AUDIO_SOURCES})
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Qml)
 target_include_directories(${PROJECT_NAME} PUBLIC ${WPN114_AUDIO_INCLUDE_DIR})
-target_compile_definitions(${PROJECT_NAME} PRIVATE -DWPN114_NPROC=${WPN114_NPROC})
 
 # LINKING -----------------------------------------------------------------------------------------
 
